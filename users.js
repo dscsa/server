@@ -1,5 +1,5 @@
 var couch = require('./couch')
-var auth  = 'Basic '+new Buffer('sirum:Stanf0rd').toString('base64')
+var auth  = 'Basic '+new Buffer('<<your db username>>:<<your db password>>').toString('base64')
 
 //Unfortunately views and _changes only work if given admin privledges (even with _users table is public)
 //two options: (1) make all users admins on _users using roles or (2) escalate certain requests to admin

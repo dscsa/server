@@ -2,7 +2,7 @@ var couch = require('./couch')
 
 //TODO set _users db admin role to ['user']
 //TODO set this on the command line rather than in code
-var auth  = 'Basic '+new Buffer('sirum:Stanf0rd').toString('base64')
+var auth  = 'Basic '+new Buffer('<<your db username>>:<<your db password>>').toString('base64')
 
 var _design = {
   accounts:{
