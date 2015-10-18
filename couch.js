@@ -114,16 +114,6 @@ couch.list = function* (){
   yield couch(this).path(path.replace(':key', this.cookies.get('AuthAccount')), true)
 }
 
-//Custom short ids rather than long uuids
-couch.post = function* () {
-  yield couch(this, 'PUT')
-  .path('/'+couch.id(), true)  //TODO verify that if body._id is set that it will override this new id
-  .body({
-    created_at:new Date().toJSON(),
-    _rev:undefined
-  }, true)
-}
-
 couch.patch = function* (patch) {
   var doc = yield couch(this, 'GET')
   .proxy(false)
