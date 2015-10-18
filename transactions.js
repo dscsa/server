@@ -6,11 +6,10 @@ exports.post = function* (prior) {
   yield couch(this, 'PUT')
   .path('/'+couch.id(), true)
   .body({
-    //history:prior.transaction ? [prior] : [],  //if called from koa-route, prior is empty object {}
+    history:prior.transaction ? [prior] : [],  //if called from koa-route, prior is empty object {}
     created_at:new Date().toJSON(),
     shipment:this.cookies.get('AuthAccount')
   }, false)
-  console.log('body3')
 }
 
 exports.history = function* (id) { //TODO option to include full from/to account information

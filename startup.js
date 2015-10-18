@@ -1,8 +1,9 @@
-var couch = require('./couch')
+var couch  = require('./couch')
+var secret = require('../development')
 
 //TODO set _users db admin role to ['user']
 //TODO set this on the command line rather than in code
-var auth  = 'Basic '+new Buffer('<<your db username>>:<<your db password>>').toString('base64')
+var auth  = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 
 var _design = {
   accounts:{

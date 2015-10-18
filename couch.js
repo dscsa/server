@@ -47,31 +47,28 @@ function couch(ctx, method) {
       return new Promise(function(resolve, reject) {
         delete options.headers['content-length'] //TODO only do this if body actually changed
         options.path = options.path.replace('/users', '/_users')
-        console.log('options', options)
         var req = http.request(options)
         req.once('response', resolve)
         req.once('error', reject)
 
         if( ! options.body && ctx.req && ctx.req.pipe) {
+          //console.log('req.pipe', options.path)
           return ctx.req.pipe(req, {end: true})
         }
 
-        Promise.resolve().then(function() {
-          if (options.append != null)
-            return couch.json(ctx.req)
-            .then(function(body) {
-              for (var i in options.body) {
-                if (options.append || ! body[i]) //append == false should be a default val (i.e. not overwrite)
-                  body[i] = options.body[i]
-              }
-              console.log('body1', body)
-              return body
-            })
+        Promise.resolve()
+        .then(function() {
+          if (options.append == null)
+            return null
+
+          return ctx.req.body || couch.json(ctx.req)
         })
         .then(function(body) {
-          console.log('body2', JSON.stringify(body || options.body, null, "  "), req)
-
-          req.end(JSON.stringify(body || options.body))
+          for (var i in body) {
+            if ( ! options.append || ! options.body[i]) //append == false should be a default val (i.e. not overwrite)
+              options.body[i] = body[i]
+          }
+          req.end(JSON.stringify(options.body))
         })
       })
       .then(function(res) {

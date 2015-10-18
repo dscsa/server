@@ -1,5 +1,6 @@
-var couch = require('./couch')
-var auth  = 'Basic '+new Buffer('<<your db username>>:<<your db password>>').toString('base64')
+var couch  = require('./couch')
+var secret = require('../development')
+var auth   = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 
 //Unfortunately views and _changes only work if given admin privledges (even with _users table is public)
 //two options: (1) make all users admins on _users using roles or (2) escalate certain requests to admin
@@ -19,6 +20,11 @@ function authorize(headers) {
   delete headers.cookie //Cookie overrides Basic Auth so we need to delete
 }
 
+exports.changes = function* () {
+  authorize(this.req.headers)
+  yield couch.changes.call(this, 'users')
+}
+
 exports.list = function* () {
   yield couch.list.call(this)   //TODO only show users of current account
 }
@@ -36,10 +42,14 @@ exports.post = function* () {
     this.message = 'user must have an account property'
   }
   else {
-    this.body._id       = 'org.couchdb.user:'+this.req.body.name
-    this.body.type      = 'user'
-    this.body.roles     = ['user']
-    yield couch.post.call(this)   //TODO only edit, get, delete users of current account
+    //TODO only edit, get, delete users of current account
+    yield couch(this, 'PUT')
+    .path('/org.couchdb.user:'+this.req.body.name, true)
+    .body({
+      created_at:new Date().toJSON(),
+      type:'user',
+      roles:['user']
+    }, true)
   }
 }
 
@@ -58,7 +68,11 @@ exports.session = {
     .path('/users/org.couchdb.user:'+id)
     .proxy(false)
 
-    this.cookies.set('AuthAccount', this.body.account)
+    this.body.account = yield couch(this, 'GET')
+    .path('/accounts/'+this.body.account)
+    .proxy(false)
+
+    this.cookies.set('AuthAccount', this.body.account._id)
     delete this.body.roles
   },
 
