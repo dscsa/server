@@ -83,7 +83,7 @@ function couch(ctx, method) {
         if ( ! proxy.body)
           return couch.json(res)
 
-        if (options.body && ~ ['POST', 'PUT'].indexOf(ctx.method)) {
+        if (options.body && ~ ['POST', 'PUT'].indexOf(ctx.method) && res.statusCode < 500) {
           return couch.json(res)
           .then(function(res) {
             ctx.body      = options.body    //Default return value is the request val.  Helpful for PUT/POST
