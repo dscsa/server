@@ -64,6 +64,9 @@ function couch(ctx, method) {
           if (options.append == null)
             return null
 
+          if ( ! ctx.req)
+            console.log(new Error('if body append is not null, then this.req must be set').stack)
+
           return ctx.req.body || couch.json(ctx.req)
         })
         .then(function(body) {
@@ -104,6 +107,10 @@ function couch(ctx, method) {
 }
 
 couch.json = function(req) {
+
+  if ( ! req.readable)
+    console.log(new Error('couch.json req is already closed').stack)
+
   var body = ''
   return new Promise(function(resolve, reject) {
     req.on('error', reject)
