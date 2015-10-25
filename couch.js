@@ -80,19 +80,19 @@ function couch(ctx, method) {
             ctx.set(i, res.headers[i])
         }
 
-        if ( ! proxy.body)
-          return couch.json(res)
+        if (proxy.body || res.statusCode >= 500) //Don't swallow errors
+          return ctx.body = res
 
-        if (options.body && ~ ['POST', 'PUT'].indexOf(ctx.method) && res.statusCode < 500) {
-          return couch.json(res)
-          .then(function(res) {
-            ctx.body      = options.body    //Default return value is the request val.  Helpful for PUT/POST
-            ctx.body._id  = res.id
-            ctx.body._rev = res.rev
-          })
-        }
-
-        return ctx.body = res
+        return couch.json(res)
+        .then(function(doc) {
+           //Default return value is the request val.  Helpful for PUT/POST
+          if ( ~ ['POST', 'PUT'].indexOf(options.method)) {
+            options.body._id  = doc.id
+            options.body._rev = doc.rev
+            doc = options.body
+          }
+          return doc
+        })
       })
       .then(success, failure)
     }
