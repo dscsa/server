@@ -51,8 +51,11 @@ function couch(ctx, method) {
         req.once('response', resolve)
         req.once('error', reject)
 
+        if(options.method == 'GET') //Don't drain req body with GET request
+          return req.end('')
+
         if( ! options.body && ctx.req && ctx.req.pipe) {
-          //console.log('req.pipe', options.path)
+          //console.log('req.pipe', options.method, options.path)
           return ctx.req.pipe(req, {end: true})
         }
 
