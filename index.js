@@ -103,4 +103,8 @@ get('/transactions/:id/history', transactions.history)          //Resursively re
 post('/transactions/:id/captured', transactions.captured.post)  //New transaction created in inventory, available for further transactions
 del('/transactions/:id/captured', transactions.captured.delete) //New transaction removed from inventory, cannot be done if item has further transactions
 
+//all(/callback?deep.field=this&this.must.be.true.to.trigger=true)
+//all(/callback?deep.field=this)
+//all(/)
+
 app.listen(3000); console.log('listening on port 3000')

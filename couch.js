@@ -124,21 +124,6 @@ couch.list = function* (){
   yield couch(this).path(path.replace(':key', this.cookies.get('AuthAccount')), true)
 }
 
-couch.patch = function* (patch) {
-  var doc = yield couch(this, 'GET')
-  .proxy(false)
-
-  for (var i in patch)
-    doc[i] = patch[i]
-
-  var save = yield couch(this, 'PUT')
-  .body(doc, false, false)
-  .proxy(false)
-
-  doc._rev = save.rev
-  return doc
-}
-
 var count = 0, old, time
 //Return a 7 digit uuid that can handle upto 36^2/47 = 27 requests per second
 couch.id = function() {
