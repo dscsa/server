@@ -10,7 +10,7 @@ function couch(ctx, method) {
     port: 5984,
     path: ctx.url, //this includes querystring
     method: method || ctx.method,
-    headers: ctx.headers
+    headers: ctx.req && ctx.req.headers
   }
   var proxy = {status:true ,headers:true, body:true}
 
@@ -76,6 +76,9 @@ function couch(ctx, method) {
           }
           req.end(JSON.stringify(options.body))
         })
+        .catch(function(err) {
+          console.log(err.stack) //Doesn't log errors otherwise
+        })
       })
       .then(function(res) {
         if (proxy.status)
@@ -85,19 +88,21 @@ function couch(ctx, method) {
           for (var i in res.headers)
             ctx.set(i, res.headers[i])
         }
-
-        if (proxy.body || res.statusCode >= 500) //Don't swallow errors
+        //If we supply a body, return it.  Helpful when adding default properties in POST
+        if (res.statusCode >= 500 || (proxy.body && ! options.body)) //Don't swallow errors
           return ctx.body = res
 
         return couch.json(res)
         .then(function(doc) {
-           //Default return value is the request val.  Helpful for PUT/POST
-          if ( ~ ['POST', 'PUT'].indexOf(options.method)) {
+          if (options.body) {
             options.body._id  = doc.id
             options.body._rev = doc.rev
             doc = options.body
           }
-          return doc
+          if ( ! proxy.body)
+            return doc
+
+          ctx.body = doc
         })
       })
       .then(success, failure)
