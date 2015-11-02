@@ -81,6 +81,7 @@ function couch(ctx, method) {
         })
       })
       .then(function(res) {
+
         if (proxy.status)
           ctx.status = res.statusCode
 
