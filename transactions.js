@@ -166,6 +166,12 @@ exports.captured = {
       return
     }
 
+    if (inventory.shipment != this.cookies.get('AuthAccount')) {
+      this.status  = 409
+      this.message = 'The inventory for this transaction has already been assigned to another shipment'
+      return
+    }
+
     yield exports.delete.call(this, inventory._id)
     if (this.status != 200) return
 
