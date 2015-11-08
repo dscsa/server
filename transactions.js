@@ -15,19 +15,21 @@ exports.post = function* () {
 exports.delete = function* (id) {
   //TODO move this to a general delete function.  Transaction should
   //not be able to be deleted if a latter transaction has it in history
-  var doc = yield couch(this, 'GET')
+  var inventory = yield couch(this, 'GET')
   .path(path.replace(':id', id))
   .proxy(false)
-  doc = doc[0]
+  inventory = inventory[0]
 
-  if ( ! doc) { //Only delete inventory if not in subsequent transaction
+  if (inventory) { //Do not delete inventory if id is in subsequent transaction
     this.status  = 409
-    this.message = 'Cannot delete this transaction because another transaction with _id '+doc._id+' has it in its history'
-    return false
-  } else {
+    this.message = 'Cannot delete this transaction because another transaction has _id '+id+' in its history'
+  } else { //We can safely delete this transaction
+    var doc = yield couch(this, 'GET')
+    .path('/transactions/'+id)
+    .proxy(false)
+
     yield couch(this, 'DELETE')
-    .path('/transactions/'+inventory._id+'?rev='+inventory._rev)
-    return doc
+    .path('/transactions/'+id+'?rev='+doc._rev)
   }
 }
 
@@ -43,13 +45,19 @@ exports.history = function* (id) { //TODO option to include full from/to account
     .path('/transactions/'+_id)
     .proxy(false)
     .then(function(transaction) {
+
+      if ( ! transaction) {
+        this.status  = 404
+        this.message = 'Cannot find transaction '+_id
+        return false
+      }
+
       return couch(that, 'GET')
       .path('/shipments/'+transaction.shipment)
       .proxy(false)
       .then(function(shipment) {
 
         if (shipment.error) { //skip if this transaction is in "inventory"
-          console.log('this transaction is in inventory', transaction)
           transaction.text = 'Inventory of '+(transaction.qty.from || '?')+' units'
         } else {
           //console.log('shipment', shipment)
@@ -97,7 +105,7 @@ exports.captured = {
   *post(id) {
     this.path = path
     var inventory = yield couch(this, 'GET')
-    .path(id, true)
+    .path(path.replace(':id', id))
     .proxy(false)
     inventory = inventory[0]
 
@@ -112,12 +120,11 @@ exports.captured = {
     .path('/transactions/'+id)
     .proxy(false)
 
-    if (doc.qty.to == null) {
+    if (doc.qty.to == null || doc.qty.to == '') {
       this.status  = 409
       this.message = 'Cannot capture a transaction with unknown quantity'
       return
     }
-
     //Update current transaction to be captured
     doc.captured_at = new Date().toJSON()
 
@@ -134,29 +141,46 @@ exports.captured = {
       transaction:id,
       qty:this.req.body.qty.to
     }]
-
+    this.req.body.qty         = {
+      to:null,
+      from:this.req.body.qty.to
+    }
     //Add a new transaction to inventory
     yield exports.post.call(this)
   },
 
+  //This is a bit complex here are the steps:
+  //1. Does this transaction id have a matching inventory item. No? Already un-captured
+  //2. Can this inventory item be deleted. No? a subsequent transaction is based on this capture so it cannot be undone
+  //3. Delete the item with inventory._id
+  //4. Update the original transaction with capture_at = null
   *delete(id) {
     var inventory = yield couch(this, 'GET')
     .path(path.replace(':id', id))
     .proxy(false)
     inventory = inventory[0]
 
-    if ( ! inventory) {
+    if ( ! inventory) { //Only delete inventory if it actually exists
       this.status  = 409
-      this.message = 'Cannot  _id '+id+' in the history of any other transactions.  Has this transaction been deleted already?'
-    } else { //Only delete inventory if it actually exists
-      var doc = yield exports.delete.call(this, inventory._id)
-      if ( ! doc) return
-
-      doc.captured_at = null //Update current transaction to be un-captured
-      yield couch(this, 'PUT')
-      .path('/transactions/'+id)
-      .body(doc)
-      .proxy(false, false, false) //return the previous delete response rather than this one
+      this.message = 'Cannot find a transaction with history.transaction = '+id+'.  Has this transaction been deleted already?'
+      return
     }
+
+    yield exports.delete.call(this, inventory._id)
+    if (this.status != 200) return
+
+    /*Start makeshift PATCH */
+    var doc = yield couch(this, 'GET')
+    .path('/transactions/'+id)
+    .proxy(false)
+
+    //Update current transaction to be captured
+    doc.captured_at = null
+
+    this.req.body = yield couch(this, 'PUT')
+    .path('/transactions/'+id)
+    .body(doc)
+    .proxy(false)
+    /*End makeshift PATCH */
   }
 }
