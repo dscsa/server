@@ -70,9 +70,15 @@ function couch(ctx, method) {
           return ctx.req.body || couch.json(ctx.req)
         })
         .then(function(body) {
-          for (var i in body) {
-            if ( ! options.append || ! options.body[i]) //append == false should be a default val (i.e. not overwrite)
-              options.body[i] = body[i]
+          //Append === false:  options has default values only to be set if body's value is null
+          //Append === true:  options values should overwrite the original body
+          //Append == null/undefined: use the options as the body, do not append to original
+          if (options.append != null) {
+            for (var i in options.body) {
+              if (options.append || body[i] == null)
+                body[i] = options.body[i]
+            }
+            options.body = body
           }
           req.end(JSON.stringify(options.body))
         })
