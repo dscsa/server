@@ -61,19 +61,18 @@ var _design = {
       },
 
       history:function(doc) {
-        for (var id in doc.history)
-          emit(id)
+        for (var i in doc.history)
+          emit(doc.history[i].transaction)
       }
     }
   }
 }
-
 Object.keys(_design).forEach(function(name) {
   couch(this, 'PUT').path('/'+name).headers({authorization:auth}).proxy(false)
   .then(function() {
     var body = {
       views:{},
-      filters:{account:auth[name].filters.toString()},
+      filters:{account:_design[name].filters.toString()},
       lists:{all:function(head, req) {
         send('[')
         var row = getRow()
@@ -86,10 +85,13 @@ Object.keys(_design).forEach(function(name) {
       }.toString()}
     }
 
-    for (var i in auth[name].views) {
-      body.views[i] = {map:auth[name].views[i].toString()}
+    for (var i in _design[name].views) {
+      body.views[i] = {map:_design[name].views[i].toString()}
     }
-    couch(this, 'PUT').path('/'+name+'/_design%2fauth').headers({authorization:auth}).body(body)
+    couch(this, 'PUT').path('/'+name+'/_design%2fauth').headers({authorization:auth}).body(body).then()
+  })
+  .catch(function(err) {
+    console.log('Error adding design files:', err)
   })
 })
 
