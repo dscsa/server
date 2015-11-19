@@ -57,41 +57,43 @@ exports.history = function* (id) { //TODO option to include full from/to account
       .proxy(false)
       .then(function(shipment) {
 
-        if (shipment.error) { //skip if this transaction is in "inventory"
-          transaction.text = 'Inventory of '+(transaction.qty.from || '?')+' units'
-        } else {
+        return Promise.resolve()
+        .then(function() {
+          if (shipment.error) { //skip if this transaction is in "inventory"
+            transaction.type = 'Inventory'
+            return
+          }
           //console.log('shipment', shipment)
           transaction.shipment = shipment
-          transaction.text =
-            shipment.from.name+
-            ' transferred '+
-            (transaction.qty.to || transaction.qty.from || '?')+
-            ' units '+
-            //'to '+shipment.to.name+' '+
-            (transaction.captured_at ? 'on '+transaction.captured_at.slice(0, 10) : '')
-          //console.log(transaction)
-        }
+          transaction.type = 'Transaction'
 
-        list.push(transaction)
+          //TODO this call is serial. Can we do in parallel with next async call?
+          return couch(that, 'GET')
+          .path('/accounts/'+shipment.from.account)
+          .proxy(false)
+        })
+        .then(function(from) {
+          transaction.from = from
+          list.push(transaction)
 
-        var len = transaction.history.length
+          var len = transaction.history.length
 
-        if (len == 1)    //This is just a normal transfer
-          return history(transaction.history[0].transaction, list)
+          if (len == 1)    //This is just a normal transfer
+            return history(transaction.history[0].transaction, list)
 
-        if (len > 1) {   //If length > 1 then its repackaged
-          transaction.text = 'Repackaged '+len+' items with '+transaction.history.map(function(t){
-            return (t.qty || '?')+' from '+t.transaction
-          })
-          var indent = []
-          list.push(indent)
+          if (len > 1) {   //If length > 1 then its repackaged
+            transaction.type = 'Repackaged'
+            var indent = []
+            list.push(indent)
 
-          return Promise.all(transaction.history.map(function(transaction) {
-            var next = []
-            indent.push(next)
-            return history(transaction.transaction, next)
-          }))
-        }
+            return Promise.all(transaction.history
+            .map(function(transaction) {
+              var next = []
+              indent.push(next)
+              return history(transaction.transaction, next)
+            }))
+          }
+        })
       })
       .then(function(_) {
         return result
