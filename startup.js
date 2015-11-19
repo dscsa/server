@@ -96,14 +96,14 @@ Object.keys(_design).forEach(function(name) {
 })
 
 couch(this, 'PUT').path('/drugs/0002-4420').headers({authorization:auth}).body({
-  "name":"Olanzapine",
-  "strength":"20mg",
-  "form":"Tablet",
-  "brand":"Zyprexa",
-  "labeler":"Eli Lilly",
-  "ndc":"0002-4420",
-  "nadac":{"price":"0.40", "date":"11/11/1111"},
-  "image":"http://pillbox.nlm.nih.gov/assets/large/000024420.jpg"
+  name:"Olanzapine",
+  strength:"20mg",
+  form:"Tablet",
+  brand:"Zyprexa",
+  labeler:"Eli Lilly",
+  retail:{price:0.80, date:"11/11/1111"},
+  wholesale:{price:0.40, date:"11/11/1111"},
+  image:"http://pillbox.nlm.nih.gov/assets/large/000024420.jpg"
 }).then()
 
 couch(this, 'PUT').path('/drugs/0071-0155').headers({authorization:auth}).body({
@@ -112,20 +112,20 @@ couch(this, 'PUT').path('/drugs/0071-0155').headers({authorization:auth}).body({
   form:'Tablet',
   brand:'Lipitor',
   labeler:'Pfizer',
-  ndc:'0071-0155',
-  nadac:{price:'0.05', date:'11/11/1111'},
+  retail:{price:0.10, date:"11/11/1111"},
+  wholesale:{price:0.05, date:"11/11/1111"},
   image:'http://pillbox.nlm.nih.gov/assets/large/00071-0155-23_711C38F1.jpg'
 }).then()
 
 couch(this, 'PUT').path('/drugs/0008-0836').headers({authorization:auth}).body({
-  "name":"Venlafaxine",
-  "strength":"150mg",
-  "form":"Capsule",
-  "brand":"Effexor",
-  "labeler":"Wyeth",
-  "ndc":"0008-0836",
-  "nadac":{"price":"0.15", "date":"11/11/1111"},
-  "image":"http://pillbox.nlm.nih.gov/assets/large/00008-0836-22_2D15969C.jpg"
+  name:"Venlafaxine",
+  strength:"150mg",
+  form:"Capsule",
+  brand:"Effexor",
+  labeler:"Wyeth",
+  retail:{price:0.30, date:"11/11/1111"},
+  wholesale:{price:0.15, date:"11/11/1111"},
+  image:"http://pillbox.nlm.nih.gov/assets/large/00008-0836-22_2D15969C.jpg"
 }).then()
 
 couch(this, 'PUT').path('/_users/_security').headers({authorization:auth}).body({
