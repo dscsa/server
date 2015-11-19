@@ -7,7 +7,7 @@ exports.post = function* () {
   .path('/transactions/'+couch.id())
   .body({
     history:[],
-    captured_at:null,
+    verified_at:null,
     created_at:new Date().toJSON(),
     shipment:this.cookies.get('AuthAccount')
   }, false)
@@ -101,7 +101,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
 }
 
 var path = '/transactions/_design/auth/_list/all/history?include_docs=true&key=":id"'
-exports.captured = {
+exports.verified = {
   *post(id) {
     this.path = path
     var inventory = yield couch(this, 'GET')
@@ -111,7 +111,7 @@ exports.captured = {
 
     if (inventory) {
       this.status  = 409
-      this.message = 'Cannot capture this transaction because another transaction with _id '+inventory._id+' already has this transaction in its history'
+      this.message = 'Cannot verify this transaction because another transaction with _id '+inventory._id+' already has this transaction in its history'
       return
     }
 
