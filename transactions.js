@@ -122,11 +122,11 @@ exports.verified = {
 
     if (doc.qty.to == null || doc.qty.to == '') {
       this.status  = 409
-      this.message = 'Cannot capture a transaction with unknown quantity'
+      this.message = 'Cannot verify a transaction with unknown quantity'
       return
     }
-    //Update current transaction to be captured
-    doc.captured_at = new Date().toJSON()
+    //Update current transaction to be verified
+    doc.verified_at = new Date().toJSON()
 
     this.req.body = yield couch(this, 'PUT')
     .path('/transactions/'+id)
@@ -134,9 +134,9 @@ exports.verified = {
     .proxy(false)
     /*End makeshift PATCH */
 
-    //New transaction should be un-captured
+    //New transaction should be un-verified
     this.req.body.shipment    = null
-    this.req.body.captured_at = null
+    this.req.body.verified_at = null
     this.req.body.history     = [{
       transaction:id,
       qty:this.req.body.qty.to
@@ -150,10 +150,10 @@ exports.verified = {
   },
 
   //This is a bit complex here are the steps:
-  //1. Does this transaction id have a matching inventory item. No? Already un-captured
-  //2. Can this inventory item be deleted. No? a subsequent transaction is based on this capture so it cannot be undone
+  //1. Does this transaction id have a matching inventory item. No? Already un-verified
+  //2. Can this inventory item be deleted. No? a subsequent transaction is based on this verification so it cannot be undone
   //3. Delete the item with inventory._id
-  //4. Update the original transaction with capture_at = null
+  //4. Update the original transaction with verified_at = null
   *delete(id) {
     var inventory = yield couch(this, 'GET')
     .path(path.replace(':id', id))
@@ -180,8 +180,8 @@ exports.verified = {
     .path('/transactions/'+id)
     .proxy(false)
 
-    //Update current transaction to be captured
-    doc.captured_at = null
+    //Update current transaction to be un-verified
+    doc.verified_at = null
 
     this.req.body = yield couch(this, 'PUT')
     .path('/transactions/'+id)
