@@ -25,6 +25,18 @@ var _design = {
     filters:function(doc, req){ return true },
     views:{
       authorized:function(doc) { emit(doc._id)}
+      // , search:function(doc) {
+      //
+      //   var names = doc.names.concat([doc._id, doc.ndc9, doc.upc, doc.brand])
+      //   var str   = doc.ndc9+" "+doc.names.join(", ")+" "+doc.form
+      //   for (var i in names) {
+      //     var name = names[i]
+      //     for (var j=4; j<=name.length; j++) {
+      //       var key = name.slice(0, j)
+      //       emit(key.toLowerCase(), str.replace(key, '<strong>'+key+'<strong>'))
+      //     }
+      //   }
+      // }
     }
   },
   shipments:{
@@ -95,38 +107,41 @@ Object.keys(_design).forEach(function(name) {
   })
 })
 
-couch(this, 'PUT').path('/drugs/0002-4420').headers({authorization:auth}).body({
-  name:"Olanzapine",
-  strength:"20mg",
+couch(this, 'PUT').path('/drugs/0000-0000').headers({authorization:auth}).body({
+  names:["Olanzapine 20mg"],
   form:"Tablet",
   brand:"Zyprexa",
   labeler:"Eli Lilly",
+  upc:'00024420',
+  ndc9:'000024420',
   retail:{price:0.80, date:"11/11/1111"},
   wholesale:{price:0.40, date:"11/11/1111"},
   image:"http://pillbox.nlm.nih.gov/assets/large/000024420.jpg"
 }).then()
 
-couch(this, 'PUT').path('/drugs/0071-0155').headers({authorization:auth}).body({
-  name:'Atorvastatin',
-  strength:'10mg',
-  form:'Tablet',
-  brand:'Lipitor',
-  labeler:'Pfizer',
-  retail:{price:0.10, date:"11/11/1111"},
-  wholesale:{price:0.05, date:"11/11/1111"},
-  image:'http://pillbox.nlm.nih.gov/assets/large/00071-0155-23_711C38F1.jpg'
-}).then()
-
-couch(this, 'PUT').path('/drugs/0008-0836').headers({authorization:auth}).body({
-  name:"Venlafaxine",
-  strength:"150mg",
-  form:"Capsule",
-  brand:"Effexor",
-  labeler:"Wyeth",
-  retail:{price:0.30, date:"11/11/1111"},
-  wholesale:{price:0.15, date:"11/11/1111"},
-  image:"http://pillbox.nlm.nih.gov/assets/large/00008-0836-22_2D15969C.jpg"
-}).then()
+// couch(this, 'PUT').path('/drugs/0071-0155').headers({authorization:auth}).body({
+//   names:['Atorvastatin 10mg', 'Aspirin 5mg'],
+//   form:'Tablet',
+//   brand:'Lipitor',
+//   labeler:'Pfizer',
+//   upc:'00710155',
+//   ndc9:'000710155',
+//   retail:{price:0.10, date:"11/11/1111"},
+//   wholesale:{price:0.05, date:"11/11/1111"},
+//   image:'http://pillbox.nlm.nih.gov/assets/large/00071-0155-23_711C38F1.jpg'
+// }).then()
+//
+// couch(this, 'PUT').path('/drugs/0008-0836').headers({authorization:auth}).body({
+//   names:["Venlafaxine 150mg"],
+//   form:"Capsule",
+//   brand:"Effexor",
+//   labeler:"Wyeth",
+//   upc:'00080836',
+//   ndc9:'000080836',
+//   retail:{price:0.30, date:"11/11/1111"},
+//   wholesale:{price:0.15, date:"11/11/1111"},
+//   image:"http://pillbox.nlm.nih.gov/assets/large/00008-0836-22_2D15969C.jpg"
+// }).then()
 
 couch(this, 'PUT').path('/_users/_security').headers({authorization:auth}).body({
   admins:{names:[], roles: ["user"]},
