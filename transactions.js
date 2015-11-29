@@ -73,7 +73,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
           .proxy(false)
         })
         .then(function(from) {
-          transaction.from = from
+          transaction.shipment.from = from
           list.push(transaction)
 
           var len = transaction.history.length
