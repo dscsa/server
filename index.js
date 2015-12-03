@@ -52,6 +52,7 @@ app.use(function* (next) {
 get('/', couch.proxy)                    //Not sure why we need this.  Shows welcome UUID & Version
 get('/:db/', couch.proxy, {strict:true}) //Shows DB info including update_seq#
 get('/:db/_all_docs', couch.proxy)       //Needed if indexedDb cleared on browser
+post('/:db/_all_docs', couch.proxy)       //Needed if indexedDb cleared on browser
 get('/users/_changes', users.changes)    //Lets PouchDB watch db using longpolling
 get('/:db/_changes', couch.changes)      //Lets PouchDB watch db using longpolling
 post('/:db/_revs_diff', couch.proxy)     //Not sure why PouchDB needs this
