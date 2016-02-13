@@ -107,17 +107,17 @@ Object.keys(_design).forEach(function(name) {
   })
 })
 
-couch(this, 'PUT').path('/drugs/0000-0000').headers({authorization:auth}).body({
-  names:["Olanzapine 20mg"],
-  form:"Tablet",
-  brand:"Zyprexa",
-  labeler:"Eli Lilly",
-  upc:'00024420',
-  ndc9:'000024420',
-  retail:{price:0.80, date:"11/11/1111"},
-  wholesale:{price:0.40, date:"11/11/1111"},
-  image:"http://pillbox.nlm.nih.gov/assets/large/000024420.jpg"
-}).then()
+// couch(this, 'PUT').path('/drugs/0000-0000').headers({authorization:auth}).body({
+//   generics:[{name:"Olanzapine 20mg"],
+//   form:"Tablet",
+//   brand:"Zyprexa",
+//   labeler:"Eli Lilly",
+//   upc:'00024420',
+//   ndc9:'000024420',
+//   retail:{price:0.80, date:"11/11/1111"},
+//   wholesale:{price:0.40, date:"11/11/1111"},
+//   image:"http://pillbox.nlm.nih.gov/assets/large/000024420.jpg"
+// }).then()
 
 // couch(this, 'PUT').path('/drugs/0071-0155').headers({authorization:auth}).body({
 //   names:['Atorvastatin 10mg', 'Aspirin 5mg'],

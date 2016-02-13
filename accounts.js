@@ -7,7 +7,7 @@ exports.post = function* () {
   .path('/'+couch.id(), true)
   .body({
     authorized:[],
-    created_at:new Date().toJSON(),
+    createdAt:new Date().toJSON(),
     _rev:undefined
   }, true)
 }

@@ -10,7 +10,7 @@ exports.post = function* () { //TODO label=fedex creates label, maybe track=true
     //TODO replace this with an Easy Post API call that actually creates a label
     //TODO create pickup for the next business date
     tracking:Math.floor(Math.random() * (99999-10000))+10000,
-    created_at:new Date().toJSON()
+    createdAt:new Date().toJSON()
   }, false)
 }
 

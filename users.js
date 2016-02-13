@@ -46,7 +46,7 @@ exports.post = function* () {
     yield couch(this, 'PUT')
     .path('/org.couchdb.user:'+this.req.body.name, true)
     .body({
-      created_at:new Date().toJSON(),
+      createdAt:new Date().toJSON(),
       type:'user',
       roles:['user']
     }, true)

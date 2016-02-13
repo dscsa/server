@@ -7,8 +7,8 @@ exports.post = function* () {
   .path('/transactions/'+couch.id())
   .body({
     history:[],
-    verified_at:null,
-    created_at:new Date().toJSON(),
+    verifiedAt:null,
+    createdAt:new Date().toJSON(),
     shipment:this.cookies.get('AuthAccount')
   }, false)
 }
@@ -128,7 +128,7 @@ exports.verified = {
       return
     }
     //Update current transaction to be verified
-    doc.verified_at = new Date().toJSON()
+    doc.verifiedAt = new Date().toJSON()
 
     this.req.body = yield couch(this, 'PUT')
     .path('/transactions/'+id)
@@ -138,7 +138,7 @@ exports.verified = {
 
     //New transaction should be un-verified
     this.req.body.shipment    = null
-    this.req.body.verified_at = null
+    this.req.body.verifiedAt = null
     this.req.body.history     = [{
       transaction:id,
       qty:this.req.body.qty.to
@@ -183,7 +183,7 @@ exports.verified = {
     .proxy(false)
 
     //Update current transaction to be un-verified
-    doc.verified_at = null
+    doc.verifiedAt = null
 
     this.req.body = yield couch(this, 'PUT')
     .path('/transactions/'+id)
