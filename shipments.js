@@ -5,7 +5,7 @@ exports.doc   = couch.doc
 exports.post = function* () { //TODO label=fedex creates label, maybe track=true/false eventually
   this.req.body = yield couch.json(this.req)
   yield couch(this, 'PUT')
-  .path('/'+this.req.body.from.account+'.'+this.req.body.to.account+'.'+couch.id(), true)
+  .path('/'+this.req.body.account.from._id+'.'+this.req.body.account.to._id+'.'+couch.id(), true)
   .body({
     //TODO replace this with an Easy Post API call that actually creates a label
     //TODO create pickup for the next business date

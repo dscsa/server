@@ -53,7 +53,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
       }
 
       return couch(that, 'GET')
-      .path('/shipments/'+transaction.shipment)
+      .path('/shipments/'+transaction.shipment._id)
       .proxy(false)
       .then(function(shipment) {
 
@@ -69,7 +69,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
 
           //TODO this call is serial. Can we do in parallel with next async call?
           return couch(that, 'GET')
-          .path('/accounts/'+shipment.from.account)
+          .path('/accounts/'+shipment.account.from._id)
           .proxy(false)
         })
         .then(function(from) {
@@ -140,7 +140,7 @@ exports.verified = {
     this.req.body.shipment    = null
     this.req.body.verifiedAt = null
     this.req.body.history     = [{
-      transaction:id,
+      transaction:{_id:id},
       qty:this.req.body.qty.to
     }]
     this.req.body.qty         = {

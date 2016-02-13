@@ -68,8 +68,11 @@ exports.session = {
     .path('/users/org.couchdb.user:'+id)
     .proxy(false)
 
+    if ( ! this.body.account)
+      return
+      
     this.body.account = yield couch(this, 'GET')
-    .path('/accounts/'+this.body.account)
+    .path('/accounts/'+this.body.account._id)
     .proxy(false)
 
     this.cookies.set('AuthAccount', this.body.account._id)
