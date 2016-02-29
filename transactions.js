@@ -8,7 +8,8 @@ exports.post = function* () {
   .body({
     history:[],
     verifiedAt:null,
-    createdAt:new Date().toJSON()
+    createdAt:new Date().toJSON(),
+    shipment:{_id:this.cookies.get('AuthAccount')}
   }, false)
 }
 exports.delete = function* (id) {
