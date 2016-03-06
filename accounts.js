@@ -35,8 +35,20 @@ exports.authorized = {
       yield couch(this,'PUT').path(path).body(account)
     }
   },
-  *delete(id) {
-    //Un-authorize a sender
-    this.status = 501 //not implemented
+  *delete(id) {  //Un-authorize a sender
+    //Authorize a sender
+    var path = '/accounts/'+this.cookies.get('AuthAccount')
+
+    var account = yield couch(this,'GET').path(path).proxy(false)
+    var index   = account.authorized.indexOf(id)
+
+    if (index == -1) {
+      this.status  = 409
+      this.message = 'This account is already not authorized'
+    }
+    else {
+      account.authorized.splice(index, 1);
+      yield couch(this,'PUT').path(path).body(account)
+    }
   }
 }
