@@ -61,6 +61,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
         .then(function() {
           if (shipment.error) { //skip if this transaction is in "inventory"
             transaction.type = 'Inventory'
+            transaction.shipment.account = {}
             return
           }
           //console.log('shipment', shipment)
@@ -68,18 +69,21 @@ exports.history = function* (id) { //TODO option to include full from/to account
           transaction.type = 'Transaction'
 
           //TODO this call is serial. Can we do in parallel with next async call?
-          return couch(that, 'GET')
-          .path('/accounts/'+shipment.account.from._id)
-          .proxy(false)
+          return Promise.all([
+            couch(that, 'GET').path('/accounts/'+shipment.account.from._id).proxy(false),
+            couch(that, 'GET').path('/accounts/'+shipment.account.to._id).proxy(false)
+          ])
         })
-        .then(function(from) {
-          transaction.shipment.from = from
+        .then(function(accounts) {
+          console.log('transaction', transaction)
+          transaction.shipment.account.from = accounts[0]
+          transaction.shipment.account.to = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
           list.push(transaction)
 
           var len = transaction.history.length
 
           if (len == 1)    //This is just a normal transfer
-            return history(transaction.history[0].transaction, list)
+            return history(transaction.history[0].transaction._id, list)
 
           if (len > 1) {   //If length > 1 then its repackaged
             transaction.type = 'Repackaged'
@@ -90,7 +94,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
             .map(function(transaction) {
               var next = []
               indent.push(next)
-              return history(transaction.transaction, next)
+              return history(transaction.transaction._id, next)
             }))
           }
         })
