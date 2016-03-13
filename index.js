@@ -56,6 +56,7 @@ post('/:db/_all_docs', couch.proxy)       //Needed if indexedDb cleared on brows
 get('/users/_changes', users.changes)    //Lets PouchDB watch db using longpolling
 get('/:db/_changes', couch.changes)      //Lets PouchDB watch db using longpolling
 post('/:db/_revs_diff', couch.proxy)     //Not sure why PouchDB needs this
+post('/drugs/_bulk_docs', drugs.bulk_docs)   //Update transactions when drug is updated
 post('/:db/_bulk_docs', couch.proxy)     //Allow PouchDB to make bulk edits
 get('/:db/_design/:doc', couch.proxy)    //TODO can I avoid sharing design docs with browser?
 all('/:db/_local/:doc', couch.doc)       //Only GET & PUT seem to be needed

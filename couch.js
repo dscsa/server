@@ -101,7 +101,11 @@ function couch(ctx, method) {
 
         return couch.json(res)
         .then(function(doc) {
-          if (options.body) {
+
+          //This is only helpful for put and post of object
+          //(so we any defaults or edits that we made before saving)
+          //TODO move this into the applicable database files that set defaults?
+          if (options.body && ! ~ options.path.indexOf('_bulk_docs')) {
             options.body._id  = doc.id
             options.body._rev = doc.rev
             doc = options.body
