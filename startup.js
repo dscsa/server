@@ -15,9 +15,9 @@ var _design = {
   },
   _users:{
     //Only see users within your account
-    filters:function(doc, req){ return doc.account == req.userCtx.roles[0] },
+    filters:function(doc, req){ return doc.account._id == req.userCtx.roles[0] },
     views:{
-      authorized:function(doc) { emit(doc.account)}
+      authorized:function(doc) { emit(doc.account._id)}
     }
   },
   drugs:{
@@ -59,7 +59,7 @@ var _design = {
         return false
 
       var account = req.userCtx.roles[0]
-      var accounts = doc.shipment.split('.')
+      var accounts = doc.shipment._id.split('.')
       return accounts[0] == account|| accounts[1] == account
     },
     views: {
@@ -67,14 +67,18 @@ var _design = {
         if ( ! doc.shipment)
           return false
 
-        var accounts = doc.shipment.split('.')
+        var accounts = doc.shipment._id.split('.')
         emit(accounts[0])
         emit(accounts[1])
       },
 
       history:function(doc) {
         for (var i in doc.history)
-          emit(doc.history[i].transaction)
+          emit(doc.history[i].transaction._id)
+      },
+
+      drugs:function(doc) {
+          emit(doc.drug._id)
       }
     }
   }

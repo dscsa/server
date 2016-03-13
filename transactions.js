@@ -2,6 +2,7 @@ var couch = require('./couch')
 
 exports.list = couch.list
 exports.doc  = couch.doc
+
 exports.post = function* () {
   yield couch(this, 'PUT')
   .path('/transactions/'+couch.id())
@@ -75,7 +76,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
           ])
         })
         .then(function(accounts) {
-          console.log('transaction', transaction)
+          //console.log('transaction', transaction)
           transaction.shipment.account.from = accounts[0]
           transaction.shipment.account.to = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
           list.push(transaction)
@@ -126,7 +127,7 @@ exports.verified = {
     .path('/transactions/'+id)
     .proxy(false)
 
-    if (doc.qty.to == null || doc.qty.to == '') {
+    if ( ! doc.qty.to && ! doc.qty.from) {
       this.status  = 409
       this.message = 'Cannot verify a transaction with unknown quantity'
       return
@@ -142,14 +143,25 @@ exports.verified = {
 
     //New transaction should be un-verified
     this.req.body.shipment    = null
-    this.req.body.verifiedAt = null
+    this.req.body.verifiedAt  = null
     this.req.body.history     = [{
       transaction:{_id:id},
       qty:this.req.body.qty.to
     }]
-    this.req.body.qty         = {
+
+    this.req.body.qty = {
       to:null,
-      from:this.req.body.qty.to
+      from:this.req.body.qty.to || this.req.body.qty.from
+    }
+
+    this.req.body.exp = this.req.body.exp && {
+      to:null,
+      from:this.req.body.exp.to || this.req.body.exp.from
+    }
+
+    this.req.body.lot = this.req.body.lot && {
+      to:null,
+      from:this.req.body.lot.to || this.req.body.lot.from
     }
     //Add a new transaction to inventory
     yield exports.post.call(this)
@@ -172,7 +184,7 @@ exports.verified = {
       return
     }
 
-    if (inventory.shipment != this.cookies.get('AuthAccount')) {
+    if (inventory.shipment._id != this.cookies.get('AuthAccount')) {
       this.status  = 409
       this.message = 'The inventory for this transaction has already been assigned to another shipment'
       return
