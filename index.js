@@ -9,7 +9,6 @@ let accounts     = require('./accounts')
 let users        = require('./users')
 let shipments    = require('./shipments')
 let transactions = require('./transactions')
-let couch2        = require('./couch2')
 
 function router(method) {
   return function(url,handler,options) {
@@ -40,7 +39,7 @@ let all  = router('all')
 // -example
 */
 
-app.use(couch2({hostname:'localhost', port: 5984}).use)
+app.use(couch({hostname:'localhost', port: 5984}).use)
 
 function* list(){
   yield this.couch
