@@ -1,24 +1,24 @@
 "use strict"
+function defaults(body) {
+
+  body.createdAt  = new Date().toJSON()
+
+  let labelerCode = ('00000'+body._id.split('-')[0]).slice(-5)
+  let productCode = ('0000'+body._id.split('-')[1]).slice(-4)
+
+  body.ndc9 = labelerCode+productCode
+  body.upc  = body._id.replace('-', '')
+}
 //Drug product NDC is a good natural key
 exports.post = function* () {
-  yield this.couch
-  .put({proxy:true})
-  .url(body => 'drugs/'+body.ndc)
-  .body(body => {
-    delete body._rev
-    body.createdAt  = new Date().toJSON()
-
-    let labelerCode = ('00000'+body._id.split('-').slice(0,1)).slice(-5)
-    let productCode = ('0000'+body._id.split('-').slice(1)).slice(-4)
-
-    body.ndc9 = labelerCode+productCode
-    body.upc  = body._id.replace('-', '')
-    return body
-  })
+  yield this.couch.put({proxy:true}).url(body => 'drugs/'+body.ndc).body(defaults)
 }
 
 exports.doc = function* () {
-  if (this.method != 'PUT')
+  if (this.method == 'POST')
+    return yield exports.post.call(this)
+
+  if (this.method != 'PUT') //DELETE, GET
     return yield this.couch({proxy:true})
 
   yield this.couch({proxy:true}).body(body => {
@@ -51,11 +51,16 @@ exports.doc = function* () {
 exports.bulk_docs = function* () {
   yield this.couch({proxy:true}).body(body => {
     let all = []
+
     for (let i in body.docs) {
+
       if ( ~ body.docs[i]._id.indexOf('_local/'))
         continue
-      //TODO this is serial should be done in parallel with Promise.all
-      all.push(exports.doc.call(this))
+
+      if (this.method == 'POST')
+        defaults(body.docs[i])
+      else
+        all.push(exports.doc.call(this))
     }
     return Promise.all(all).then(_ => body)
   })
