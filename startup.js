@@ -1,8 +1,6 @@
 "use strict"
-let couch  = require('./couch')
+let couch  = require('./couch')({hostname:'localhost', port: 5984})
 let secret = require('../development')
-
-let couch = couch({hostname:'localhost', port: 5984})
 
 //TODO set _users db admin role to ['user']
 //TODO set this on the command line rather than in code
