@@ -1,19 +1,21 @@
-var couch = require('./couch')
+"use strict"
 
-exports.list  = couch.list
-exports.doc   = couch.doc
 exports.post = function* () {
-  yield couch(this, 'PUT')
-  .path('/'+couch.id(), true)
-  .body({
-    authorized:[],
-    createdAt:new Date().toJSON(),
-    _rev:undefined
-  }, true)
+  yield this.couch
+  .put({proxy:true})
+  .url('accounts/'+couch.id())
+  .body(body => {
+    delete body._rev
+    body.createdAt  = new Date().toJSON()
+    body.authorized = body.authorized || []
+    return body
+  })
 }
+
 exports.email = function* (id) {
   this.status = 501 //not implemented
 }
+
 exports.authorized = {
   *get(id) {
     //Search for all accounts (recipients) that have authorized this account as a sender
@@ -22,9 +24,9 @@ exports.authorized = {
   },
   *post(id) {
     //Authorize a sender
-    var path = '/accounts/'+this.cookies.get('AuthAccount')
+    let path = '/accounts/'+this.cookies.get('AuthAccount')
 
-    var account = yield couch(this,'GET').path(path).proxy(false)
+    let account = yield this.couch.get().url(path)
 
     if ( ~ account.authorized.indexOf(id)) {
       this.status  = 409
@@ -32,15 +34,14 @@ exports.authorized = {
     }
     else {
       account.authorized.push(id)
-      yield couch(this,'PUT').path(path).body(account)
+      yield this.couch.put({proxy:true}).url(path).body(account)
     }
   },
-  *delete(id) {  //Un-authorize a sender
-    //Authorize a sender
-    var path = '/accounts/'+this.cookies.get('AuthAccount')
-
-    var account = yield couch(this,'GET').path(path).proxy(false)
-    var index   = account.authorized.indexOf(id)
+  *delete(id) {
+    //Un-authorize a sender
+    let path    = '/accounts/'+this.cookies.get('AuthAccount')
+    let account = yield this.couch.get().url(path)
+    let index   = account.authorized.indexOf(id)
 
     if (index == -1) {
       this.status  = 409
@@ -48,7 +49,7 @@ exports.authorized = {
     }
     else {
       account.authorized.splice(index, 1);
-      yield couch(this,'PUT').path(path).body(account)
+      yield this.couch.put({proxy:true}).url(path).body(account)
     }
   }
 }

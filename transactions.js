@@ -1,170 +1,160 @@
-var couch = require('./couch')
+"use strict"
 
-exports.list = couch.list
-exports.doc  = couch.doc
+function history(id) {
+  return `/transactions/_design/auth/_list/all/history?include_docs=true&key="${id}"`
+}
+
+/* Makeshift PATCH */
+function *patch(id, updates) {
+  let doc = yield this.couch.get().url('/transactions/'+id)
+
+  for (let i in updates)
+    doc[i] = updates[i]
+
+  yield this.couch.put().url('/transactions/'+id).body(doc)
+}
+
+//TODO make this based on patch with {_delete:true}
+function *remove(id) {
+  var doc = yield this.couch.get().url('/transactions/'+id)
+
+  yield this.couch.delete({proxy:true}).url(`/transactions/${id}?rev=${doc._rev}`)
+}
 
 exports.post = function* () {
-  yield couch(this, 'PUT')
-  .path('/transactions/'+couch.id())
-  .body({
-    history:[],
-    verifiedAt:null,
-    createdAt:new Date().toJSON(),
-    shipment:{_id:this.cookies.get('AuthAccount')}
-  }, false)
+  yield this.couch.put({proxy:true})
+  .url('/transactions/'+couch.id())
+  .body(body => {
+    //TODO ensure that there is a qty
+    body.history    = []
+    body.createdAt  = new Date().toJSON()
+    body.verifiedAt = null
+    body.qty.to     = +body.qty.to
+    body.qty.from   = +body.qty.from
+    body.shipment   = body.shipment || {_id:this.account}
+  })
 }
+
 exports.delete = function* (id) {
-  //TODO move this to a general delete function.  Transaction should
-  //not be able to be deleted if a latter transaction has it in history
-  var inventory = yield couch(this, 'GET')
-  .path(path.replace(':id', id))
-  .proxy(false)
-  inventory = inventory[0]
 
-  if (inventory) { //Do not delete inventory if id is in subsequent transaction
+  let inventory = yield this.couch.get().url(history(id))
+
+  if (inventory[0]) { //Do not delete inventory if id is in subsequent transaction
     this.status  = 409
-    this.message = 'Cannot delete this transaction because another transaction has _id '+id+' in its history'
-  } else { //We can safely delete this transaction
-    var doc = yield couch(this, 'GET')
-    .path('/transactions/'+id)
-    .proxy(false)
-
-    yield couch(this, 'DELETE')
-    .path('/transactions/'+id+'?rev='+doc._rev)
+    this.message = `Cannot delete this transaction because transaction ${inventory[0]._id} has _id ${id} in its history`
+    return
   }
+
+  //We can safely delete this transaction.  Get the current _rev
+  yield remove.call(this, id)
 }
 
 exports.history = function* (id) { //TODO option to include full from/to account information
-  var count = 0
-  var that = this
+  var count  = 0
+  var $this  = this
   var result = []
 
   this.body = yield history(id, result)
 
   function history(_id, list) {
-    return couch(that, 'GET')
-    .path('/transactions/'+_id)
-    .proxy(false)
-    .then(function(transaction) {
+    return $this.couch.get().url('/transactions/'+_id)
+    .then(trans => {
 
-      if ( ! transaction) {
+      if ( ! trans.body) {
         this.status  = 404
         this.message = 'Cannot find transaction '+_id
         return false
       }
 
-      return couch(that, 'GET')
-      .path('/shipments/'+transaction.shipment._id)
-      .proxy(false)
-      .then(function(shipment) {
+      //Start resursive
+      list.push(trans)
 
-        return Promise.resolve()
-        .then(function() {
-          if (shipment.error) { //skip if this transaction is in "inventory"
-            transaction.type = 'Inventory'
-            transaction.shipment.account = {}
-            return
-          }
-          //console.log('shipment', shipment)
-          transaction.shipment = shipment
-          transaction.type = 'Transaction'
+      let len = trans.history.length
 
-          //TODO this call is serial. Can we do in parallel with next async call?
-          return Promise.all([
-            couch(that, 'GET').path('/accounts/'+shipment.account.from._id).proxy(false),
-            couch(that, 'GET').path('/accounts/'+shipment.account.to._id).proxy(false)
-          ])
-        })
-        .then(function(accounts) {
-          //console.log('transaction', transaction)
-          transaction.shipment.account.from = accounts[0]
-          transaction.shipment.account.to = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
-          list.push(transaction)
+      if (len == 1)    //This is just a normal transfer
+        history(trans.history[0].transaction._id, list)
+      else if (len > 1) {
+        trans.type = 'Repackaged'
+        let indent = []
+        list.push(indent)
+      }
 
-          var len = transaction.history.length
-
-          if (len == 1)    //This is just a normal transfer
-            return history(transaction.history[0].transaction._id, list)
-
-          if (len > 1) {   //If length > 1 then its repackaged
-            transaction.type = 'Repackaged'
-            var indent = []
-            list.push(indent)
-
-            return Promise.all(transaction.history
-            .map(function(transaction) {
-              var next = []
-              indent.push(next)
-              return history(transaction.transaction._id, next)
-            }))
-          }
-        })
+      let all = trans.history.map(ancestor => {
+        var next = []
+        indent.push(next)
+        return history(ancestor.transaction._id, next)
       })
-      .then(function(_) {
+      //End Recursive
+
+      //Now we just fill in full shipment and account info into the transaction
+      if (trans.shipment._id == $this.account) { //skip if this transaction is in "inventory"
+        trans.type = 'Inventory'
+        all.unshift({
+          account:{from:{_id:$this.account}}
+        })
+      } else {
+        transaction.type = 'Transaction'
+        all.unshift(
+          $this.couch.get().url('/shipments/'+trans.shipment._id)
+        )
+      }
+
+      //Search for transaction's ancestors and shipment in parallel
+      return Promose.all(all).then(all => {
+        trans.shipment = all[0]
+
+        //TODO this call is serial. Can we do in parallel with next async call?
+        return Promise.all([
+          $this.couch.get().url('/accounts/'+trans.shipment.account.from._id),
+          trans.shipment.account.to && $this.couch.get().url('/accounts/'+trans.shipment.account.to._id)
+        ])
+      })
+      .then(function(accounts) {
+        trans.shipment.account.from = accounts[0]
+        trans.shipment.account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
         return result
       })
     })
   }
 }
 
-var path = '/transactions/_design/auth/_list/all/history?include_docs=true&key=":id"'
 exports.verified = {
   *post(id) {
-    this.path = path
-    var inventory = yield couch(this, 'GET')
-    .path(path.replace(':id', id))
-    .proxy(false)
-    inventory = inventory[0]
+    let inventory = yield this.couch.get().url(history(id))
 
-    if (inventory) {
+    if (inventory[0]) {
       this.status  = 409
-      this.message = 'Cannot verify this transaction because another transaction with _id '+inventory._id+' already has this transaction in its history'
+      this.message = `Cannot verify this transaction because transaction ${inventory[0]._id} with _id ${id} already has this transaction in its history`
       return
     }
 
-    /*Start makeshift PATCH */
-    var doc = yield couch(this, 'GET')
-    .path('/transactions/'+id)
-    .proxy(false)
+    yield patch.call(this, id, {verifiedAt:new Date().toJSON()})
 
-    if ( ! doc.qty.to && ! doc.qty.from) {
-      this.status  = 409
-      this.message = 'Cannot verify a transaction with unknown quantity'
-      return
-    }
-    //Update current transaction to be verified
-    doc.verifiedAt = new Date().toJSON()
+    //TODO test if previous call was successful
 
-    this.req.body = yield couch(this, 'PUT')
-    .path('/transactions/'+id)
-    .body(doc)
-    .proxy(false)
-    /*End makeshift PATCH */
-
-    //New transaction should be un-verified
-    this.req.body.shipment    = null
-    this.req.body.verifiedAt  = null
-    this.req.body.history     = [{
-      transaction:{_id:id},
-      qty:this.req.body.qty.to
-    }]
-
-    this.req.body.qty = {
-      to:null,
-      from:this.req.body.qty.to || this.req.body.qty.from
-    }
-
-    this.req.body.exp = this.req.body.exp && {
-      to:null,
-      from:this.req.body.exp.to || this.req.body.exp.from
-    }
-
-    this.req.body.lot = this.req.body.lot && {
-      to:null,
-      from:this.req.body.lot.to || this.req.body.lot.from
-    }
-    //Add a new transaction to inventory
-    yield exports.post.call(this)
+    //Create the inventory
+    yield this.couch.put({proxy:true})
+    .url('/transactions/'+couch.id())
+    .body({
+      shipment:{_id:this.account},
+      verifiedAt:null,
+      history:[{
+        transaction:{_id:id},
+        qty:doc.body.qty.to
+      }],
+      qty:{
+        to:null,
+        from:doc.body.qty.to || doc.body.qty.from
+      },
+      exp:doc.body.exp && {
+        to:null,
+        from:doc.body.exp.to || doc.body.exp.from
+      },
+      exp:doc.body.lot && {
+        to:null,
+        from:doc.body.lot.to || doc.body.lot.from
+      }
+    })
   },
 
   //This is a bit complex here are the steps:
@@ -173,38 +163,22 @@ exports.verified = {
   //3. Delete the item with inventory._id
   //4. Update the original transaction with verified_at = null
   *delete(id) {
-    var inventory = yield couch(this, 'GET')
-    .path(path.replace(':id', id))
-    .proxy(false)
-    inventory = inventory[0]
+    let inventory = yield this.couch.get().url(history(id))
 
-    if ( ! inventory) { //Only delete inventory if it actually exists
+    if ( ! inventory[0]) { //Only delete inventory if it actually exists
       this.status  = 409
       this.message = 'Cannot find a transaction with history.transaction = '+id+'.  Has this transaction been deleted already?'
       return
     }
 
-    if (inventory.shipment._id != this.cookies.get('AuthAccount')) {
+    if (inventory[0].shipment._id != this.account) {
       this.status  = 409
       this.message = 'The inventory for this transaction has already been assigned to another shipment'
       return
     }
 
-    yield exports.delete.call(this, inventory._id)
-    if (this.status != 200) return
+    yield patch.call(this, id, {verifiedAt:null}) //Un-verify transaction
 
-    /*Start makeshift PATCH */
-    var doc = yield couch(this, 'GET')
-    .path('/transactions/'+id)
-    .proxy(false)
-
-    //Update current transaction to be un-verified
-    doc.verifiedAt = null
-
-    this.req.body = yield couch(this, 'PUT')
-    .path('/transactions/'+id)
-    .body(doc)
-    .proxy(false)
-    /*End makeshift PATCH */
+    yield remove.call(this, inventory._id)
   }
 }

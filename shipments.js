@@ -1,17 +1,12 @@
-var couch = require('./couch')
-
-exports.list  = couch.list
-exports.doc   = couch.doc
-exports.post = function* () { //TODO label=fedex creates label, maybe track=true/false eventually
-  this.req.body = yield couch.json(this.req)
-  yield couch(this, 'PUT')
-  .path('/'+this.req.body.account.from._id+'.'+this.req.body.account.to._id+'.'+couch.id(), true)
-  .body({
+exports.post = function* () { //TODO querystring with label=fedex creates label, maybe track=true/false eventually
+  yield this.couch.put({proxy:true})
+  .url(body => `/${body.account.from._id}.${body.account.to._id}.${this.couch.id()}`)
+  .body(body => {
     //TODO replace this with an Easy Post API call that actually creates a label
     //TODO create pickup for the next business date
-    tracking:Math.floor(Math.random() * (99999-10000))+10000,
-    createdAt:new Date().toJSON()
-  }, false)
+    body.tracking  = Math.floor(Math.random() * (99999-10000))+10000,
+    body.createdAt = new Date().toJSON()
+  })
 }
 
 exports.shipped = function* (id) {

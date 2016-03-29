@@ -1,6 +1,7 @@
-var couch  = require('./couch')
-var secret = require('../development')
-var auth   = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
+"use strict"
+
+let secret = require('../development')
+let auth   = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 
 //Unfortunately views and _changes only work if given admin privledges (even with _users table is public)
 //two options: (1) make all users admins on _users using roles or (2) escalate certain requests to admin
@@ -20,37 +21,36 @@ function authorize(headers) {
   delete headers.cookie //Cookie overrides Basic Auth so we need to delete
 }
 
-exports.changes = function* () {
-  authorize(this.req.headers)
-  yield couch.changes.call(this, 'users')
+exports.proxy = function* () {
+  yield this.couch({proxy:true}).headers(authorize).url(this.url.replace('/users', '/_users'))
 }
 
+//TODO only show users of current account
+//TODO reuse code from index.js
 exports.list = function* () {
-  yield couch.list.call(this)   //TODO only show users of current account
+  yield this.couch
+  .get({proxy:true})
+  //.headers(authorize)
+  .url(`/_users/_design/auth/_list/all/authorized?include_docs=true&key="${this.account}"`)
 }
 
-exports.doc = function* () {
-  yield couch.doc.call(this)   //TODO only edit, get, delete users of current account
+exports.doc = function* (id) { //TODO only edit, get, delete users of current account
+  yield this.couch({proxy:true})
+  //.headers(authorize)
+  .url(this.url.replace('/users', '/_users'))
 }
 
 //CouchDB requires an _id based on the user's name
 exports.post = function* () {
-  authorize(this.req.headers)
-  this.req.body = yield couch.json(this.req)
-  if ( ! this.req.body.account) {
-    this.status = 422
-    this.message = 'user must have an account property'
-  }
-  else {
-    //TODO only edit, get, delete users of current account
-    yield couch(this, 'PUT')
-    .path('/org.couchdb.user:'+this.req.body.name, true)
-    .body({
-      createdAt:new Date().toJSON(),
-      type:'user',
-      roles:['user']
-    }, true)
-  }
+  yield this.couch.put({proxy:true})
+  .headers(authorize)
+  .url(body => '/_users/org.couchdb.user:'+body.name)
+  .body(body => {
+    body.createdAt = new Date().toJSON()
+    body.account = body.account || this.account
+    body.type  = 'user'
+    body.roles = ['user']
+  })
 }
 
 exports.email = function* (id) {
@@ -59,28 +59,25 @@ exports.email = function* (id) {
 
 exports.session = {
   *post(id) {
-    yield couch(this)
-    .path('/_session')
-    .headers({'referer':'http://'+this.headers['host']}, true)
-    .body({name:id}, true)
+    yield this.couch({proxy:true})
+    .url('/_session')
+    .headers(headers => { headers.referer = 'http://'+headers.host })
+    .body(body => { body.name = id })
 
-    this.body = yield couch(this, 'GET')
-    .path('/users/org.couchdb.user:'+id)
-    .proxy(false)
+    let user    = yield this.couch.get().url('/_users/org.couchdb.user:'+id)
+    let account = yield this.couch.get().url('/accounts/'+user.body.account._id)
 
-    if ( ! this.body.account)
-      return
-      
-    this.body.account = yield couch(this, 'GET')
-    .path('/accounts/'+this.body.account._id)
-    .proxy(false)
+    user.body.account = account.body
 
-    this.cookies.set('AuthAccount', this.body.account._id)
-    delete this.body.roles
+    this.cookies.set('AuthAccount', user.body.account._id)
+
+    delete user.body.roles
+    delete user.body.type
+    this.body = user.body
   },
 
   *delete(id) {
     this.cookies.set('AuthAccount', '')
-    yield couch(this).path('/_session')
+    yield this.couch({proxy:true}).url('/_session')
   }
 }
