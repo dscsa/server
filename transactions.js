@@ -23,10 +23,10 @@ function *remove(id) {
 
 exports.post = function* () {
   yield this.couch.put({proxy:true})
-  .url('/transactions/'+couch.id())
+  .url('/transactions/'+this.couch.id())
   .body(body => {
     //TODO ensure that there is a qty
-    body.history    = []
+    body.history    = body.history || []
     body.createdAt  = new Date().toJSON()
     body.verifiedAt = null
     body.qty.to     = +body.qty.to
