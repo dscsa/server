@@ -12,6 +12,8 @@ exports.post = function* () {
   })
 }
 
+//TODO need to update shipments account.from/to.name on change of account name
+
 exports.email = function* (id) {
   this.status = 501 //not implemented
 }
@@ -24,32 +26,32 @@ exports.authorized = {
   },
   *post(id) {
     //Authorize a sender
-    let path = '/accounts/'+this.cookies.get('AuthAccount')
+    let path = '/accounts/'+this.account
 
     let account = yield this.couch.get().url(path)
 
-    if ( ~ account.authorized.indexOf(id)) {
+    if ( ~ account.body.authorized.indexOf(id)) {
       this.status  = 409
       this.message = 'This account is already authorized'
     }
     else {
-      account.authorized.push(id)
-      yield this.couch.put({proxy:true}).url(path).body(account)
+      account.body.authorized.push(id)
+      yield this.couch.put({proxy:true}).url(path).body(account.body)
     }
   },
   *delete(id) {
     //Un-authorize a sender
-    let path    = '/accounts/'+this.cookies.get('AuthAccount')
-    let account = yield this.couch.get().url(path)
-    let index   = account.authorized.indexOf(id)
+    let url     = '/accounts/'+this.account
+    let account = yield this.couch.get().url(url)
+    let index   = account.body.authorized.indexOf(id)
 
     if (index == -1) {
       this.status  = 409
       this.message = 'This account is already not authorized'
     }
     else {
-      account.authorized.splice(index, 1);
-      yield this.couch.put({proxy:true}).url(path).body(account)
+      account.body.authorized.splice(index, 1);
+      yield this.couch.put({proxy:true}).url(url).body(account.body)
     }
   }
 }

@@ -60,12 +60,13 @@ exports.history = function* (id) { //TODO option to include full from/to account
     return $this.couch.get().url('/transactions/'+_id)
     .then(trans => {
 
-      if ( ! trans.body) {
-        this.status  = 404
-        this.message = 'Cannot find transaction '+_id
+      if (trans.status == 404) {
+        $this.status  = 404
+        $this.message = 'Cannot find transaction '+_id
         return false
       }
 
+      trans = trans.body
       //Start resursive
       list.push(trans)
 
@@ -93,15 +94,22 @@ exports.history = function* (id) { //TODO option to include full from/to account
           account:{from:{_id:$this.account}}
         })
       } else {
-        transaction.type = 'Transaction'
+        trans.type = 'Transaction'
         all.unshift(
           $this.couch.get().url('/shipments/'+trans.shipment._id)
         )
       }
 
       //Search for transaction's ancestors and shipment in parallel
-      return Promose.all(all).then(all => {
-        trans.shipment = all[0]
+      return Promise.all(all).then(all => {
+
+        if (all[0].status == 404) {
+          $this.status  = 404
+          $this.message = `Malformed transaction ${trans._id} does not have a shipment ${trans.shipment._id}`
+          return false
+        }
+
+        trans.shipment = all[0].body
 
         //TODO this call is serial. Can we do in parallel with next async call?
         return Promise.all([
@@ -110,8 +118,10 @@ exports.history = function* (id) { //TODO option to include full from/to account
         ])
       })
       .then(function(accounts) {
-        trans.shipment.account.from = accounts[0]
-        trans.shipment.account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
+        if (accounts) {
+          trans.shipment.account.from = accounts[0]
+          trans.shipment.account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
+        }
         return result
       })
     })
