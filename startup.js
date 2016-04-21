@@ -91,7 +91,7 @@ Object.keys(_design).forEach(name => {
     }
 
     for (var i in _design[name].views) {
-      body.views[i] = {map:_design[name].views[i].toString()}
+      body.views[i] = {map:'function'+_design[name].views[i].toString()}
     }
     couch.put().url(`/${name}/_design%2fauth`).headers({authorization:auth}).body(body).then()
   })
