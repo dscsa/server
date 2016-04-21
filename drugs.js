@@ -11,7 +11,19 @@ function defaults(body) {
 }
 //Drug product NDC is a good natural key
 exports.post = function* () {
-  yield this.couch.put({proxy:true}).url(body => 'drugs/'+body.ndc).body(defaults)
+  let res = yield this.couch.put()
+  .url(body => 'drugs/'+body.ndc)
+  .body(body => {
+    defaults(body)
+    this.body = body
+  })
+  this.status    = res.status
+
+  if (this.status != 201)
+    return this.body = res.body
+
+  this.body._id  = res.body.id
+  this.body._rev = res.body.rev
 }
 
 exports.doc = function* () {
