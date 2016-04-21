@@ -9,9 +9,12 @@ function *patch(id, updates) {
   let doc = yield this.couch.get().url('/transactions/'+id)
 
   for (let i in updates)
-    doc[i] = updates[i]
+    doc.body[i] = updates[i]
 
-  yield this.couch.put().url('/transactions/'+id).body(doc)
+  let res = yield this.couch.put().url('/transactions/'+id).body(doc.body)
+  doc.body._rev = res.body.rev
+
+  return doc.body
 }
 
 //TODO make this based on patch with {_delete:true}
@@ -22,17 +25,27 @@ function *remove(id) {
 }
 
 exports.post = function* () {
-  yield this.couch.put({proxy:true})
+  let res = yield this.couch.put()
   .url('/transactions/'+this.couch.id())
   .body(body => {
     //TODO ensure that there is a qty
     body.history    = body.history || []
     body.createdAt  = new Date().toJSON()
     body.verifiedAt = null
+
+    //TODO [TypeError: Cannot read property 'to' of undefined] is malformed request
     body.qty.to     = +body.qty.to
     body.qty.from   = +body.qty.from
     body.shipment   = body.shipment || {_id:this.account}
+    this.body       = body
   })
+  this.status    = res.status
+
+  if (this.status != 201)
+    return this.body = res.body
+
+  this.body._id  = res.body.id
+  this.body._rev = res.body.rev
 }
 
 exports.delete = function* (id) {
@@ -70,13 +83,13 @@ exports.history = function* (id) { //TODO option to include full from/to account
       //Start resursive
       list.push(trans)
 
-      let len = trans.history.length
+      let indent, len = trans.history.length
 
       if (len == 1)    //This is just a normal transfer
         history(trans.history[0].transaction._id, list)
       else if (len > 1) {
         trans.type = 'Repackaged'
-        let indent = []
+        indent = []
         list.push(indent)
       }
 
@@ -119,8 +132,8 @@ exports.history = function* (id) { //TODO option to include full from/to account
       })
       .then(function(accounts) {
         if (accounts) {
-          trans.shipment.account.from = accounts[0]
-          trans.shipment.account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
+          trans.shipment.account.from = accounts[0].body
+          trans.shipment.account.to   = accounts[1].body //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
         }
         return result
       })
@@ -132,39 +145,42 @@ exports.verified = {
   *post(id) {
     let inventory = yield this.couch.get().url(history(id))
 
-    if (inventory[0]) {
+    if (inventory.body[0]) {
       this.status  = 409
       this.message = `Cannot verify this transaction because transaction ${inventory[0]._id} with _id ${id} already has this transaction in its history`
       return
     }
 
-    yield patch.call(this, id, {verifiedAt:new Date().toJSON()})
+    let doc = yield patch.call(this, id, {verifiedAt:new Date().toJSON()})
 
-    //TODO test if previous call was successful
+    //TODO test if previous call was successful.
 
     //Create the inventory
     yield this.couch.put({proxy:true})
-    .url('/transactions/'+couch.id())
+    .url('/transactions/'+this.couch.id())
     .body({
       shipment:{_id:this.account},
+      drug:doc.drug,
       verifiedAt:null,
       history:[{
         transaction:{_id:id},
-        qty:doc.body.qty.to
+        qty:doc.qty.to
       }],
       qty:{
         to:null,
-        from:doc.body.qty.to || doc.body.qty.from
+        from:doc.qty.to || doc.qty.from
       },
-      exp:doc.body.exp && {
+      exp:doc.exp && {
         to:null,
-        from:doc.body.exp.to || doc.body.exp.from
+        from:doc.exp.to || doc.exp.from
       },
-      exp:doc.body.lot && {
+      lot:doc.lot && {
         to:null,
-        from:doc.body.lot.to || doc.body.lot.from
+        from:doc.lot.to || doc.lot.from
       }
     })
+
+    //TODO rollback verified if the adding the new item is not successful
   },
 
   //This is a bit complex here are the steps:
