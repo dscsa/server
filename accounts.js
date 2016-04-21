@@ -1,15 +1,21 @@
 "use strict"
 
 exports.post = function* () {
-  yield this.couch
-  .put({proxy:true})
+  let res = yield this.couch.put()
   .url('accounts/'+couch.id())
   .body(body => {
     delete body._rev
     body.createdAt  = new Date().toJSON()
     body.authorized = body.authorized || []
-    return body
+    this.body = body
   })
+  this.status    = res.status
+
+  if (this.status != 201)
+    return this.body = res.body
+
+  this.body._id  = res.body.id
+  this.body._rev = res.body.rev
 }
 
 //TODO need to update shipments account.from/to.name on change of account name
