@@ -1,15 +1,14 @@
 "use strict"
 
 exports.post = function* () {
-  let res = yield this.couch.put()
-  .url('accounts/'+couch.id())
-  .body(body => {
-    delete body._rev
-    body.createdAt  = new Date().toJSON()
-    body.authorized = body.authorized || []
-    this.body = body
-  })
-  this.status    = res.status
+  this.body            = yield this.http.body
+  this.body.createdAt  = new Date().toJSON()
+  this.body.authorized = body.authorized || []
+  delete this.body._rev
+
+  let res = yield this.http.put('accounts/'+this.couch.id).body(this.body)
+
+  this.status = res.status
 
   if (this.status != 201)
     return this.body = res.body
@@ -19,7 +18,6 @@ exports.post = function* () {
 }
 
 //TODO need to update shipments account.from/to.name on change of account name
-
 exports.email = function* (id) {
   this.status = 501 //not implemented
 }
@@ -32,32 +30,29 @@ exports.authorized = {
   },
   *post(id) {
     //Authorize a sender
-    let path = '/accounts/'+this.account
+    let path    = 'accounts/'+this.account
+    let account = yield this.http.get(path)
 
-    let account = yield this.couch.get().url(path)
-
-    if ( ~ account.body.authorized.indexOf(id)) {
+    if (account.body.authorized.includes(id)) {
       this.status  = 409
       this.message = 'This account is already authorized'
-    }
-    else {
+    } else {
       account.body.authorized.push(id)
-      yield this.couch.put({proxy:true}).url(path).body(account.body)
+      yield this.http.put(path, true).body(account.body)
     }
   },
   *delete(id) {
     //Un-authorize a sender
-    let url     = '/accounts/'+this.account
-    let account = yield this.couch.get().url(url)
+    let path    = 'accounts/'+this.account
+    let account = yield this.http.get(path)
     let index   = account.body.authorized.indexOf(id)
 
     if (index == -1) {
       this.status  = 409
       this.message = 'This account is already not authorized'
-    }
-    else {
+    } else {
       account.body.authorized.splice(index, 1);
-      yield this.couch.put({proxy:true}).url(url).body(account.body)
+      yield this.http.put(path, true).body(account.body)
     }
   }
 }

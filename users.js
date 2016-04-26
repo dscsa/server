@@ -22,35 +22,37 @@ function authorize(headers) {
 }
 
 exports.proxy = function* () {
-  yield this.couch({proxy:true}).headers(authorize).url(this.url.replace('/users', '/_users'))
+  yield this.http(this.url.replace('/users', '/_users'), true).headers(authorize)
 }
 
 //TODO only show users of current account
 //TODO reuse code from index.js
 exports.list = function* () {
-  yield this.couch
-  .get({proxy:true})
-  //.headers(authorize)
-  .url(`/_users/_design/auth/_list/all/authorized?include_docs=true&key="${this.account}"`)
+  yield this.http.get(`/_users/_design/auth/_list/all/authorized?include_docs=true&key="${this.account}"`, true)
 }
 
 exports.doc = function* (id) { //TODO only edit, get, delete users of current account
-  yield this.couch({proxy:true})
-  //.headers(authorize)
-  .url(this.url.replace('/users', '/_users'))
+  yield this.http(this.url.replace('/users', '/_users'), true)
 }
 
 //CouchDB requires an _id based on the user's name
 exports.post = function* () {
-  yield this.couch.put({proxy:true})
-  .headers(authorize)
-  .url(body => '/_users/org.couchdb.user:'+body.name)
-  .body(body => {
-    body.createdAt = new Date().toJSON()
-    body.account = body.account || this.account
-    body.type  = 'user'
-    body.roles = ['user']
-  })
+  this.body = yield this.http.body
+
+  this.body.createdAt = new Date().toJSON()
+  this.body.account   = body.account || this.account
+  this.body.type      = 'user'
+  this.body.roles     = ['user']
+
+  let res = yield this.http.put('_users/org.couchdb.user:'+this.body.name).headers(authorize).body(this.body)
+
+  this.status = res.status
+
+  if (this.status != 201)
+    return this.body = res.body
+
+  this.body._id  = res.body.id
+  this.body._rev = res.body.rev
 }
 
 exports.email = function* (id) {
@@ -58,26 +60,31 @@ exports.email = function* (id) {
 }
 
 exports.session = {
+
   *post(id) {
-    yield this.couch({proxy:true})
-    .url('/_session')
-    .headers(headers => { headers.referer = 'http://'+headers.host })
-    .body(body => { body.name = id })
+    let login = yield this.http.body
 
-    let user    = yield this.couch.get().url('/_users/org.couchdb.user:'+id)
-    let account = yield this.couch.get().url('/accounts/'+user.body.account._id)
+    this.headers.referer = 'http://'+this.headers.host
+    login.name = id
 
-    user.body.account = account.body
+    yield this.http('_session', true).headers(this.headers).body(login)
 
-    this.cookies.set('AuthAccount', user.body.account._id)
+    if (this.status != 200) return
 
-    delete user.body.roles
-    delete user.body.type
+    let user = yield this.http.get('_users/org.couchdb.user:'+id)
+
     this.body = user.body
+    delete this.body.roles
+    delete this.body.type
+    this.cookies.set('AuthAccount', this.body.account._id)
+
+    let account = yield this.http.get('accounts/'+this.body.account._id)
+
+    this.body.account = account.body
   },
 
   *delete(id) {
     this.cookies.set('AuthAccount', '')
-    yield this.couch({proxy:true}).url('/_session')
+    yield this.http('_session', true)
   }
 }

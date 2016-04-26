@@ -1,10 +1,12 @@
 "use strict"
-let couch  = require('./couch')({hostname:'localhost', port: 5984})
+
+let co     = require('koa/node_modules/co')
+let http   = require('./http')({hostname:'localhost', port: 5984, middleware:false})
 let secret = require('../development')
 
 //TODO set _users db admin role to ['user']
 //TODO set this on the command line rather than in code
-let auth  = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
+let authorization  = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 
 let _design = {
   accounts:{
@@ -72,36 +74,48 @@ let _design = {
     }
   }
 }
-Object.keys(_design).forEach(name => {
-  couch.put().url('/'+name).headers({authorization:auth})
-  .then(_ => {
-    var body = {
-      views:{},
-      filters:{account:_design[name].filters.toString()},
-      lists:{all:function(head, req) {
-        send('[')
-        var row = getRow()
-        if (row) {
-          send(toJSON(row.doc))
-          while(row = getRow())
-            send(','+toJSON(row.doc))
-        }
-        send(']')
-      }.toString()}
-    }
 
-    for (var i in _design[name].views) {
-      body.views[i] = {map:'function'+_design[name].views[i].toString()}
+function all(head, req) {
+  send('[')
+  var row = getRow()
+  if (row) {
+    send(toJSON(row.doc))
+    while(row = getRow())
+      send(','+toJSON(row.doc))
+  }
+  send(']')
+}
+
+function *addDesignDocs (name) {
+
+  yield http.put(name).headers({authorization})
+
+  var body = {
+    views:{},
+    filters:{account:_design[name].filters.toString()},
+    lists:{
+      all:all.toString()
     }
-    couch.put().url(`/${name}/_design%2fauth`).headers({authorization:auth}).body(body).then()
+  }
+
+  for (var i in _design[name].views) {
+    body.views[i] = {map:'function '+_design[name].views[i].toString()}
+  }
+
+  yield http.put(`${name}/_design%2fauth`).headers({authorization}).body(body)
+}
+
+co(function*() {
+  let all = Object.keys(_design).map(addDesignDocs)
+  let sec = http.put('_users/_security').headers({authorization}).body({
+     admins:{names:[], roles: ["user"]},
+     members:{names:[], roles: []}
   })
-  .catch(err => {
-    console.log('Error adding design files:', err)
-  })
+  all.push(sec)
+  try {
+    yield Promise.all(all)
+    console.log('Success adding design docs to database')
+  } catch(err) {
+    console.log('Error adding design docs to database', err)
+  }
 })
-
-couch.put().url('/_users/_security').headers({authorization:auth})
-.body({
-   admins:{names:[], roles: ["user"]},
-  members:{names:[], roles: []}
-}).then()

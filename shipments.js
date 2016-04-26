@@ -1,15 +1,19 @@
 "use strict"
 
 exports.post = function* () { //TODO querystring with label=fedex creates label, maybe track=true/false eventually
-  let res = yield this.couch.put()
-  .url(body => `/shipments/${body.account.from._id}.${body.account.to._id}.${this.couch.id()}`)
-  .body(body => {
-    //TODO replace this with an Easy Post API call that actually creates a label
-    //TODO create pickup for the next business date
-    body.tracking  = Math.floor(Math.random() * (99999-10000))+10000,
-    body.createdAt = new Date().toJSON()
-    this.body = body
-  })
+
+  this.body = yield this.http.body
+
+  //TODO replace this with an Easy Post API call that actually creates a label
+  //TODO create pickup for the next business date
+  this.body.tracking  = Math.floor(Math.random() * (99999-10000))+10000,
+  this.body.createdAt = new Date().toJSON()
+
+  //Complicated id is not need for shipment, but is needed for transaction that references shipment
+  //this way a list function ensure transactions are only provided to the correct from/to accounts
+  let id  = `${this.body.account.from._id}.${this.body.account.to._id}.${this.http.id}`
+  let res = yield this.http.put('shipments/'+id).body(this.body)
+
   this.status = res.status
 
   if (this.status != 201)
@@ -18,6 +22,7 @@ exports.post = function* () { //TODO querystring with label=fedex creates label,
   this.body._id  = res.body.id
   this.body._rev = res.body.rev
 }
+
 
 exports.shipped = function* (id) {
   this.status = 501 //not implemented

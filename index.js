@@ -3,7 +3,7 @@
 require('./startup')
 let app          = require('koa')()
 let route        = require('koa-route')
-let couch        = require('./couch')
+let http         = require('./http')
 let drugs        = require('./drugs')
 let accounts     = require('./accounts')
 let users        = require('./users')
@@ -22,7 +22,7 @@ function router(method) {
 //Shortcuts for defining routes with common methods
 let get  = router('get')
 let post = router('post')
-let put = router('put')
+let put  = router('put')
 let del  = router('del')
 let all  = router('all')
 
@@ -39,32 +39,23 @@ let all  = router('all')
 // -example
 */
 
-app.use(couch({hostname:'localhost', port: 5984}).use)
+app.use(http({hostname:'localhost', port: 5984, middleware:'http'}))
 
 function* list(){
-  yield this.couch
-  .get({proxy:true})
-  .url(`${this.path}/_design/auth/_list/all/authorized?include_docs=true&key="${this.account}"`)
+  yield this.http.get(`${this.path}/_design/auth/_list/all/authorized?include_docs=true&key="${this.account}"`, true)
 }
 
 function* proxy() {
-  yield this.couch({proxy:true}).url(this.url.replace('/users', '/_users'))
+  yield this.http(this.url.replace('/users', '/_users'), true)
 }
-let i = 0
+
 function* changes(db) {
-  let start = Date.now()
-  //console.log('changes before', this.url)
-  yield this.couch({proxy:true}).url(this.url)
-  //console.log('changes after', this.url)
-
-  //if (Date.now()-start > 200)
-  //console.log(Date.now()-start, this.status, this.response.headers, this.url)
-
+  yield this.http(null, true)
 }
 
 app.use(function* (next) {
   //Sugar
-  this.account     = this.cookies.get('AuthAccount')
+  this.account = this.cookies.get('AuthAccount')
 
   //Rather setting up CouchDB for CORS, it's easier & more secure to do here
   this.set('access-control-allow-origin', this.headers.origin)
@@ -88,12 +79,16 @@ post('/:db/_bulk_docs', proxy)               //Allow PouchDB to make bulk edits
  get('/users/_design/:doc', users.proxy)    //TODO can I avoid sharing design docs with browser?
  get('/:db/_design/:doc', proxy)    //TODO can I avoid sharing design docs with browser?
  all('/:db/_local/:doc', proxy)       //Only GET & PUT seem to be needed
+ post('/:db/_bulk_get', proxy)               //Allow PouchDB to make bulk edits
+
  //put('/:db/_local/:doc', proxy)       //Only GET & PUT seem to be needed
 
 //Drugs Resource Endpoint
  get('/drugs', list, {strict:true})
 post('/drugs', drugs.post)
- all('/drugs/:id', drugs.doc)
+ get('/drugs/:id', drugs.get)
+ put('/drugs/:id', drugs.put)
+ del('/drugs/:id', drugs.delete)
 
 //Account Resource Endpoint
  get('/accounts', list, {strict:true})              //List all docs in resource. Strict means no trailing slash
