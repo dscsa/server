@@ -11,13 +11,51 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   if (oldDoc && newDoc._id != userCtx.roles[0])
     throw({unauthorized:"User's may only edit their own account. Your account is "+userCtx.roles[0]+". Got "+toJSON(newDoc)});
 }
+
+//Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
+//them with a function that takes a key and returns the couchdb url needed to call them.
+//TODO this currently allows for anyone to modify any account.  We need a different way to check viewing vs editing
+exports.filter = {
+  authorized(doc, req) {
+    return doc._id.slice(0, 7) != '_design' //Everyone can see all accounts except design documents
+  }
+}
+
+exports.view = {
+  authorized(doc) {
+    emit(doc._id)
+  }
+}
+
+exports.show = {
+  authorized(doc, req) {
+    return toJSON([{ok:doc}]) //Everyone can get/put/del all accounts
+  }
+}
+
+exports.changes = function* (db) {
+  yield this.http(exports.filter.authorized(this.url), true)
+}
+
+exports.list = function* () {
+  yield this.http(exports.view.authorized(), true)
+}
+
+exports.get = function* (id) {
+  yield this.http(exports.show.authorized(id), true)
+}
+
+exports.bulk_get = function* (id) {
+  this.status = 400
+}
+
 exports.post = function* () {
   this.body            = yield this.http.body
   this.body.createdAt  = new Date().toJSON()
-  this.body.authorized = body.authorized || []
+  this.body.authorized = this.body.authorized || []
   delete this.body._rev
 
-  let res = yield this.http.put('accounts/'+this.couch.id).body(this.body)
+  let res = yield this.http.put('accounts/'+this.http.id).body(this.body)
 
   this.status = res.status
 
@@ -26,6 +64,22 @@ exports.post = function* () {
 
   this.body._id  = res.body.id
   this.body._rev = res.body.rev
+}
+
+exports.put = function* () {
+  yield this.http(null, true)
+}
+
+exports.bulk_docs = function* () {
+  yield this.http(null, true)
+}
+
+exports.delete = function* (id) {
+
+  yield this.http.get('accounts/'+id, true)
+
+  if (this.status == 200)
+    yield this.http.delete(`/drugs/${id}?rev=${account.body._rev}`, true)
 }
 
 //TODO need to update shipments account.from/to.name on change of account name
@@ -41,8 +95,8 @@ exports.authorized = {
   },
   *post(id) {
     //Authorize a sender
-    let path    = 'accounts/'+this.account
-    let account = yield this.http.get(path)
+    let path    = exports.show.authorized(this.account)
+    let account = yield this.http(path)
 
     if (account.body.authorized.includes(id)) {
       this.status  = 409
@@ -54,8 +108,8 @@ exports.authorized = {
   },
   *delete(id) {
     //Un-authorize a sender
-    let path    = 'accounts/'+this.account
-    let account = yield this.http.get(path)
+    let path    = exports.show.authorized(this.account)
+    let account = yield this.http(path)
     let index   = account.body.authorized.indexOf(id)
 
     if (index == -1) {

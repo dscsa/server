@@ -19,6 +19,55 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   if (ids[0] != userCtx.roles[0] && ids[1] != userCtx.roles[0])
     throw({unauthorized:'An account may only make a shipment to or from itself. Your account is '+userCtx.roles[0]});
 }
+
+//Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
+//them with a function that takes a key and returns the couchdb url needed to call them.
+exports.filter = {
+  authorized(doc, req){
+
+    if (doc._id.slice(0, 7) == '_design') return
+    
+    var account  = req.account || req.userCtx.roles[0]
+    var accounts = doc._id.split('.')
+
+    return accounts[0] == account || accounts[1] == account
+  }
+}
+
+exports.view = {
+  authorized(doc) {
+    var accounts = doc._id.split('.')
+    emit(accounts[0])
+    emit(accounts[1])
+  }
+}
+
+exports.show = {
+  authorized(doc, req) {
+    var account  = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
+    var accounts = doc._id.split('.')
+
+    if (accounts[0] == account || accounts[1] == account)
+      return toJSON([{ok:doc}])
+  }
+}
+
+exports.changes = function* (db) {
+  yield this.http(exports.filter.authorized(this.url), true)
+}
+
+exports.list = function* () {
+  yield this.http(exports.view.authorized(), true)
+}
+
+exports.get = function* (id) {
+  yield this.http(exports.show.authorized(id), true)
+}
+
+exports.bulk_get = function* (id) {
+  this.status = 400
+}
+
 exports.post = function* () { //TODO querystring with label=fedex creates label, maybe track=true/false eventually
 
   this.body = yield this.http.body
@@ -42,6 +91,21 @@ exports.post = function* () { //TODO querystring with label=fedex creates label,
   this.body._rev = res.body.rev
 }
 
+exports.put = function* () {
+  yield this.http(null, true)
+}
+
+exports.bulk_docs = function* () {
+  yield this.http(null, true)
+}
+
+exports.delete = function* (id) {
+
+  yield this.http.get('shipments/'+id, true)
+
+  if (this.status == 200)
+    yield this.http.delete(`/shipments/${id}?rev=${shipment.body._rev}`, true)
+}
 
 exports.shipped = function* (id) {
   this.status = 501 //not implemented

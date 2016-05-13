@@ -1,5 +1,4 @@
 "use strict"
-
 let drugs = require('./drugs')
 
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
@@ -28,45 +27,61 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   //   throw({unauthorized:'An account may only add transactions to a shipment to or from itself. Got '+toJSON(userCtx)});
 }
 
+//Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
+//them with a function that takes a key and returns the couchdb url needed to call them.
+exports.filter = {
+  authorized(doc, req) {
 
-//WHEN IS IT CALLED
-//ALL PARAMS - TYPES, REQUIREMENTS
-//RETURN VALUE
-//SET CONTEXT
-//ANY SIDE EFFECTS
-//ANY TODOS/ISSUES
+    if (doc._id.slice(0, 7) == '_design') return 
 
-
-
-function defaults(body) {
-  //TODO ensure that there is a qty
-  body.history    = body.history || []
-  body.createdAt  = body.createdAt || new Date().toJSON()
-
-  //TODO [TypeError: Cannot read property 'to' of undefined] is malformed request
-  body.qty.to     = +body.qty.to
-  body.qty.from   = +body.qty.from
-  body.shipment   = (body.shipment && body.shipment._id) || {_id:this.account}
+    var account = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
+    var accounts = doc.shipment._id.split('.')
+    return accounts[0] == account || accounts[1] == account
+  }
 }
 
-/* Makeshift PATCH */
-function *patch(id, updates) {
-  let transaction = yield this.http.get('transactions/'+id)
-  transaction     = transaction.body
+exports.view = {
+  authorized(doc) {
+    var accounts = doc.shipment._id.split('.')
+    emit(accounts[0])
+    emit(accounts[1])
+  },
 
-  Object.assign(transaction, updates)
+  history(doc) {
+    for (var i in doc.history)
+      emit(doc.history[i].transaction._id)
+  },
 
-  let res = yield this.http.put('transactions/'+id).body(transaction)
-
-  transaction._rev = res.body.rev
-
-  return transaction
+  //used by drug endpoint to update transactions on drug name/form updates
+  drugs(doc) {
+    emit(doc.drug._id)
+  }
 }
 
-//TODO make this based on patch with {_delete:true}
-function *remove(id) {
-  var doc = yield this.http.get('transactions/'+id)
-  yield this.http.delete(`/transactions/${id}?rev=${doc._rev}`, true)
+exports.show = {
+  authorized(doc, req) {
+    var account = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
+    var accounts = doc.shipment._id.split('.')
+
+    if (accounts[0] == account || accounts[1] == account)
+      return toJSON([{ok:doc}])
+  }
+}
+
+exports.changes = function* (db) {
+  yield this.http(exports.filter.authorized(this.url), true)
+}
+
+exports.list = function* () {
+  yield this.http(exports.view.authorized(), true)
+}
+
+exports.get = function* (id) {
+  yield this.http(exports.show.authorized(id), true)
+}
+
+exports.bulk_get = function* (id) {
+  this.status = 400
 }
 
 exports.post = function* () {
@@ -74,14 +89,12 @@ exports.post = function* () {
   let transaction = yield this.http.body
 
   defaults.call(this, transaction)
-
   //Making sure these are accurate and upto date is too
   //costly to do on every save so just do it on creation
   yield drugs.get.call(this, transaction.drug._id)
-
-  transaction.drug.price    = this.body.price
-  transaction.drug.generics = this.body.generics
-  transaction.drug.form     = this.body.form
+  transaction.drug.price    = this.body[0].ok.price
+  transaction.drug.generics = this.body[0].ok.generics
+  transaction.drug.form     = this.body[0].ok.form
 
   let create = yield this.http.put('transactions/'+this.http.id).body(transaction)
 
@@ -95,21 +108,17 @@ exports.post = function* () {
   this.body._rev = create.body.rev
 }
 
+exports.put = function* () {
+  yield this.http(null, true)
+}
+
 exports.bulk_docs = function* () {
-
-  let body = yield this.http.body
-
-  for (let doc of body.docs) {
-    if ( ! doc._id.includes('_local/'))
-      defaults.call(this, doc)
-  }
-
-  yield this.http(null, true).body(body)
+  yield this.http(null, true)
 }
 
 exports.delete = function* (id) {
 
-  let inventory = yield this.http.get(history(id))
+  let inventory = yield this.http.get(exports.view.history(id))
 
   if (inventory[0]) { //Do not delete inventory if id is in subsequent transaction
     this.status  = 409
@@ -117,7 +126,7 @@ exports.delete = function* (id) {
     return
   }
 
-  yield remove.call(this, id) //We can safely delete this transaction.  Get the current _rev
+  yield patch.call(this, id, {_delete:true}) //We can safely delete this transaction.  Get the current _rev
 }
 
 
@@ -130,7 +139,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
   this.body = yield history(id, result)
 
   function *history (_id, list) {
-    let trans = yield $this.http.get('transactions/'+_id)
+    let trans = yield exports.get.call(this, _id)
 
     if (trans.status == 404) {
       $this.status  = 404
@@ -197,7 +206,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
 
 exports.verified = {
   *post(_id) {
-    let inventory = yield this.http.get(history(_id))
+    let inventory = yield this.http.get(exports.view.history(_id))
 
     if (inventory.body[0]) {
       this.status  = 409
@@ -241,7 +250,7 @@ exports.verified = {
   //3. Delete the item with inventory._id
   //4. Update the original transaction with verified_at = null
   *delete(id) {
-    let inventory = yield this.http.get(history(id))
+    let inventory = yield this.http.get(exports.view.history(id))
 
     if ( ! inventory[0]) { //Only delete inventory if it actually exists
       this.status  = 409
@@ -257,6 +266,33 @@ exports.verified = {
 
     yield patch.call(this, id, {verifiedAt:null}) //Un-verify transaction
 
-    yield remove.call(this, inventory._id)
+    yield patch.call(this, inventory._id, {_delete:true})
   }
+}
+
+function defaults(body) {
+  //TODO ensure that there is a qty
+  body.history    = body.history || []
+  body.createdAt  = body.createdAt || new Date().toJSON()
+
+  //TODO [TypeError: Cannot read property 'to' of undefined] is malformed request
+  body.qty.to     = body.qty.to ? +body.qty.to : null     //don't turn null to 0 since it will get erased
+  body.qty.from   = body.qty.from ? +body.qty.from : null //don't turn null to 0 since it will get erased
+  body.shipment   = (body.shipment && body.shipment._id) || {_id:this.account}
+}
+
+/* Makeshift PATCH */
+function *patch(id, updates) {
+
+  yield exports.get.call(this, id)
+
+  if (this.status != 200) return
+
+  Object.assign(this.body, updates)
+
+  res = yield this.http.put('transactions/'+id).body(this.body)
+
+  this.body._rev = res.body.rev
+
+  return this.body
 }

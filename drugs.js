@@ -1,8 +1,7 @@
 "use strict"
-let crypto = require('crypto')
+let crypto       = require('crypto')
+let transactions = require('./transactions')
 
-function defaults(body) {
-  body.createdAt  = body.createdAt || new Date().toJSON()
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   // if ( ! userCtx.roles[0])
@@ -38,61 +37,74 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
     throw({forbidden:"drug.ndc9 must be CMS's 9 digit version of drug._id. Got "+toJSON(newDoc)})
 }
 
-function nadacUrl() {
-  var d = new Date()
-  d.setDate(d.getDate() - d.getDay() - 4) //Last Wednesday (getDay: Monday = 1 Sunday = 7)
-  d = d.toJSON().slice(0,10)+'T00:00:00.000'
-  return `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=starts_with(ndc,"${body.ndc9}")&as_of_date=${d}`
+//Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
+//them with a function that takes a key and returns the couchdb url needed to call them.
+exports.filter = {
+  authorized(doc, req) {
+    return doc._id.slice(0, 7) != '_design' //Everyone can see all drugs except design documents
+  }
 }
 
-function goodrxUrl() {
-  let qs     = `name=${body.generics[0].name}&dosage=${body.generics[0].strength}&api_key=f46cd9446f`
-  let sig    = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
-  return `https://api.goodrx.com/fair-price?${qs}&sig=${sig}`
+exports.view = {
+  authorized(doc) {
+    emit(doc._id)
+  }
+}
+
+exports.show = {
+  authorized(doc, req) {
+    return toJSON([{ok:doc}]) //Everyone can get/put/del all drugs
+  }
+}
+
+exports.changes = function* (db) {
+  yield this.http(exports.filter.authorized(this.url), true)
+}
+
+exports.list = function* () {
+  yield this.http(exports.view.authorized(), true)
 }
 
 //Retrieve drug and update its price if it is out of date
 exports.get = function*(id) {
-
-    let drug = yield this.http.get('drugs/'+id)
+    let drug = yield this.http.get(exports.show.authorized(id))
 
     this.status  = drug.status
     this.body    = drug.body
     this.set(drug.headers)
 
-    if (new Date() - new Date(drug.body.price.updatedAt) < 7*24*60*60*1000)
-      return
+    if (this.status != 200) return
 
-    let prices = yield Promise.all([
-      this.http.get(nadacUrl()).headers({}),
-      this.http.get(goodrxUrl()).headers({})
-    ])
+    drug = drug.body[0].ok
+    if (new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)
+      return console.log('Prices up to date.')
 
-    let nadac  = prices[0].body[0]
-    let goodrx = prices[1].body.data
+    //TODO destructuring
+    let prices = yield [getNadac.call(this, drug), getGoodrx.call(this, drug)]
 
-    if (nadac || goodrx)
-      drug.body.price.updatedAt = new Date().toJSON()
+    drug.price.nadac  = prices[0] || drug.price.nadac
+    drug.price.goodrx = prices[1] || drug.price.goodrx
 
-    if (nadac)
-      drug.body.price.nadac  = +nadac.nadac_per_unit
+    drug.price.updatedAt = new Date().toJSON()
 
-    if (goodrx)
-      drug.body.price.goodrx = goodrx.price/goodrx.quantity
-
-    this.http.put('drugs/'+drug.body.drug._id).body(drug.body)
+    this.http.put('drugs/'+drug._id).body(drug)
     .then(res => { //need a "then" trigger to send request but we don't need to yield to it
-      return res.status != 201 && console.log('drug price could not be updated', res.body)
+      if (res.status != 201)
+        console.log('drug price could not be updated', res.body)
     })
+}
+
+exports.bulk_get = function* (id) {
+  this.status = 400
 }
 
 //Drug product NDC is a good natural key
 exports.post = function* () {
   let drug = yield this.http.body
 
-  defaults(drug.body)
+  defaults(drug)
 
-  let res = yield this.http.put('drugs/'+drug.body.ndc).body(drug.body)
+  let res = yield this.http.put('drugs/'+drug._id).body(drug)
 
   this.status = res.status
 
@@ -100,20 +112,100 @@ exports.post = function* () {
     return this.body = res.body
 
   //Make sure user gets the updated drug price
-  yield this.http.get('drugs/'+body.ndc, true)
+  yield this.http.get('drugs/'+drug._id, true)
 }
 
-exports.delete = function* () {
-  yield this.http(null, true)
+exports.put = function* () {
+
+  let drug = yield this.http.body
+
+  let res  = yield this.http(null, true).body(drug.body)
+
+  yield updateTransactions.call(this, drug.body)
+
+  this.status = res.status
+
+  if (this.status != 201)
+    return this.body = res.body
+
+  this.body      = drug.body
+  this.body._rev = res.body.rev
+}
+
+exports.bulk_docs = function* () {
+
+  let body  = yield this.http.body
+  let res   = yield this.http(null).body(body)
+  this.status = res.status
+  this.body   = res.body
+
+  let all   = []
+  for (let i in body.docs) {
+    let drug = body.docs[i]
+    if (res.body[i].error) {
+      this.status = 403
+      continue
+    }
+
+    if ( ! drug._id.includes('_local/')) {
+      all.push(updateTransactions.call(this, drug))
+    }
+  }
+
+  yield all
+}
+
+exports.delete = function* (id) {
+
+  yield this.http.get('drugs/'+id, true)
+
+  if (this.status == 200)
+    yield this.http.delete(`/drugs/${id}?rev=${drug.body._rev}`, true)
+}
+
+function defaults(body) {
+  body.createdAt  = body.createdAt || new Date().toJSON()
+
+  let labelerCode = ('00000'+body._id.split('-')[0]).slice(-5)
+  let productCode = ('0000'+body._id.split('-')[1]).slice(-4)
+
+  body.ndc9 = labelerCode+productCode
+  body.upc  = body._id.replace('-', '')
+
+  body.price = body.price || {}
+}
+
+function *getNadac(drug) {
+  var d = new Date()
+  d.setDate(d.getDate() - d.getDay() - 4) //Last Wednesday (getDay: Monday = 1 Sunday = 7)
+  d = d.toJSON().slice(0,10)+'T00:00:00.000'
+  let price = yield this.http.get(`http://data.medicaid.gov/resource/tau9-gfwr.json?$where=starts_with(ndc,"${drug.ndc9}")&as_of_date=${d}`).headers({})
+
+  if (price.body[0]) //API returns a status of 200 even on failure ;-(
+    return price.body[0].nadac_per_unit
+
+  console.log("Drug's nadac price could not be updated", price)
+}
+
+function *getGoodrx(drug) {
+  let qs    = `name=${drug.generics[0].name}&dosage=${drug.generics[0].strength}&api_key=f46cd9446f`.replace(/ /g, '%20')
+  let sig   = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
+  let price = yield this.http.get(`https://api.goodrx.com/fair-price?${qs}&sig=${sig}`).headers({})
+
+  if (price.status == 200) //409 error means qs not properly encoded, 400 means missing drug
+    return price.body.data.quantity ? price.body.data.price/price.body.data.quantity : null
+
+  console.log("Drug's goodrx price could not be updated", price.body.errors)
 }
 
 //Get all transactins using this drug so we can update denormalized database
-function* updateTransactions(drug) {
-
+function *updateTransactions(drug) {
   //TODO don't do this if drug.form and drug.generics were not changed
-  let transactions = yield this.http.get(`transactions/_design/auth/_view/drugs?include_docs=true&key="${drug._id}"`)
+  let res = yield this.http.get(transactions.view.drugs(drug._id))
 
-  for (let transaction of transactions) {
+  if (res.status != 200) return
+
+  for (let transaction of res.body) {
     transaction.doc.drug.generics = drug.generics
     transaction.doc.drug.form     = drug.form
 
@@ -123,37 +215,4 @@ function* updateTransactions(drug) {
     //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
     this.http.put('transactions/'+transaction._id).body(transaction.doc)
   }
-}
-
-exports.put = function* () {
-
-  let drug = yield this.http.body
-
-  defaults(drug.body)
-
-  updateTransactions.call(this, drug.body)
-
-  let update = yield this.http(null, true).body(drug.body)
-
-  this.status = update.status
-
-  if (this.status != 201)
-    return this.body = update.body
-
-  this.body      = drug
-  this.body._rev = update.body.rev
-}
-
-exports.bulk_docs = function* () {
-
-  let body = yield this.http.body
-
-  for (let drug of body.docs) {
-    if ( ! drug._id.includes('_local/')) {
-      defaults(drug)
-      updateTransactions.call(this, drug)
-    }
-  }
-
-  yield this.couch(null, true).body(body)
 }
