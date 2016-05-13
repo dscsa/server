@@ -1,5 +1,24 @@
 "use strict"
 
+exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+
+  if ( ! userCtx.roles[0])
+    throw({unauthorized:'You must be logged in to create or modify a shipment'})
+
+  if (newDoc._id.slice(0, 7) == '_local/')
+    return
+
+  let ids = newDoc._id.split('.')
+
+  if (ids.length != 3 && newDoc._id != userCtx.roles[0])
+    throw({forbidden:'shipment._id must be either your account._id or in the format <from account._id>.<to account._id>.<unique id>. Got '+toJSON(newDoc)})
+
+  //TODO stop shipments where to == from
+  //TODO stop shipments with invalid account ids
+
+  if (ids[0] != userCtx.roles[0] && ids[1] != userCtx.roles[0])
+    throw({unauthorized:'An account may only make a shipment to or from itself. Your account is '+userCtx.roles[0]});
+}
 exports.post = function* () { //TODO querystring with label=fedex creates label, maybe track=true/false eventually
 
   this.body = yield this.http.body

@@ -3,14 +3,39 @@ let crypto = require('crypto')
 
 function defaults(body) {
   body.createdAt  = body.createdAt || new Date().toJSON()
+exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
-  let labelerCode = ('00000'+body._id.split('-')[0]).slice(-5)
-  let productCode = ('0000'+body._id.split('-')[1]).slice(-4)
+  // if ( ! userCtx.roles[0])
+  //   throw({unauthorized:'You must be logged in to create or modify a drug'})
 
-  body.ndc9 = labelerCode+productCode
-  body.upc  = body._id.replace('-', '')
+  if (newDoc._id.slice(0, 7) == '_local/')
+    return
 
-  body.price = body.price || {}
+  if ( ! isArray(newDoc.generics))
+    throw({forbidden:'drug.generics must be an array. Got '+toJSON(newDoc)})
+
+  if ( ! newDoc.form)
+    throw({forbidden:'drug.form is required. Got '+toJSON(newDoc)})
+
+  if ( ! newDoc.ndc9)
+    throw({forbidden:'drug.ndc9 is required. Got '+toJSON(newDoc)})
+
+  if ( ! newDoc.upc)
+    throw({forbidden:'drug.upc is required. Got '+toJSON(newDoc)})
+
+  if ( ! ~ newDoc._id.indexOf('-'))
+    throw({forbidden:'drug._id must be a product NDC with a dash. Got '+toJSON(newDoc)})
+
+  if (newDoc._id.replace('-', '') != newDoc.upc)
+    throw({forbidden:"drug.ndc9 must be CMS's 9 digit version of drug._id. Got "+toJSON(newDoc)})
+
+  if (newDoc._id.length < 8 || newDoc._id.length > 9)
+    throw({forbidden:'drug._id must be a product NDC between 8 and 9 characters long. Got '+toJSON(newDoc)})
+
+  var labeler = ('00000'+newDoc._id.split('-')[0]).slice(-5)
+  var product = ('0000'+newDoc._id.split('-')[1]).slice(-4)
+  if (newDoc.ndc9.length != 9 || (labeler + product) != newDoc.ndc9)
+    throw({forbidden:"drug.ndc9 must be CMS's 9 digit version of drug._id. Got "+toJSON(newDoc)})
 }
 
 function nadacUrl() {

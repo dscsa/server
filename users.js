@@ -7,18 +7,26 @@ let auth   = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('
 //two options: (1) make all users admins on _users using roles or (2) escalate certain requests to admin
 //on a per route basis.  I couldn't figure out a way to escalate while retaining and verifying the user's
 //account, so I went with #1 for now.
+exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+  if (newDoc._id.slice(0, 7) == '_local/')
+    return
 
+  if ( ! newDoc.account || ! newDoc.account._id)
+    throw({forbidden:'user.account must be an object with _id. Got '+toJSON(newDoc)})
 
-//TODO Highly INSECURE right now. Any request to users has admin privledges!!!
-//Maybe only put admin headers for post request
-//TODO Problem Only Admins Can Access Views of system dbs however if we escalate
-//user to an admin then their context doesn't work anymore.  Make "user" role an admin on _user table?
-//Unfortunately non-admins cannot access views even if _users table is set to public.
+  if ( ! isArray(newDoc.roles) || newDoc.roles.length != 2)
+    throw({forbidden:'user.roles must be in the form [<account._id>, "user"]. Got '+toJSON(newDoc)})
 
-//TODO do a query beforehand to make sure someone is only changing users in their account
-function authorize(headers) {
-  headers.authorization = auth
-  delete headers.cookie //Cookie overrides Basic Auth so we need to delete
+  if (newDoc.roles[0] != newDoc.account._id)
+    throw({forbidden:'user.roles[0] must match user.account.id. Got '+toJSON(newDoc)})
+
+  if (newDoc.roles[1] != 'user')
+    throw({forbidden:'user.roles[1] must be "user". Got '+toJSON(newDoc)})
+
+  if ( ! oldDoc) return //Rest of rules are only for editing existing users
+
+  if (newDoc.account._id != userCtx.roles[0])
+    throw({unauthorized:'Only users within an account may edit one another. Your account is '+userCtx.roles[0]});
 }
 
 exports.proxy = function* () {

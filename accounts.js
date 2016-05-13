@@ -1,5 +1,16 @@
 "use strict"
 
+exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+  
+  if (newDoc._id.slice(0, 7) == '_local/')
+    return
+
+  if ( ! isArray(newDoc.authorized))
+    throw({forbidden:'account.authorized must be an array. Got '+toJSON(newDoc)})
+
+  if (oldDoc && newDoc._id != userCtx.roles[0])
+    throw({unauthorized:"User's may only edit their own account. Your account is "+userCtx.roles[0]+". Got "+toJSON(newDoc)});
+}
 exports.post = function* () {
   this.body            = yield this.http.body
   this.body.createdAt  = new Date().toJSON()

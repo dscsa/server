@@ -2,9 +2,30 @@
 
 let drugs = require('./drugs')
 
+exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
-function history(id) {
-  return `/transactions/_design/auth/_list/all/history?include_docs=true&key="${id}"`
+  // if ( ! userCtx.roles[0])
+  //   throw({unauthorized:'You must be logged in to create or modify a transaction'})
+
+  if (newDoc._id.slice(0, 7) == '_local/')
+    return
+
+  if ( ! newDoc.shipment || ! newDoc.shipment._id)
+    throw({forbidden:'transaction.shipment must be an object with an _id. Got '+toJSON(newDoc)})
+
+  if ( ! isArray(newDoc.history))
+    throw({forbidden:'transaction.history must be an array. Got '+toJSON(newDoc)})
+
+  if ( ! newDoc.drug || ! newDoc.drug._id || ! isArray(newDoc.drug.generics) || ! newDoc.drug.form)
+    throw({forbidden:'transaction.drug must be an object with an _id, generics, and form. Got '+toJSON(newDoc)})
+
+  var ids = newDoc.shipment._id.split('.')
+
+  // if (ids.length != 3 && (newDoc.shipment._id != userCtx.roles[0]))
+  //   throw({forbidden:'transaction.shipment._id '+newDoc.shipment._id+' must be either your account._id '+toJSON(userCtx.roles[0])+' or in the format <from account._id>.<to account._id>.<unique id>.'})
+
+  // if (ids[0] != userCtx.roles[0] && ids[1] != userCtx.roles[0])
+  //   throw({unauthorized:'An account may only add transactions to a shipment to or from itself. Got '+toJSON(userCtx)});
 }
 
 
