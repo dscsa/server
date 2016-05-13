@@ -15,28 +15,43 @@ module.exports = defaults => {
   }
 }
 
-function parseUrl(path) {
-  path = path || {}
-  return typeof path == 'string' ? url.parse(path) : path
-}
+
 
 function init(defaults, ctx) {
 
-  //Right now {parse:true} is only option, eventually we can suppose {forms, json, multipart}
-  function api(path, proxy) {
-    path = parseUrl(path)
+  function parseUrl(path) {
+    path = path || {}
 
-    let body, config = {
+    if (typeof path == 'string') {
+      path = url.parse(path)
+
+      //if path is string and hostname is empty (goodrx and nadac queryies
+      //shouldn't use original url's qs) then combine path's qs with original qs
+      if (ctx.querystring && ! path.hostname) {
+        path.path += path.path.includes('?') ? '&' : '?'
+        path.path += ctx.querystring
+      }
+
+      if (path.path[0] != '/') //force relative paths to be absolute
+        path.path = '/'+path.path
+    }
+
+    return  {
       hostname:path.hostname || defaults.hostname,
       port:path.port || (path.hostname ? null : defaults.port),
-      method:(path.method || ctx.method).toUpperCase(),
+      method:(path.method || ctx.method || 'get').toUpperCase(),
       path:path.path || ctx.url, //this includes querystring
       headers:path.headers || ctx.req && ctx.req.headers,
       body:path.body || ctx.req
     }
+  }
+
+  //Right now {parse:true} is only option, eventually we can suppose {forms, json, multipart}
+  function api(path, proxy) {
+
+    let body, config = parseUrl(path)
 
     return {
-
       headers(headers) {
         config.headers = headers
         return this
@@ -55,13 +70,12 @@ function init(defaults, ctx) {
           config.headers = all[0]
           config.body    = all[1]
 
-          if (config.path[0] != '/')
-            config.path = '/'+config.path
+          config.headers && delete config.headers['content-length']
 
           var req = http.request(config)
 
-          if(config.method == 'GET') //Don't drain req body with GET request
-            req.end('')
+          if(config.method == 'GET')
+            req.end('')  //Don't drain req body with GET request
 
           else if ( ! config.body)
             console.log(`Error: you forgot to set request body for ${config.method} ${config.path}`, config)
@@ -76,11 +90,13 @@ function init(defaults, ctx) {
             config.body.pipe(req, {end: true})
 
           return new Promise((resolve, reject) => {
+
             req.once('response', resolve)
             req.once('error', reject)
           })
         })
         .then(res => {
+          //console.log(config.method, config.path, body)
           if ( ! proxy)
             return api.json(res).then(body => {
               return {body, status:res.statusCode, headers:res.headers}
@@ -91,7 +107,11 @@ function init(defaults, ctx) {
           ctx.status  = res.statusCode
           ctx.set(res.headers)
         })
-        .catch(err => console.log('this.couch error', err))
+        .catch(err => {
+          console.error()
+          console.error(defaults.middleware ? 'this.'+defaults.middleware+' error' : 'http', err.stack)
+          console.error()
+        })
         .then(a,b)
       },
 
