@@ -139,6 +139,12 @@ function init(defaults, ctx) {
     return api(path, proxy)
   }
 
+  api.delete = (path, proxy) => {
+    path = parseUrl(path)
+    path.method = 'delete'
+    return api(path, proxy)
+  }
+
   api.json = stream => {
     if (stream.body) //maybe this stream has already been collected.
       return Promise.resolve(stream.body)
