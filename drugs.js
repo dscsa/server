@@ -7,34 +7,34 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   // if ( ! userCtx.roles[0])
   //   throw({unauthorized:'You must be logged in to create or modify a drug'})
 
-  if (newDoc._id.slice(0, 7) == '_local/')
-    return
+  if (newDoc._id.slice(0, 7) == '_local/') return
 
-  if ( ! isArray(newDoc.generics))
-    throw({forbidden:'drug.generics must be an array. Got '+toJSON(newDoc)})
+  ensure.prefix = 'drug'
 
-  if ( ! newDoc.form)
-    throw({forbidden:'drug.form is required. Got '+toJSON(newDoc)})
+  //Required
+  ensure('_id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
+  ensure('createdAt').notNull.isDate.notChanged
+  ensure('generics').notNull.isArray.length(1, 10)
+  ensure('generics.name').notNull.isString
+  ensure('generics.strength').notNull.isString
+  ensure('form').notNull.isString
+  ensure('upc').assert(upc)
+  ensure('ndc9').assert(ndc9)
 
-  if ( ! newDoc.ndc9)
-    throw({forbidden:'drug.ndc9 is required. Got '+toJSON(newDoc)})
+  //Optional
+  ensure('brand').isString
+  ensure('labeler').isString
+  ensure('price.updatedAt').isDate
+  ensure('price.goodrx').isNumber
+  ensure('price.nadac').isNumber
 
-  if ( ! newDoc.upc)
-    throw({forbidden:'drug.upc is required. Got '+toJSON(newDoc)})
+  function upc(val) {
+    return val == newDoc._id.replace('-', '') || 'must be same as _id without the "-" and no 0s for padding'
+  }
 
-  if ( ! ~ newDoc._id.indexOf('-'))
-    throw({forbidden:'drug._id must be a product NDC with a dash. Got '+toJSON(newDoc)})
-
-  if (newDoc._id.replace('-', '') != newDoc.upc)
-    throw({forbidden:"drug.ndc9 must be CMS's 9 digit version of drug._id. Got "+toJSON(newDoc)})
-
-  if (newDoc._id.length < 8 || newDoc._id.length > 9)
-    throw({forbidden:'drug._id must be a product NDC between 8 and 9 characters long. Got '+toJSON(newDoc)})
-
-  var labeler = ('00000'+newDoc._id.split('-')[0]).slice(-5)
-  var product = ('0000'+newDoc._id.split('-')[1]).slice(-4)
-  if (newDoc.ndc9.length != 9 || (labeler + product) != newDoc.ndc9)
-    throw({forbidden:"drug.ndc9 must be CMS's 9 digit version of drug._id. Got "+toJSON(newDoc)})
+  function ndc9(val) {
+    return val == ('00000'+newDoc._id.split('-')[0]).slice(-5)+('0000'+newDoc._id.split('-')[1]).slice(-4) || 'must be same as _id with 5 digit labeler code and 4 digit product code, no "-"'
+  }
 }
 
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces

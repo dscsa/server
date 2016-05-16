@@ -3,33 +3,36 @@ let secret = require('../development')
 let auth   = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
-  if (newDoc._id.slice(0, 7) == '_local/')
-    return
+  if (newDoc._id.slice(0, 7) == '_local/') return
+  var id = /^[a-z0-9]{7}$/
 
-  if ( ! newDoc.account || ! newDoc.account._id)
-    throw({forbidden:'user.account must be an object with _id. Got '+toJSON(newDoc)})
+  ensure.prefix = 'user'
 
-  if ( ! isArray(newDoc.roles) || newDoc.roles.length != 2)
-    throw({forbidden:'user.roles must be in the form [<account._id>, "user"]. Got '+toJSON(newDoc)})
+  ensure('account._id').assert(accountId)
+  ensure('first').notNull.isString
+  ensure('last').notNull.isString
+  ensure('name').notNull.regex(/\w{2,}@\w{3,}\.(com|org|net|gov)/)
+  ensure('phone').notNull.regex(/\d{3}\.\d{3}\.\d{4}/)
+  ensure('createdAt').notNull.isDate.notChanged
+  ensure('roles').assert(roles)
 
-  if (newDoc.roles[0] != newDoc.account._id)
-    throw({forbidden:'user.roles[0] must match user.account.id. Got '+toJSON(newDoc)})
+  function accountId(val) {
+    if (userCtx.roles[0] == '_admin' && ! newDoc._rev && id.test(val)) return
 
-  if (newDoc.roles[1] != 'user')
-    throw({forbidden:'user.roles[1] must be "user". Got '+toJSON(newDoc)})
+    return userCtx.roles[0] == val || 'can only be modified by one of its users'
+  }
 
-  if ( ! oldDoc) return //Rest of rules are only for editing existing users
-
-  if (newDoc.account._id != userCtx.roles[0])
-    throw({unauthorized:'Only users within an account may edit one another. Your account is '+userCtx.roles[0]});
+  function roles(val) {
+    if ( ! isArray(val) || val.length != 2 || ! id.test(val[0]))
+      return 'must be an array in the form [<account._id>, "user"]'
+  }
 }
-
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
 //them with a function that takes a key and returns the couchdb url needed to call them.
 exports.filter = {
   authorized(doc, req) {
     if (doc._id.slice(0, 7) == '_design') return
-    
+
     return doc.account._id == req.userCtx.roles[0] //Only see users within your account
   }
 }

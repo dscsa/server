@@ -2,22 +2,41 @@
 
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
-  if ( ! userCtx.roles[0])
-    throw({unauthorized:'You must be logged in to create or modify a shipment'})
+  if (newDoc._id.slice(0, 7) == '_local/') return
 
-  if (newDoc._id.slice(0, 7) == '_local/')
-    return
+  ensure.prefix = 'shipment'
 
-  let ids = newDoc._id.split('.')
+  //Required
+  ensure('_id').assert(_id)
+  ensure('createdAt').notNull.isDate.notChanged
+  ensure('from.name').notNull.isString
+  ensure('to.name').notNull.isString
 
-  if (ids.length != 3 && newDoc._id != userCtx.roles[0])
-    throw({forbidden:'shipment._id must be either your account._id or in the format <from account._id>.<to account._id>.<unique id>. Got '+toJSON(newDoc)})
+  //Optional
+  ensure('pickupAt').isDate
+  ensure('shippedAt').isDate
+  ensure('receivedAt').isDate
+  ensure('verifiedAt').isDate
 
-  //TODO stop shipments where to == from
-  //TODO stop shipments with invalid account ids
+  function _id(val) {
 
-  if (ids[0] != userCtx.roles[0] && ids[1] != userCtx.roles[0])
-    throw({unauthorized:'An account may only make a shipment to or from itself. Your account is '+userCtx.roles[0]});
+    val = val.split('.')
+
+    if (val[0] != userCtx.roles[0] && val[1] != userCtx.roles[0])
+      return "must contain your account._id as its only, first, or second segment"
+
+    if (val.length == 1 && val[0] == account.from._id) return
+
+    if (val[0] == val[1])
+      return 'cannot have account.from._id == account.to._id'
+
+    if (val.length == 3 && id.test(val[2])) {
+      if (val[0] == account.from._id && id.test(val[1])) return
+      if (val[1] == account.to._id && id.test(val[0])) return
+    }
+
+    return 'must be in the format <account.from._id> or <account.from._id>.<account.to._id>.<_id>'
+  }
 }
 
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
@@ -26,7 +45,7 @@ exports.filter = {
   authorized(doc, req){
 
     if (doc._id.slice(0, 7) == '_design') return
-    
+
     var account  = req.account || req.userCtx.roles[0]
     var accounts = doc._id.split('.')
 

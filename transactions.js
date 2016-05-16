@@ -6,25 +6,56 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   // if ( ! userCtx.roles[0])
   //   throw({unauthorized:'You must be logged in to create or modify a transaction'})
 
-  if (newDoc._id.slice(0, 7) == '_local/')
-    return
+  if (newDoc._id.slice(0, 7) == '_local/') return
+  var id = /^[a-z0-9]{7}$/
+  ensure.prefix = 'transaction'
 
-  if ( ! newDoc.shipment || ! newDoc.shipment._id)
-    throw({forbidden:'transaction.shipment must be an object with an _id. Got '+toJSON(newDoc)})
+  //Required
+  ensure('_id').notNull.regex(id)
+  ensure('shipment._id').assert(shipmentId)
+  ensure('createdAt').notNull.isDate.notChanged
+  ensure('history').notNull.isArray
+  ensure('history.transaction._id').notNull.regex(id)
+  ensure('history.qty').notNull.isNumber
+  ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
+  ensure('drug.generics').notNull.isArray.length(1, 10)
+  ensure('drug.generics.name').notNull.isString
+  ensure('drug.generics.strength').notNull.isString
+  ensure('drug.form').notNull.isString
+  ensure('drug.price.updatedAt').notNull.isDate
 
-  if ( ! isArray(newDoc.history))
-    throw({forbidden:'transaction.history must be an array. Got '+toJSON(newDoc)})
+  //Optional
+  ensure('qty.from').isNumber
+  ensure('qty.to').isNumber
+  ensure('exp.from').isDate
+  ensure('exp.to').isDate
+  ensure('drug.price.goodrx').isNumber
+  ensure('drug.price.nadac').isNumber
 
-  if ( ! newDoc.drug || ! newDoc.drug._id || ! isArray(newDoc.drug.generics) || ! newDoc.drug.form)
-    throw({forbidden:'transaction.drug must be an object with an _id, generics, and form. Got '+toJSON(newDoc)})
+  function shipmentId(val) {
 
-  var ids = newDoc.shipment._id.split('.')
+    val = val.split('.')
 
-  // if (ids.length != 3 && (newDoc.shipment._id != userCtx.roles[0]))
-  //   throw({forbidden:'transaction.shipment._id '+newDoc.shipment._id+' must be either your account._id '+toJSON(userCtx.roles[0])+' or in the format <from account._id>.<to account._id>.<unique id>.'})
+    if (val[0] == val[1])
+      return 'cannot have account.from._id == account.to._id'
 
-  // if (ids[0] != userCtx.roles[0] && ids[1] != userCtx.roles[0])
-  //   throw({unauthorized:'An account may only add transactions to a shipment to or from itself. Got '+toJSON(userCtx)});
+    if (val.length == 3 && id.test(val[2])) {
+      if (val[0] == userCtx.roles[0] && id.test(val[1])) return
+      if (val[1] == userCtx.roles[0] && id.test(val[0])) return
+    }
+
+    if(val.length == 1 && id.test(val[0])) return //val[0] == userCtx.roles[0]
+
+    return 'must be in the format <account.from._id> or <account.from._id>.<account.to._id>.<_id>'
+  }
+
+  //var ids = newDoc.shipment._id.split('.')
+  //
+  //   // if (ids.length != 3 && (newDoc.shipment._id != userCtx.roles[0]))
+  //   //   throw({forbidden:'transaction.shipment._id '+newDoc.shipment._id+' must be either your account._id '+toJSON(userCtx.roles[0])+' or in the format <from account._id>.<to account._id>.<unique id>.'})
+  //
+  //   // if (ids[0] != userCtx.roles[0] && ids[1] != userCtx.roles[0])
+  //   //   throw({unauthorized:'An account may only add transactions to a shipment to or from itself. Got '+toJSON(userCtx)});
 }
 
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
@@ -32,7 +63,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 exports.filter = {
   authorized(doc, req) {
 
-    if (doc._id.slice(0, 7) == '_design') return 
+    if (doc._id.slice(0, 7) == '_design') return
 
     var account = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc.shipment._id.split('.')

@@ -1,15 +1,28 @@
 "use strict"
 
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
-  
-  if (newDoc._id.slice(0, 7) == '_local/')
-    return
 
-  if ( ! isArray(newDoc.authorized))
-    throw({forbidden:'account.authorized must be an array. Got '+toJSON(newDoc)})
+  if (newDoc._id.slice(0, 7) == '_local/') return
 
-  if (oldDoc && newDoc._id != userCtx.roles[0])
-    throw({unauthorized:"User's may only edit their own account. Your account is "+userCtx.roles[0]+". Got "+toJSON(newDoc)});
+  ensure.prefix = 'account'
+
+  //Required
+  ensure('_id').notNull.assert(_id)
+  ensure('name').notNull.isString
+  ensure('license').notNull.isString
+  ensure('street').notNull.isString
+  ensure('city').notNull.isString
+  ensure('state').notNull.isString.length(2)
+  ensure('zip').notNull.regex(/\d{5}/)
+  ensure('createdAt').notNull.isDate.notChanged
+  ensure('authorized').notNull.isArray
+
+  //Optional
+  ensure('ordered').isObject
+
+  function _id(val) {
+    return ( ! userCtx.roles[0] && ! newDoc._rev && /^[a-z0-9]{7}$/.test(val)) || userCtx.roles[0] == val || 'can only be modified by one of its users'
+  }
 }
 
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
