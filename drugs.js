@@ -140,6 +140,8 @@ exports.bulk_docs = function* () {
   this.status = res.status
   this.body   = res.body
 
+  if ( ! body.new_edits) return
+
   let all   = []
   for (let i in body.docs) {
     let drug = body.docs[i]
