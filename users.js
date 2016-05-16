@@ -52,7 +52,7 @@ exports.show = {
 }
 
 exports.changes = function* (db) {
-  //authorize(this.headers)
+  authorize(this.headers)
   yield this.http(exports.filter.authorized(this.url), true)
 }
 
