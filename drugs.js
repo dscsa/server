@@ -53,6 +53,7 @@ exports.view = {
 
 exports.show = {
   authorized(doc, req) {
+    if ( ! doc) return
     return toJSON([{ok:doc}]) //Everyone can get/put/del all drugs
   }
 }

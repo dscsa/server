@@ -45,6 +45,7 @@ exports.view = {
 
 exports.show = {
   authorized(doc, req) {
+    if ( ! doc) return
     if (doc.account._id == req.userCtx.roles[0]  )
       return toJSON([{ok:doc}])
   }

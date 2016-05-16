@@ -63,6 +63,7 @@ exports.view = {
 
 exports.show = {
   authorized(doc, req) {
+    if ( ! doc) return
     var account  = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc._id.split('.')
 
