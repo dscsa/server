@@ -36,7 +36,7 @@ exports.filter = {
 
 exports.view = {
   authorized(doc) {
-    emit(doc._id)
+    emit(doc._id, {rev:doc._rev})
   }
 }
 

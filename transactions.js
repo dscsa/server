@@ -74,8 +74,8 @@ exports.filter = {
 exports.view = {
   authorized(doc) {
     var accounts = doc.shipment._id.split('.')
-    emit(accounts[0])
-    emit(accounts[1])
+    emit(accounts[0], {rev:doc._rev})
+    emit(accounts[1], {rev:doc._rev})
   },
 
   history(doc) {
