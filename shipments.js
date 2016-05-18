@@ -4,13 +4,14 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   if (newDoc._id.slice(0, 7) == '_local/') return
   if (newDoc._deleted) return
+  var id = /^[a-z0-9]{7}$/
   ensure.prefix = 'shipment'
 
   //Required
   ensure('_id').assert(_id)
   ensure('createdAt').notNull.isDate.notChanged
-  ensure('from.name').notNull.isString
-  ensure('to.name').notNull.isString
+  ensure('account.from.name').notNull.isString
+  ensure('account.to.name').notNull.isString
 
   //Optional
   ensure('pickupAt').isDate
@@ -19,21 +20,21 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('verifiedAt').isDate
 
   function _id(val) {
+    if (typeof val != 'string')
+      return 'is required to be a valid _id'
 
     val = val.split('.')
-
-    if (val[0] != userCtx.roles[0] && val[1] != userCtx.roles[0])
-      return "must contain your account._id as its only, first, or second segment"
-
-    if (val.length == 1 && val[0] == account.from._id) return
 
     if (val[0] == val[1])
       return 'cannot have account.from._id == account.to._id'
 
     if (val.length == 3 && id.test(val[2])) {
-      if (val[0] == account.from._id && id.test(val[1])) return
-      if (val[1] == account.to._id && id.test(val[0])) return
+      if (val[0] == newDoc.account.from._id && val[0] == userCtx.roles[0] && id.test(val[1])) return
+      if (val[1] == newDoc.account.to._id   && val[1] == userCtx.roles[0] && id.test(val[0])) return
+      if (userCtx.roles[0] == "_admin") return
     }
+
+    if (val.length == 1 && val[0] == newDoc.account.from._id && val[0] == userCtx.roles[0]) return
 
     return 'must be in the format <account.from._id> or <account.from._id>.<account.to._id>.<_id>'
   }
