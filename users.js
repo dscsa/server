@@ -35,7 +35,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 exports.filter = {
   authorized(doc, req) {
     if (doc._id.slice(0, 7) == '_design') return
-
+  
     return doc.account._id == req.userCtx.roles[0] //Only see users within your account
   }
 }
@@ -55,7 +55,6 @@ exports.show = {
 }
 
 exports.changes = function* (db) {
-  authorize(this.headers)
   yield this.http(exports.filter.authorized(this.url), true)
 }
 
