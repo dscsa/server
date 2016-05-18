@@ -243,10 +243,7 @@ exports.verified = {
     let doc = yield patch.call(this, _id, {verifiedAt:new Date().toJSON()})
 
     //TODO test if previous call was successful.
-
-    //Create the inventory
-    yield this.http.put('transactions/'+this.http.id, true).body({
-      shipment:{_id:this.account},
+    inventory = defaults.call(this, {
       drug:doc.drug,
       verifiedAt:null,
       history:[{
@@ -266,6 +263,9 @@ exports.verified = {
         from:doc.lot.to || doc.lot.from
       }
     })
+
+    //Create the inventory
+    yield this.http.put('transactions/'+this.http.id, true).body(inventory)
 
     //TODO rollback verified if the adding the new item is not successful
   },
@@ -304,21 +304,21 @@ function defaults(body) {
   //TODO [TypeError: Cannot read property 'to' of undefined] is malformed request
   body.qty.to     = body.qty.to ? +body.qty.to : null     //don't turn null to 0 since it will get erased
   body.qty.from   = body.qty.from ? +body.qty.from : null //don't turn null to 0 since it will get erased
-  body.shipment   = (body.shipment && body.shipment._id) || {_id:this.account}
+  body.shipment   = body.shipment || {_id:this.account}
+
+  return body
 }
 
 /* Makeshift PATCH */
 function *patch(id, updates) {
 
-  yield exports.get.call(this, id)
+  let doc = yield this.http(exports.show.authorized(id))
+  let body = doc.body[0].ok
 
-  if (this.status != 200) return
+  if (doc.status != 200) return
+  Object.assign(body, updates)
+  let patch = yield this.http.put('transactions/'+id).body(body)
+  body._rev = patch.body.rev
 
-  Object.assign(this.body, updates)
-
-  res = yield this.http.put('transactions/'+id).body(this.body)
-
-  this.body._rev = res.body.rev
-
-  return this.body
+  return body
 }
