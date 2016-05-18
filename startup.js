@@ -26,7 +26,7 @@ function toString(fn) {
   return '('+fn+')'
 }
 
-function ensure(key) {
+function ensure(path) {
 
   function extract(obj, keys) {
     var $keys = JSON.stringify(keys)
@@ -39,6 +39,9 @@ function ensure(key) {
     obj = isArray(obj) ? obj : [obj]
 
     for (i in obj) {
+
+      if ( ! obj[i]) throw({forbidden:path+' does not exist in '+toJSON(newDoc)})
+
       var val = extract(obj[i][key], keys)    //walk through object with recursion
 
       val = isArray(val) && len ? val : [val] //if end result is an array e.g, drug.generics then keep, otherwise flatten
@@ -49,14 +52,14 @@ function ensure(key) {
     return res
   }
 
-  var value = extract(newDoc, key.split('.'))
+  var value = extract(newDoc, path.split('.'))
 
   var api = {
     assert:function(callback) {
       for (var i in value) {
         var msg = callback(value[i], i)
         if (typeof msg == 'string')
-          throw({forbidden:ensure.prefix+'.'+key+' '+msg+'. Got '+toJSON(value[i])+' from '+toJSON(newDoc)})
+          throw({forbidden:{msg:ensure.prefix+'.'+path+' '+msg+'. Got '+toJSON(value[i]), doc:newDoc}})
       }
       return api
     },
@@ -113,7 +116,7 @@ function ensure(key) {
 
     if ( ! oldDoc) return api
 
-    var oldVal = extract(oldDoc, key.split('.'))
+    var oldVal = extract(oldDoc, path.split('.'))
 
     return api.assert(function(val, i) {
       var old = toJSON(oldVal[i])
@@ -125,51 +128,11 @@ function ensure(key) {
   return api
 }
 
-// function ensure(name, value) {
-//   log('ensure')
-//   log(ensure.caller)
-//   log(ensure.caller.arguments)
-//   log(ensure.caller.arguments[0])
-//   var fluent = {
-//     hasId:function() {
-//       if (typeof value._id == 'string' && value._id.length == 7) return fluent
-//       throw({forbidden:name+' must have a valid _id property. Got '+toJSON(newDoc)})
-//     },
-//     isDate:function() {
-//       if (value == new Date(value).toJSON()) return fluent
-//       throw({forbidden:name+' must be a valid date formatted as a JSON string. Got '+toJSON(newDoc)})
-//     },
-//     isNumber:function() {
-//       if (typeof value == 'number') return fluent
-//       throw({forbidden:name+' must be a number. Got '+toJSON(newDoc)})
-//     },
-//     isString:function() {
-//       if (typeof value == 'string') return fluent
-//       throw({forbidden:name+' must be a string. Got '+toJSON(newDoc)})
-//     },
-//     isObject:function() {
-//       if (typeof value == 'object') return fluent
-//       throw({forbidden:name+' must be an object. Got '+toJSON(newDoc)})
-//     },
-//     isArray:function() {
-//       if (isArray(value)) return fluent
-//       throw({forbidden:name+' must be an array. Got '+toJSON(newDoc)})
-//     },
-//     notChanged:function() {
-//       var key = name.split('.').slice(1).join('.')
-//       if (toJSON(newDoc[key]) == toJSON(oldDoc[key]) return fluent
-//       throw({forbidden:name+' cannot be changed. Got '+toJSON(newDoc)})
-//     }
-//   }
-//
-//   return fluent
-// }
-
 function *addDesignDocs (name) {
   let views = {}, filters = {}, shows = {}
   let db = require('./'+name.replace('_', ''))
 
-  yield http.delete(name).headers({authorization}).body(true)
+  //yield http.delete(name).headers({authorization}).body(true)
   let res = yield http.put(name).headers({authorization}).body(true) //Create the database
 
   //This may be too much magic for best practice but its really elegant.  Replace the export function
