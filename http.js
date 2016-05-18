@@ -165,7 +165,7 @@ function init(defaults, ctx) {
 
   api.body = {
     then(a,b) {
-      return api.json(ctx.req).then(a,b)
+      return api.json(ctx.body || ctx.req).then(a,b)
     }
   }
 
