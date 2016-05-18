@@ -36,6 +36,9 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   function shipmentId(val) {
 
+    if (typeof val != 'string')
+      return 'is required to be a valid _id'
+
     val = val.split('.')
 
     if (val[0] == val[1])
@@ -44,20 +47,13 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
     if (val.length == 3 && id.test(val[2])) {
       if (val[0] == userCtx.roles[0] && id.test(val[1])) return
       if (val[1] == userCtx.roles[0] && id.test(val[0])) return
+      if (userCtx.roles[0] == "_admin") return
     }
 
-    if(val.length == 1 && id.test(val[0])) return //val[0] == userCtx.roles[0]
+    if(val.length == 1 && val[0] == userCtx.roles[0]) return
 
     return 'must be in the format <account.from._id> or <account.from._id>.<account.to._id>.<_id>'
   }
-
-  //var ids = newDoc.shipment._id.split('.')
-  //
-  //   // if (ids.length != 3 && (newDoc.shipment._id != userCtx.roles[0]))
-  //   //   throw({forbidden:'transaction.shipment._id '+newDoc.shipment._id+' must be either your account._id '+toJSON(userCtx.roles[0])+' or in the format <from account._id>.<to account._id>.<unique id>.'})
-  //
-  //   // if (ids[0] != userCtx.roles[0] && ids[1] != userCtx.roles[0])
-  //   //   throw({unauthorized:'An account may only add transactions to a shipment to or from itself. Got '+toJSON(userCtx)});
 }
 
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
