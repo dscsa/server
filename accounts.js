@@ -22,7 +22,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('ordered').isObject
 
   function _id(val) {
-    return ( ! userCtx.roles[0] && ! newDoc._rev && /^[a-z0-9]{7}$/.test(val)) || userCtx.roles[0] == val || 'can only be modified by one of its users'
+    return ( ! newDoc._rev && /^[a-z0-9]{7}$/.test(val)) || userCtx.roles[0] == val || 'can only be modified by one of its users'
   }
 }
 
