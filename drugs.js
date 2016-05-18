@@ -8,6 +8,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   //   throw({unauthorized:'You must be logged in to create or modify a drug'})
 
   if (newDoc._id.slice(0, 7) == '_local/') return
+  if (newDoc._deleted) return
 
   ensure.prefix = 'drug'
 

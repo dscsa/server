@@ -3,7 +3,7 @@
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   if (newDoc._id.slice(0, 7) == '_local/') return
-
+  if (newDoc._deleted) return
   ensure.prefix = 'shipment'
 
   //Required

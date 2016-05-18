@@ -3,7 +3,10 @@ let secret = require('../development')
 let auth   = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+
   if (newDoc._id.slice(0, 7) == '_local/') return
+  if (newDoc._deleted) return
+
   var id = /^[a-z0-9]{7}$/
 
   ensure.prefix = 'user'
