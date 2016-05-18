@@ -169,7 +169,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
   this.body = yield history(id, result)
 
   function *history (_id, list) {
-    let trans = yield exports.get.call(this, _id)
+    let trans = yield $this.http.get('transactions/'+_id) //don't use show function because we might need to see transactions not directly authorized
 
     if (trans.status == 404) {
       $this.status  = 404
@@ -180,20 +180,15 @@ exports.history = function* (id) { //TODO option to include full from/to account
     trans = trans.body
     list.push(trans)
 
-    let indent, len = trans.history.length
+    let indentedList = [], len = trans.history.length
 
-    if (len == 1)    //This is just a normal transfer
-      history(trans.history[0].transaction._id, list)
-    else if (len > 1) {
+    if (len > 1) {
       trans.type = 'Repackaged'
-      indent = []
-      list.push(indent)
+      list.push([indentedList])
     }
 
     let all = trans.history.map(ancestor => {
-      var next = []
-      indent.push(next)
-      return history(ancestor.transaction._id, next)
+      return history(ancestor.transaction._id, len == 1 ? list : indentedList)
     })
     //End Recursive
 
@@ -211,7 +206,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
     }
 
     //Search for transaction's ancestors and shipment in parallel
-    all = yield Promise.all(all)
+    all = yield all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
 
     if (all[0].status == 404) {
       $this.status  = 404
@@ -223,11 +218,12 @@ exports.history = function* (id) { //TODO option to include full from/to account
     let account = trans.shipment.account
 
     //TODO this call is serial. Can we do in parallel with next async call?
-    let accounts = yield Promise.all([
+    //TODO this is co specific won't work when upgrading to async/await which need Promise.all
+    let accounts = yield [
       $this.http.get('accounts/'+account.from._id),
       account.to && $this.http.get('accounts/'+account.to._id)
-    ])
-
+    ]
+console.log('account', trans._id, account, accounts)
     account.from = accounts[0].body
     account.to   = accounts[1].body //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
     return result
