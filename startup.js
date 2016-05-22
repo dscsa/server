@@ -28,38 +28,43 @@ function toString(fn) {
 
 function ensure(path) {
 
-  function extract(obj, keys) {
-    var $keys = JSON.stringify(keys)
-    var key = keys.shift()
-    var len = keys.length //cache this before recursion which will reduce length
-    var res = []
+  function extract(doc) {
+    var vals = [doc]
+    var keys = path.split('.')
 
-    if ( ! key ) return obj
+    for (var i in keys) {
+      for (var j in vals) {
 
-    obj = isArray(obj) ? obj : [obj]
+        if ( ! vals[j])
+          throw({forbidden:{msg:ensure.prefix+'.'+path+' does not exist. Got '+toJSON(vals[j])+'.'+keys[i], doc:newDoc}})
 
-    for (i in obj) {
+        var innerObj = vals[j][keys[i]]
 
-      if ( ! obj[i]) throw({forbidden:path+' does not exist in '+toJSON(newDoc)})
+        //log('\n'+toJSON(keys)+' ---> '+keys[i]+'\n\n\n'+JSON.stringify(vals[j], null, "  ")+'\n\n--->\n\n'+JSON.stringify(innerObj, null, "  "))
 
-      var val = extract(obj[i][key], keys)    //walk through object with recursion
-
-      val = isArray(val) && len ? val : [val] //if end result is an array e.g, drug.generics then keep, otherwise flatten
-
-      res.push.apply(res, val)
+        //Flatten resulting array if it is in middle but not end of path
+        //e.g., transaction.history._id would flatten since history is an
+        //array but transaction.drug.generics would not since it ends as an array
+        if (isArray(innerObj) && i < keys.length-1) {
+          vals.splice(j, 1)
+          vals = vals.concat(innerObj)
+        } else {
+          vals[j] = innerObj
+        }
+      }
     }
-
-    return res
+    return vals
   }
 
-  var value = extract(newDoc, path.split('.'))
+  var values = extract(newDoc)
 
   var api = {
     assert:function(callback) {
-      for (var i in value) {
-        var msg = callback(value[i], i)
-        if (typeof msg == 'string')
-          throw({forbidden:{msg:ensure.prefix+'.'+path+' '+msg+'. Got '+toJSON(value[i]), doc:newDoc}})
+      for (var i in values) {
+        var msg = callback(values[i], i)
+        if (typeof msg == 'string') {
+          throw({forbidden:{msg:ensure.prefix+'.'+path+' '+msg+'. Got '+toJSON(values[i]), doc:newDoc}})
+        }
       }
       return api
     },
@@ -116,10 +121,10 @@ function ensure(path) {
 
     if ( ! oldDoc) return api
 
-    var oldVal = extract(oldDoc, path.split('.'))
+    var oldVals = extract(oldDoc)
 
     return api.assert(function(val, i) {
-      var old = toJSON(oldVal[i])
+      var old = toJSON(oldVals[i])
       return toJSON(val) == old || 'cannot be changed from '+old
     })
   })
@@ -130,16 +135,16 @@ function ensure(path) {
 
 function *addDesignDocs (name) {
   let views = {}, filters = {}, shows = {}
-  let db = require('./'+name.replace('_', ''))
+  let db = require('./'+name)
 
   //yield http.delete(name).headers({authorization}).body(true)
   let res = yield http.put(name).headers({authorization}).body(true) //Create the database
 
   //This may be too much magic for best practice but its really elegant.  Replace the export function
   //with the url used to call the export so the original module can call it properly
-  for (let key in db.view) {
-    views[key]   = {map:toString(db.view[key])}
-    db.view[key] = key => `${name}/_design/auth/_list/all/authorized?include_docs=true&key="${key}"`
+  for (let view in db.view) {
+    views[view]   = {map:toString(db.view[view])}
+    db.view[view] = key => `${name}/_design/auth/_list/all/${view}?include_docs=true&key="${key}"`
   }
 
   //See note on "too much magic" above
@@ -149,9 +154,9 @@ function *addDesignDocs (name) {
   }
 
   //See note on "too much magic" above
-  for (let key in db.show) {
-    shows[key] = toString(db.show[key])
-    db.show[key] = id => `${name}/_design/auth/_show/authorized/${id}`
+  for (let show in db.show) {
+    shows[show] = toString(db.show[show])
+    db.show[show] = id => `${name}/_design/auth/_show/${show}/${id}`
   }
 
   let design = yield http.get(name+'/_design/auth').headers({authorization})
@@ -166,15 +171,10 @@ function *addDesignDocs (name) {
     validate_doc_update,
     lists:{ all:toString(all) }
   })
-
-  yield http.put(name+'/_security').headers({authorization}).body({
-     admins:{names:[], roles: ["user"]},
-     members:{names:[], roles: []}
-  })
 }
 
 co(function*() {
-  let all = ['accounts', '_users', 'drugs', 'shipments', 'transactions'].map(addDesignDocs)
+  let all = ['account', 'user', 'drug', 'shipment', 'transaction'].map(addDesignDocs)
 
   try {
     yield all //TODO Promise.all[] doesn't work for generators although this is deprecated in Koa v2
