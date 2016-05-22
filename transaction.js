@@ -1,5 +1,5 @@
 "use strict"
-let drugs = require('./drugs')
+let drugs = require('./drug')
 
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
@@ -21,9 +21,9 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('history.qty').notNull.isNumber
   ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
   ensure('drug.generics').notNull.isArray.length(1, 10)
-  ensure('drug.generics.name').notNull.isString
-  ensure('drug.generics.strength').notNull.isString
-  ensure('drug.form').notNull.isString
+  ensure('drug.generics.name').notNull.isString.length(1, 50)
+  ensure('drug.generics.strength').notNull.isString.length(1, 10)
+  ensure('drug.form').notNull.isString.length(1, 20)
   ensure('drug.price.updatedAt').notNull.isDate
 
   //Optional
@@ -50,7 +50,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
       if (userCtx.roles[0] == "_admin") return
     }
 
-    if(val.length == 1 && val[0] == userCtx.roles[0]) return
+    if(val.length == 1 && (val[0] == userCtx.roles[0] || '_admin' == userCtx.roles[0])) return
 
     return 'must be in the format <account.from._id> or <account.from._id>.<account.to._id>.<_id>'
   }
@@ -62,6 +62,7 @@ exports.filter = {
   authorized(doc, req) {
 
     if (doc._id.slice(0, 7) == '_design') return
+    if (doc._deleted) return true
 
     var account = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc.shipment._id.split('.')
@@ -89,25 +90,32 @@ exports.view = {
 
 exports.show = {
   authorized(doc, req) {
-    if ( ! doc) return
+    if ( ! doc)
+      return {code:404}
+
     var account = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc.shipment._id.split('.')
 
     if (accounts[0] == account || accounts[1] == account)
       return toJSON([{ok:doc}])
+
+      return {code:401}
   }
 }
 
-exports.changes = function* (db) {
+exports.changes = function* () {
   yield this.http(exports.filter.authorized(this.url), true)
 }
 
-exports.list = function* () {
-  yield this.http(exports.view.authorized(), true)
-}
+exports.get = function* () {
+  let selector = JSON.parse(this.query.selector)
 
-exports.get = function* (id) {
-  yield this.http(exports.show.authorized(id), true)
+  if (selector._id)
+    yield this.http(exports.show.authorized(selector._id), true)
+
+  if (selector._id && this.query.history) {
+    this.body = yield history.call(this, selector._id)
+  }
 }
 
 exports.bulk_get = function* (id) {
@@ -121,12 +129,17 @@ exports.post = function* () {
   defaults.call(this, transaction)
   //Making sure these are accurate and upto date is too
   //costly to do on every save so just do it on creation
-  yield drugs.get.call(this, transaction.drug._id)
+  this.query.selector = JSON.stringify({_id:transaction.drug._id})
+  yield drugs.get.call(this)
+
+  if (this.status != 200)
+    return
+
   transaction.drug.price    = this.body[0].ok.price
   transaction.drug.generics = this.body[0].ok.generics
   transaction.drug.form     = this.body[0].ok.form
 
-  let create = yield this.http.put('transactions/'+this.http.id).body(transaction)
+  let create = yield this.http.put('transaction/'+this.http.id).body(transaction)
 
   this.status = create.status
 
@@ -146,30 +159,126 @@ exports.bulk_docs = function* () {
   yield this.http(null, true)
 }
 
-exports.delete = function* (id) {
+exports.delete = function* () {
 
-  let inventory = yield this.http.get(exports.view.history(id))
+  let body = yield this.http.body
+  let inventory = yield this.http.get(exports.view.history(body._id))
 
   if (inventory[0]) { //Do not delete inventory if id is in subsequent transaction
     this.status  = 409
-    this.message = `Cannot delete this transaction because transaction ${inventory[0]._id} has _id ${id} in its history`
+    this.message = `Cannot delete this transaction because transaction ${inventory[0]._id} has _id ${body._id} in its history`
     return
   }
 
-  yield patch.call(this, id, {_delete:true}) //We can safely delete this transaction.  Get the current _rev
+  yield this.http(null, true)
 }
 
+exports.verified = {
+  *post() {
+    let body = yield this.http.body
+    let inventory = yield this.http.get(exports.view.history(body._id))
 
-//TODO Convert this from promises to use async generators
-exports.history = function* (id) { //TODO option to include full from/to account information
-  var count  = 0
-  var $this  = this
-  var result = []
+    if (inventory.body[0]) {
+      this.status  = 409
+      this.message = `Cannot verify this transaction because transaction ${inventory[0]._id} with _id ${body._id} already has this transaction in its history`
+      return
+    }
 
-  this.body = yield history(id, result)
+    let doc = yield patch.call(this, body._id, {verifiedAt:new Date().toJSON()})
+
+    //TODO test if previous call was successful.
+    inventory = defaults.call(this, {
+      drug:doc.drug,
+      verifiedAt:null,
+      history:[{
+        transaction:{_id:body._id},
+        qty:doc.qty.to
+      }],
+      qty:{
+        to:null,
+        from:doc.qty.to || doc.qty.from
+      },
+      exp:doc.exp && {
+        to:null,
+        from:doc.exp.to || doc.exp.from
+      },
+      lot:doc.lot && {
+        to:null,
+        from:doc.lot.to || doc.lot.from
+      }
+    })
+    //Create the inventory
+    yield this.http.put('transaction/'+this.http.id, true).body(inventory)
+
+    //TODO rollback verified if the adding the new item is not successful
+  },
+
+  //This is a bit complex here are the steps:
+  //1. Does this transaction id have a matching inventory item. No? Already un-verified
+  //2. Can this inventory item be deleted. No? a subsequent transaction is based on this verification so it cannot be undone
+  //3. Delete the item with inventory._id
+  //4. Update the original transaction with verified_at = null
+  *delete() {
+    let body = yield this.http.body
+    let inventory = yield this.http.get(exports.view.history(body._id))
+
+    if ( ! inventory[0]) { //Only delete inventory if it actually exists
+      this.status  = 409
+      this.message = 'Cannot find a transaction with history.transaction = '+body._id+'.  Has this transaction been deleted already?'
+      return
+    }
+
+    if (inventory[0].shipment._id != this.account) {
+      this.status  = 409
+      this.message = 'The inventory for this transaction has already been assigned to another shipment'
+      return
+    }
+
+    yield patch.call(this, body._id, {verifiedAt:null}) //Un-verify transaction
+    yield this.http.delete('transaction', true).body(inventory[0])
+  }
+}
+
+function defaults(body) {
+  //TODO ensure that there is a qty
+  body.history    = body.history || []
+  body.createdAt  = body.createdAt || new Date().toJSON()
+
+  //TODO [TypeError: Cannot read property 'to' of undefined] is malformed request
+  body.qty.to     = body.qty.to ? +body.qty.to : null     //don't turn null to 0 since it will get erased
+  body.qty.from   = body.qty.from ? +body.qty.from : null //don't turn null to 0 since it will get erased
+  body.shipment   = body.shipment || {_id:this.user.account._id}
+
+  return body
+}
+
+/* Makeshift PATCH */
+function *patch(id, updates) {
+
+  let doc = yield this.http.get(exports.show.authorized(id))
+  let body = doc.body[0].ok
+
+  if (doc.status != 200) return
+  Object.assign(body, updates)
+  let patch = yield this.http.put('transaction/'+id).body(body)
+  body._rev = patch.body.rev
+
+  return body
+}
+
+//TODO don't search for shipment if shipment._id doesn't have two periods (inventory)
+//TODO option to include full from/to account information
+function *history(id) {
+
+  let body = yield this.http.body
+  let count  = 0
+  let $this  = this
+  let result = []
+
+  return yield history(id, result)
 
   function *history (_id, list) {
-    let trans = yield $this.http.get('transactions/'+_id) //don't use show function because we might need to see transactions not directly authorized
+    let trans = yield $this.http.get('transaction/'+_id) //don't use show function because we might need to see transactions not directly authorized
 
     if (trans.status == 404) {
       $this.status  = 404
@@ -201,7 +310,7 @@ exports.history = function* (id) { //TODO option to include full from/to account
     } else {
       trans.type = 'Transaction'
       all.unshift(
-        $this.http.get('shipments/'+trans.shipment._id)
+        $this.http.get('shipment/'+trans.shipment._id)
       )
     }
 
@@ -220,105 +329,12 @@ exports.history = function* (id) { //TODO option to include full from/to account
     //TODO this call is serial. Can we do in parallel with next async call?
     //TODO this is co specific won't work when upgrading to async/await which need Promise.all
     let accounts = yield [
-      $this.http.get('accounts/'+account.from._id),
-      account.to && $this.http.get('accounts/'+account.to._id)
+      $this.http.get('account/'+account.from._id),
+      account.to && $this.http.get('account/'+account.to._id)
     ]
-console.log('account', trans._id, account, accounts)
+
     account.from = accounts[0].body
     account.to   = accounts[1].body //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
     return result
   }
-}
-
-exports.verified = {
-  *post(_id) {
-    let inventory = yield this.http.get(exports.view.history(_id))
-
-    if (inventory.body[0]) {
-      this.status  = 409
-      this.message = `Cannot verify this transaction because transaction ${inventory[0]._id} with _id ${_id} already has this transaction in its history`
-      return
-    }
-
-    let doc = yield patch.call(this, _id, {verifiedAt:new Date().toJSON()})
-
-    //TODO test if previous call was successful.
-    inventory = defaults.call(this, {
-      drug:doc.drug,
-      verifiedAt:null,
-      history:[{
-        transaction:{_id},
-        qty:doc.qty.to
-      }],
-      qty:{
-        to:null,
-        from:doc.qty.to || doc.qty.from
-      },
-      exp:doc.exp && {
-        to:null,
-        from:doc.exp.to || doc.exp.from
-      },
-      lot:doc.lot && {
-        to:null,
-        from:doc.lot.to || doc.lot.from
-      }
-    })
-
-    //Create the inventory
-    yield this.http.put('transactions/'+this.http.id, true).body(inventory)
-
-    //TODO rollback verified if the adding the new item is not successful
-  },
-
-  //This is a bit complex here are the steps:
-  //1. Does this transaction id have a matching inventory item. No? Already un-verified
-  //2. Can this inventory item be deleted. No? a subsequent transaction is based on this verification so it cannot be undone
-  //3. Delete the item with inventory._id
-  //4. Update the original transaction with verified_at = null
-  *delete(id) {
-    let inventory = yield this.http.get(exports.view.history(id))
-
-    if ( ! inventory[0]) { //Only delete inventory if it actually exists
-      this.status  = 409
-      this.message = 'Cannot find a transaction with history.transaction = '+id+'.  Has this transaction been deleted already?'
-      return
-    }
-
-    if (inventory[0].shipment._id != this.account) {
-      this.status  = 409
-      this.message = 'The inventory for this transaction has already been assigned to another shipment'
-      return
-    }
-
-    yield patch.call(this, id, {verifiedAt:null}) //Un-verify transaction
-
-    yield patch.call(this, inventory._id, {_delete:true})
-  }
-}
-
-function defaults(body) {
-  //TODO ensure that there is a qty
-  body.history    = body.history || []
-  body.createdAt  = body.createdAt || new Date().toJSON()
-
-  //TODO [TypeError: Cannot read property 'to' of undefined] is malformed request
-  body.qty.to     = body.qty.to ? +body.qty.to : null     //don't turn null to 0 since it will get erased
-  body.qty.from   = body.qty.from ? +body.qty.from : null //don't turn null to 0 since it will get erased
-  body.shipment   = body.shipment || {_id:this.account}
-
-  return body
-}
-
-/* Makeshift PATCH */
-function *patch(id, updates) {
-
-  let doc = yield this.http(exports.show.authorized(id))
-  let body = doc.body[0].ok
-
-  if (doc.status != 200) return
-  Object.assign(body, updates)
-  let patch = yield this.http.put('transactions/'+id).body(body)
-  body._rev = patch.body.rev
-
-  return body
 }

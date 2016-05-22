@@ -13,7 +13,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('license').notNull.isString
   ensure('street').notNull.isString
   ensure('city').notNull.isString
-  ensure('state').notNull.isString.length(2)
+  ensure('state').notNull.isString.length(2).notChanged
   ensure('zip').notNull.regex(/\d{5}/)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('authorized').notNull.isArray
@@ -22,7 +22,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('ordered').isObject
 
   function _id(val) {
-    return ( ! newDoc._rev && /^[a-z0-9]{7}$/.test(val)) || userCtx.roles[0] == val || 'can only be modified by one of its users'
+    return ( ! newDoc._rev && /^[a-z0-9]{7}$/.test(val)) || userCtx.roles[0] == val || userCtx.roles[0] == '_admin' || 'can only be modified by one of its users'
   }
 }
 
@@ -31,6 +31,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 //TODO this currently allows for anyone to modify any account.  We need a different way to check viewing vs editing
 exports.filter = {
   authorized(doc, req) {
+    if (doc._deleted) return true
     return doc._id.slice(0, 7) != '_design' //Everyone can see all accounts except design documents
   }
 }
@@ -43,12 +44,14 @@ exports.view = {
 
 exports.show = {
   authorized(doc, req) {
-    if ( ! doc) return
+    if ( ! doc)
+      return {code:404}
+
     return toJSON([{ok:doc}]) //Everyone can get/put/del all accounts
   }
 }
 
-exports.changes = function* (db) {
+exports.changes = function* () {
   yield this.http(exports.filter.authorized(this.url), true)
 }
 
@@ -56,11 +59,14 @@ exports.list = function* () {
   yield this.http(exports.view.authorized(), true)
 }
 
-exports.get = function* (id) {
-  yield this.http(exports.show.authorized(id), true)
+exports.get = function* () {
+  let selector = JSON.parse(this.query.selector)
+
+  if (selector._id)
+    yield this.http(exports.show.authorized(selector._id), true)
 }
 
-exports.bulk_get = function* (id) {
+exports.bulk_get = function* (i) {
   this.status = 400
 }
 
@@ -70,7 +76,7 @@ exports.post = function* () {
   this.body.authorized = this.body.authorized || []
   delete this.body._rev
 
-  let res = yield this.http.put('accounts/'+this.http.id).body(this.body)
+  let res = yield this.http.put('account/'+this.http.id).body(this.body)
 
   this.status = res.status
 
@@ -90,11 +96,7 @@ exports.bulk_docs = function* () {
 }
 
 exports.delete = function* (id) {
-
-  yield this.http.get('accounts/'+id, true)
-
-  if (this.status == 200)
-    yield this.http.delete(`/drugs/${id}?rev=${account.body._rev}`, true)
+  yield this.http(null, true)
 }
 
 //TODO need to update shipments account.from/to.name on change of account name
@@ -103,36 +105,39 @@ exports.email = function* (id) {
 }
 
 exports.authorized = {
-  *get(id) {
+  *get() {
     //Search for all accounts (recipients) that have authorized this account as a sender
     //shortcut to /accounts?selector={"authorized":{"$elemMatch":"${session.account}"}}
     this.status = 501 //not implemented
   },
-  *post(id) {
+  *post() {
     //Authorize a sender
-    let path    = exports.show.authorized(this.account)
-    let account = yield this.http(path)
+    let body    = yield this.http.body
+    let account = yield this.http.get(exports.show.authorized(this.user.account._id))
 
-    if (account.body.authorized.includes(id)) {
+    account = account.body[0].ok
+    if (account.authorized.includes(body._id)) {
       this.status  = 409
       this.message = 'This account is already authorized'
     } else {
-      account.body.authorized.push(id)
-      yield this.http.put(path, true).body(account.body)
+      account.authorized.push(body._id)
+      yield this.http.put('account/'+this.user.account._id, true).body(account)
     }
   },
-  *delete(id) {
-    //Un-authorize a sender
-    let path    = exports.show.authorized(this.account)
-    let account = yield this.http(path)
-    let index   = account.body.authorized.indexOf(id)
+  *delete() {
+    //Unauthorize a sender
+    let body    = yield this.http.body
+    let account = yield this.http.get(exports.show.authorized(this.user.account._id))
+
+    account   = account.body[0].ok
+    let index = account.authorized.indexOf(body._id)
 
     if (index == -1) {
       this.status  = 409
       this.message = 'This account is already not authorized'
     } else {
-      account.body.authorized.splice(index, 1);
-      yield this.http.put(path, true).body(account.body)
+      account.authorized.splice(index, 1)
+      yield this.http.put('account/'+this.user.account._id, true).body(account)
     }
   }
 }

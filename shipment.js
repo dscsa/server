@@ -64,12 +64,16 @@ exports.view = {
 
 exports.show = {
   authorized(doc, req) {
-    if ( ! doc) return
+    if ( ! doc)
+      return {code:404}
+
     var account  = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc._id.split('.')
 
     if (accounts[0] == account || accounts[1] == account)
       return toJSON([{ok:doc}])
+
+    return {code:401}
   }
 }
 
@@ -77,12 +81,11 @@ exports.changes = function* (db) {
   yield this.http(exports.filter.authorized(this.url), true)
 }
 
-exports.list = function* () {
-  yield this.http(exports.view.authorized(), true)
-}
+exports.get = function* () {
+  let selector = JSON.parse(this.query.selector)
 
-exports.get = function* (id) {
-  yield this.http(exports.show.authorized(id), true)
+  if (selector._id)
+    yield this.http(exports.show.authorized(selector._id), true)
 }
 
 exports.bulk_get = function* (id) {
@@ -101,7 +104,7 @@ exports.post = function* () { //TODO querystring with label=fedex creates label,
   //Complicated id is not need for shipment, but is needed for transaction that references shipment
   //this way a list function ensure transactions are only provided to the correct from/to accounts
   let id  = `${this.body.account.from._id}.${this.body.account.to._id}.${this.http.id}`
-  let res = yield this.http.put('shipments/'+id).body(this.body)
+  let res = yield this.http.put('shipment/'+id).body(this.body)
 
   this.status = res.status
 
@@ -120,12 +123,8 @@ exports.bulk_docs = function* () {
   yield this.http(null, true)
 }
 
-exports.delete = function* (id) {
-
-  yield this.http.get('shipments/'+id, true)
-
-  if (this.status == 200)
-    yield this.http.delete(`/shipments/${id}?rev=${shipment.body._rev}`, true)
+exports.delete = function* () {
+  yield this.http(null, true)
 }
 
 exports.shipped = function* (id) {

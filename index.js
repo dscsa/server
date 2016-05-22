@@ -1,14 +1,14 @@
 "use strict"
 
 require('./startup')
-let app          = require('koa')()
-let route        = require('koa-route')
-let http         = require('./http')
-let drugs        = require('./drugs')
-let accounts     = require('./accounts')
-let users        = require('./users')
-let shipments    = require('./shipments')
-let transactions = require('./transactions')
+let app         = require('koa')()
+let route       = require('koa-route')
+let http        = require('./http')
+let drug        = require('./drug')
+let account     = require('./account')
+let user        = require('./user')
+let shipment    = require('./shipment')
+let transaction = require('./transaction')
 
 function r(url, options) {
 
@@ -60,16 +60,17 @@ function r(url, options) {
 app.use(http({hostname:'localhost', port: 5984, middleware:'http'}))
 
 function* proxy() {
-  yield this.http(this.url.replace('users', '_users'), true)
+  //console.log('proxy used for', this.url)
+  yield this.http(this.url, true)
 }
 
 function* all_docs(db) {
-  yield this.http(db.replace('users', '_users')+'/_design/auth/_view/authorized', true)
+  yield this.http(db+'/_design/auth/_view/authorized', true)
 }
 
 app.use(function* (next) {
   //Sugar
-  this.account = this.cookies.get('AuthAccount')
+  this.user = JSON.parse(this.cookies.get('AuthUser') || 'null')
 
   //Rather setting up CouchDB for CORS, it's easier & more secure to do here
   this.set('access-control-allow-origin', this.headers.origin)
@@ -110,137 +111,142 @@ r('/:db/_local/:doc')
 //get('/users/_design/:doc', users.proxy) //TODO can I avoid sharing design docs with browser?
 //get('/:db/_design/:doc', proxy)        //TODO can I avoid sharing design docs with browser?
 
+
+
 //Drugs Resource Endpoint
-r('/drugs/_bulk_docs')    //Update denormalized transactions when drug is updated
-  .post(drugs.bulk_docs)
+r('/drug/_bulk_docs')    //Update denormalized transactions when drug is updated
+  .post(drug.bulk_docs)
 
-r('/drugs/_changes')      //Lets PouchDB watch db using longpolling
-  .get(drugs.changes)
+r('/drug/_changes')      //Lets PouchDB watch db using longpolling
+  .get(drug.changes)
 
-r('/drugs/_bulk_get')     //Allow PouchDB to make bulk edits
-  .post(drugs.bulk_get)
-
-r('/drugs', {strict:true})
-  .get(drugs.list)
-  .post(drugs.post)
-
-r('/drugs/:id')
-  .get(drugs.get)
-  .put(drugs.put)
-  .del(drugs.delete)
+r('/drug/_bulk_get')     //Allow PouchDB to make bulk edits
+  .post(drug.bulk_get)
 
 //Account Resource Endpoint
-r('/accounts/_bulk_docs')
-  .post(accounts.bulk_docs)
+r('/account/_bulk_docs')
+  .post(account.bulk_docs)
 
-r('/accounts/_changes')
-  .get(accounts.changes)              //Lets PouchDB watch db using longpolling
+r('/account/_changes')
+  .get(account.changes)              //Lets PouchDB watch db using longpolling
 
-r('/accounts/_bulk_get')
-  .post(accounts.bulk_get)            //Allow PouchDB to make bulk edits
+r('/account/_bulk_get')
+  .post(account.bulk_get)            //Allow PouchDB to make bulk edits
 
-r('/accounts', {strict:true})
-  .get(accounts.list)
-  .post(accounts.post)              //List all docs in resource. Strict means no trailing slash
+r('/user/_bulk_docs')
+  .post(user.bulk_docs)
 
-r('/accounts/:id')
-  .get(accounts.get)
-  .put(accounts.put)
-  .del(accounts.delete)                          //Allow user to get, modify, & delete docs
+r('/user/_changes')
+  .get(user.changes)    //Lets PouchDB watch db using longpolling
 
-r('/accounts/:id/email')
-  .post(accounts.email)                 //Allow user to get, modify, & delete docs
+r('/user/_bulk_get')
+  .post(user.bulk_get)            //Allow PouchDB to make bulk edits
 
-r('/accounts/:id/authorized')     //Allow user to get, modify, & delete docs
-  .get(accounts.authorized.get)
-  .post(accounts.authorized.post)
-  .del(accounts.authorized.delete)
+r('/shipment/_bulk_docs')
+  .post(shipment.bulk_docs)
+
+r('/shipment/_changes')
+  .get(shipment.changes)       //Lets PouchDB watch db using longpolling
+
+r('/shipment/_bulk_get')
+  .post(shipment.bulk_get)     //Allow PouchDB to make bulk edits
+
+r('/transaction/_bulk_docs')
+  .post(transaction.bulk_docs)
+
+r('/transaction/_changes')
+  .get(transaction.changes)    //Lets PouchDB watch db using longpolling
+
+r('/transaction/_bulk_get')
+  .post(transaction.bulk_get)            //Allow PouchDB to make bulk edits
+
+//TODO remove once bulk_get is implemented so that replication no longer needs get method
+app.use(function* (next) {
+  if (this.method == 'GET') {
+    let path = this.path.split('/')
+
+    if (path.length == 3) {
+      let _id  = path.pop()
+
+      this.query.selector = JSON.stringify({_id})
+
+      this.query = this.query
+      this.path  = path.join('/')
+    }
+  }
+
+  yield next
+})
+
+r('/drug', {strict:true})
+  .get(drug.get)
+  .post(drug.post)
+  .put(drug.put)
+  .del(drug.delete)
+
+r('/account', {strict:true})
+  .get(account.get)
+  .post(account.post)              //List all docs in resource. Strict means no trailing slash
+  .put(account.put)
+  .del(account.delete)             //Allow user to get, modify, & delete docs
+
+r('/account/email')
+  .post(account.email)                 //Allow user to get, modify, & delete docs
+
+r('/account/authorized')     //Allow user to get, modify, & delete docs
+  .get(account.authorized.get)
+  .post(account.authorized.post)
+  .del(account.authorized.delete)
 
 //User Resource Endpoint
-r('/users/_bulk_docs')
-  .post(users.bulk_docs)
+r('/user', {strict:true})
+  .get(user.get)        //TODO only show logged in account's users
+  .post(user.post)       //TODO only create user for logged in account
+  .put(user.put)
+  .del(user.delete)      //TODO only get, modify, & delete user for logged in account
 
-r('/users/_changes')
-  .get(users.changes)    //Lets PouchDB watch db using longpolling
+r('/user/email')
+  .post(user.email)           //TODO only get, modify, & delete user for logged in account
 
-r('/users/_bulk_get')
-  .post(users.bulk_get)            //Allow PouchDB to make bulk edits
-
-r('/users', {strict:true})
-  .get(users.list)        //TODO only show logged in account's users
-  .post(users.post)                      //TODO only create user for logged in account
-
-r('/users/:id')
-  .get(users.get)
-  .put(users.put)
-  .del(users.delete)                   //TODO only get, modify, & delete user for logged in account
-
-r('/users/:id/email')
-  .post(users.email)           //TODO only get, modify, & delete user for logged in account
-
-r('/users/:id/session')
-  .post(users.session.post)  //Login
-  .del(users.session.delete) //Logout
+r('/user/session')
+  .post(user.session.post)  //Login
+  .del(user.session.delete) //Logout
 
 
 //Shipment Resource Endpoint
-r('/shipments/_bulk_docs')
-  .post(shipments.bulk_docs)
+r('/shipment', {strict:true})
+  .get(shipment.get)          //List all docs in resource. TODO "find" functionality in querystring
+  .post(shipment.post)
+  .put(shipment.put)
+  .del(shipment.delete)
 
-r('/shipments/_changes')
-  .get(shipments.changes)       //Lets PouchDB watch db using longpolling
+r('/shipment/shipped')
+  .post(shipment.shipped)         // TODO add shipped_at date and change status to shipped
 
-r('/shipments/_bulk_get')
-  .post(shipments.bulk_get)     //Allow PouchDB to make bulk edits
+r('/shipment/received')
+  .post(shipment.received)       // TODO add recieved_at date and change status to received
 
-r('/shipments', {strict:true})
-  .get(shipments.list)          //List all docs in resource. TODO "find" functionality in querystring
-  .post(shipments.post)
+r('/shipment/pickup')
+  .post(shipment.pickup.post)      // add pickup_at date. Allow webhook filtering based on query string ?description=tracker.updated&result.status=delivered.
+  .del(shipment.pickup.delete)     // delete pickup_at date
 
-r('/shipments/:id')             // Allow user to get, modify, & delete docs
-  .get(shipments.get)
-  .put(shipments.put)
-  .del(shipments.delete)
-
-r('/shipments/:id/shipped')
-  .post(shipments.shipped)         // TODO add shipped_at date and change status to shipped
-
-r('/shipments/:id/received')
-  .post(shipments.received)       // TODO add recieved_at date and change status to received
-
-r('/shipments/:id/pickup')
-  .post(shipments.pickup.post)      // add pickup_at date. Allow webhook filtering based on query string ?description=tracker.updated&result.status=delivered.
-  .del(shipments.pickup.delete)     // delete pickup_at date
-
-r('/shipments/:id/manifest')
-  .get(shipments.manifest.get)    // pdf options?  if not exists then create, rather than an explicit POST method
-  .del(shipments.manifest.delete) // delete an old manifest
+r('/shipment/manifest')
+  .get(shipment.manifest.get)    // pdf options?  if not exists then create, rather than an explicit POST method
+  .del(shipment.manifest.delete) // delete an old manifest
 
 //Transaction Resource Endpoint
-r('/transactions/_bulk_docs')
-  .post(transactions.bulk_docs)
+r('/transaction', {strict:true})
+  .get(transaction.get)          //List all docs in resource. Strict means no trailing slash
+  .post(transaction.post)                        //Create new record in DB with short uuid
+  .put(transaction.put)
+  .del(transaction.delete)                   //TODO replace this with a show function. Allow user to get, modify, & delete docs
 
-r('/transactions/_changes')
-  .get(transactions.changes)    //Lets PouchDB watch db using longpolling
+r('/transaction/history')
+  .get(transaction.history)          //Resursively retrieve transaction's history
 
-r('/transactions/_bulk_get')
-  .post(transactions.bulk_get)            //Allow PouchDB to make bulk edits
-
-r('/transactions', {strict:true})
-  .get(transactions.list)          //List all docs in resource. Strict means no trailing slash
-  .post(transactions.post)                        //Create new record in DB with short uuid
-
-r('/transactions/:id')
-  .get(transactions.get)
-  .put(transactions.put)
-  .del(transactions.delete)                   //TODO replace this with a show function. Allow user to get, modify, & delete docs
-
-r('/transactions/:id/history')
-  .get(transactions.history)          //Resursively retrieve transaction's history
-
-r('/transactions/:id/verified')
-  .post(transactions.verified.post)  //New transaction created in inventory, available for further transactions
-  .del(transactions.verified.delete) //New transaction removed from inventory, cannot be done if item has further transactions
+r('/transaction/verified')
+  .post(transaction.verified.post)  //New transaction created in inventory, available for further transactions
+  .del(transaction.verified.delete) //New transaction removed from inventory, cannot be done if item has further transactions
 
 
 //all(/on?deep.field=this&this.must.be.true.to.trigger=true)

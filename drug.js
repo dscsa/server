@@ -1,6 +1,9 @@
 "use strict"
 let crypto       = require('crypto')
-let transactions = require('./transactions')
+let transaction = require('./transaction')
+let secret = require('../development')
+let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
+
 
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
@@ -16,9 +19,9 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('_id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('generics').notNull.isArray.length(1, 10)
-  ensure('generics.name').notNull.isString
-  ensure('generics.strength').notNull.isString
-  ensure('form').notNull.isString
+  ensure('generics.name').notNull.isString.length(1, 50)
+  ensure('generics.strength').notNull.isString.length(1, 10)
+  ensure('form').notNull.isString.length(1, 20)
   ensure('upc').assert(upc)
   ensure('ndc9').assert(ndc9)
 
@@ -43,6 +46,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 exports.filter = {
   authorized(doc, req) {
     return doc._id.slice(0, 7) != '_design' //Everyone can see all drugs except design documents
+    if (doc._deleted) return true
   }
 }
 
@@ -59,41 +63,42 @@ exports.show = {
   }
 }
 
-exports.changes = function* (db) {
+exports.changes = function* () {
   yield this.http(exports.filter.authorized(this.url), true)
 }
 
-exports.list = function* () {
-  yield this.http(exports.view.authorized(), true)
-}
-
 //Retrieve drug and update its price if it is out of date
-exports.get = function*(id) {
-    let drug = yield this.http.get(exports.show.authorized(id))
+exports.get = function*() {
 
-    this.status  = drug.status
-    this.body    = drug.body
-    this.set(drug.headers)
+  let selector = JSON.parse(this.query.selector)
 
-    if (this.status != 200) return
+  if ( ! selector._id) return //TODO implement other searches
 
-    drug = drug.body[0].ok
-    if (new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)
-      return console.log('Prices up to date.')
+  let drug = yield this.http.get(exports.show.authorized(selector._id))
 
-    //TODO destructuring
-    let prices = yield [getNadac.call(this, drug), getGoodrx.call(this, drug)]
+  this.status  = drug.status
+  this.body    = drug.body
+  this.set(drug.headers)
 
-    drug.price.nadac  = prices[0] || drug.price.nadac
-    drug.price.goodrx = prices[1] || drug.price.goodrx
+  if (this.status != 200) return
 
-    drug.price.updatedAt = new Date().toJSON()
+  drug = drug.body[0].ok
+  if (new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)
+    return console.log('Prices up to date.')
 
-    this.http.put('drugs/'+drug._id).body(drug)
-    .then(res => { //need a "then" trigger to send request but we don't need to yield to it
-      if (res.status != 201)
-        console.log('drug price could not be updated', res.body)
-    })
+  //TODO destructuring
+  let prices = yield [getNadac.call(this, drug), getGoodrx.call(this, drug)]
+
+  drug.price.nadac  = prices[0] || drug.price.nadac
+  drug.price.goodrx = prices[1] || drug.price.goodrx
+
+  drug.price.updatedAt = new Date().toJSON()
+
+  this.http.put('drug/'+drug._id).body(drug)
+  .then(res => { //need a "then" trigger to send request but we don't need to yield to it
+    if (res.status != 201)
+      console.log('drug price could not be updated', res.body)
+  })
 }
 
 exports.bulk_get = function* (id) {
@@ -106,7 +111,7 @@ exports.post = function* () {
 
   defaults(drug)
 
-  let res = yield this.http.put('drugs/'+drug._id).body(drug)
+  let res = yield this.http.put('drug/'+drug._id).body(drug)
 
   this.status = res.status
 
@@ -114,7 +119,7 @@ exports.post = function* () {
     return this.body = res.body
 
   //Make sure user gets the updated drug price
-  yield this.http.get('drugs/'+drug._id, true)
+  yield this.http.get('drug/'+drug._id, true)
 }
 
 exports.put = function* () {
@@ -141,30 +146,16 @@ exports.bulk_docs = function* () {
   this.status = res.status
   this.body   = res.body
 
-  if ( ! body.new_edits) return
 
-  let all   = []
-  for (let i in body.docs) {
-    let drug = body.docs[i]
-    if (res.body[i].error) {
-      this.status = 403
-      continue
-    }
+  if (body.new_edits) return //Pouch uses this for local docs
 
-    if ( ! drug._id.includes('_local/')) {
-      all.push(updateTransactions.call(this, drug))
-    }
-  }
-
-  yield all
+  yield body.docs.map(drug => {
+      return updateTransactions.call(this, drug)
+  })
 }
 
 exports.delete = function* (id) {
-
-  yield this.http.get('drugs/'+id, true)
-
-  if (this.status == 200)
-    yield this.http.delete(`/drugs/${id}?rev=${drug.body._rev}`, true)
+  yield this.http(null, true)
 }
 
 function defaults(body) {
@@ -173,9 +164,8 @@ function defaults(body) {
   let labelerCode = ('00000'+body._id.split('-')[0]).slice(-5)
   let productCode = ('0000'+body._id.split('-')[1]).slice(-4)
 
-  body.ndc9 = labelerCode+productCode
-  body.upc  = body._id.replace('-', '')
-
+  body.ndc9  = labelerCode+productCode
+  body.upc   = body._id.replace('-', '')
   body.price = body.price || {}
 }
 
@@ -204,19 +194,20 @@ function *getGoodrx(drug) {
 
 //Get all transactins using this drug so we can update denormalized database
 function *updateTransactions(drug) {
+
   //TODO don't do this if drug.form and drug.generics were not changed
-  let res = yield this.http.get(transactions.view.drugs(drug._id))
+  let res = yield this.http.get(transaction.view.drugs(drug._id))
 
   if (res.status != 200) return
 
   for (let transaction of res.body) {
-    transaction.doc.drug.generics = drug.generics
-    transaction.doc.drug.form     = drug.form
+    transaction.drug.generics = drug.generics
+    transaction.drug.form     = drug.form
 
-    if ( ! transaction.doc.drug.price)
-      transaction.doc.drug.price = drug.price
+    if ( ! transaction.drug.price)
+      transaction.drug.price = drug.price
 
     //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
-    this.http.put('transactions/'+transaction._id).body(transaction.doc)
+    this.http.put('transaction/'+transaction._id).headers({authorization}).body(transaction).then(res => console.log(res)).catch(e => console.log(e))
   }
 }
