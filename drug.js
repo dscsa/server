@@ -58,8 +58,10 @@ exports.view = {
 
 exports.show = {
   authorized(doc, req) {
-    if ( ! doc) return
-    return toJSON([{ok:doc}]) //Everyone can get/put/del all drugs
+    if ( ! doc)
+      return {code:404}
+      
+    return toJSON(req.query.open_revs ? [{ok:doc}]: doc) //Everyone can get/put/del all drugs
   }
 }
 

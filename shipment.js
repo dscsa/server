@@ -71,7 +71,7 @@ exports.show = {
     var accounts = doc._id.split('.')
 
     if (accounts[0] == account || accounts[1] == account)
-      return toJSON([{ok:doc}])
+      return toJSON(req.query.open_revs ? [{ok:doc}]: doc)
 
     return {code:401}
   }
@@ -98,7 +98,7 @@ exports.post = function* () { //TODO querystring with label=fedex creates label,
 
   //TODO replace this with an Easy Post API call that actually creates a label
   //TODO create pickup for the next business date
-  this.body.tracking  = Math.floor(Math.random() * (99999-10000))+10000,
+  this.body.tracking  = this.body.tracking || Math.floor(Math.random() * (99999-10000))+10000,
   this.body.createdAt = new Date().toJSON()
 
   //Complicated id is not need for shipment, but is needed for transaction that references shipment

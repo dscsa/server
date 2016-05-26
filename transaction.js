@@ -97,7 +97,7 @@ exports.show = {
     var accounts = doc.shipment._id.split('.')
 
     if (accounts[0] == account || accounts[1] == account)
-      return toJSON([{ok:doc}])
+      return toJSON(req.query.open_revs ? [{ok:doc}]: doc)
 
       return {code:401}
   }
@@ -135,9 +135,9 @@ exports.post = function* () {
   if (this.status != 200)
     return
 
-  transaction.drug.price    = this.body[0].ok.price
-  transaction.drug.generics = this.body[0].ok.generics
-  transaction.drug.form     = this.body[0].ok.form
+  transaction.drug.price    = this.body.price
+  transaction.drug.generics = this.body.generics
+  transaction.drug.form     = this.body.form
 
   let create = yield this.http.put('transaction/'+this.http.id).body(transaction)
 
@@ -245,8 +245,9 @@ function defaults(body) {
   body.createdAt  = body.createdAt || new Date().toJSON()
 
   //TODO [TypeError: Cannot read property 'to' of undefined] is malformed request
-  body.qty.to     = body.qty.to ? +body.qty.to : null     //don't turn null to 0 since it will get erased
-  body.qty.from   = body.qty.from ? +body.qty.from : null //don't turn null to 0 since it will get erased
+  //Empty string -> null, string -> number, number -> number (including 0)
+  body.qty.to     = body.qty.to != null && body.qty.to !== '' ? +body.qty.to : null     //don't turn null to 0 since it will get erased
+  body.qty.from   = body.qty.from != null && body.qty.from !== '' ? +body.qty.from : null //don't turn null to 0 since it will get erased
   body.shipment   = body.shipment || {_id:this.user.account._id}
 
   return body
@@ -256,7 +257,7 @@ function defaults(body) {
 function *patch(id, updates) {
 
   let doc = yield this.http.get(exports.show.authorized(id))
-  let body = doc.body[0].ok
+  let body = doc.body
 
   if (doc.status != 200) return
   Object.assign(body, updates)

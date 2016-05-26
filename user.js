@@ -55,7 +55,7 @@ exports.show = {
       return toJSON(doc)
     }
     if (doc.account._id == req.userCtx.roles[0]  )
-      return toJSON([{ok:doc}])
+      return toJSON(req.query.open_revs ? [{ok:doc}]: doc)
 
     return {code:401}
   }

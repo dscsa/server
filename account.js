@@ -47,7 +47,7 @@ exports.show = {
     if ( ! doc)
       return {code:404}
 
-    return toJSON([{ok:doc}]) //Everyone can get/put/del all accounts
+    return toJSON(req.query.open_revs ? [{ok:doc}]: doc) //Everyone can get/put/del all accounts
   }
 }
 
@@ -115,7 +115,7 @@ exports.authorized = {
     let body    = yield this.http.body
     let account = yield this.http.get(exports.show.authorized(this.user.account._id))
 
-    account = account.body[0].ok
+    account = account.body
     if (account.authorized.includes(body._id)) {
       this.status  = 409
       this.message = 'This account is already authorized'
@@ -129,7 +129,7 @@ exports.authorized = {
     let body    = yield this.http.body
     let account = yield this.http.get(exports.show.authorized(this.user.account._id))
 
-    account   = account.body[0].ok
+    account   = account.body
     let index = account.authorized.indexOf(body._id)
 
     if (index == -1) {
