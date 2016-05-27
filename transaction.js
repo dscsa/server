@@ -16,6 +16,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('_id').notNull.regex(id)
   ensure('shipment._id').assert(shipmentId)
   ensure('createdAt').notNull.isDate.notChanged
+  ensure('verifiedAt').isDate.assert(verifiedAt)
   ensure('history').notNull.isArray
   ensure('history.transaction._id').notNull.regex(id)
   ensure('history.qty').notNull.isNumber
@@ -53,6 +54,11 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
     if(val.length == 1 && (val[0] == userCtx.roles[0] || '_admin' == userCtx.roles[0])) return
 
     return 'must be in the format <account.from._id> or <account.from._id>.<account.to._id>.<_id>'
+  }
+
+  function verifiedAt(val) {
+    if (val && ! newDoc.qty.to && ! newDoc.qty.from)
+      return 'cannot be set if both transaction.qty.to and transaction.qty.from are not set'
   }
 }
 
@@ -180,19 +186,26 @@ exports.verified = {
 
     if (inventory.body[0]) {
       this.status  = 409
-      this.message = `Cannot verify this transaction because transaction ${inventory[0]._id} with _id ${body._id} already has this transaction in its history`
+      this.message = `Cannot verify this transaction because transaction ${inventory.body[0]._id} with _id ${body._id} already has this transaction in its history`
       return
     }
 
     let doc = yield patch.call(this, body._id, {verifiedAt:new Date().toJSON()})
 
+    if (doc.status != 200) {
+      this.status = doc.status
+      this.body   = doc.body
+      return
+    }
+
+    doc = doc.body
     //TODO test if previous call was successful.
     inventory = defaults.call(this, {
       drug:doc.drug,
       verifiedAt:null,
       history:[{
         transaction:{_id:body._id},
-        qty:doc.qty.to
+        qty:doc.qty.to || doc.qty.from
       }],
       qty:{
         to:null,
@@ -209,7 +222,6 @@ exports.verified = {
     })
     //Create the inventory
     yield this.http.put('transaction/'+this.http.id, true).body(inventory)
-
     //TODO rollback verified if the adding the new item is not successful
   },
 
@@ -222,20 +234,20 @@ exports.verified = {
     let body = yield this.http.body
     let inventory = yield this.http.get(exports.view.history(body._id))
 
-    if ( ! inventory[0]) { //Only delete inventory if it actually exists
+    if ( ! inventory.body[0]) { //Only delete inventory if it actually exists
       this.status  = 409
       this.message = 'Cannot find a transaction with history.transaction = '+body._id+'.  Has this transaction been deleted already?'
       return
     }
 
-    if (inventory[0].shipment._id != this.account) {
+    if (inventory.body[0].shipment._id != this.user.account._id) {
       this.status  = 409
       this.message = 'The inventory for this transaction has already been assigned to another shipment'
       return
     }
 
     yield patch.call(this, body._id, {verifiedAt:null}) //Un-verify transaction
-    yield this.http.delete('transaction', true).body(inventory[0])
+    yield this.http.delete('transaction/'+inventory.body[0]._id+'?rev='+inventory.body[0]._rev, true).body(inventory.body[0])
   }
 }
 
@@ -257,14 +269,14 @@ function defaults(body) {
 function *patch(id, updates) {
 
   let doc = yield this.http.get(exports.show.authorized(id))
-  let body = doc.body
 
   if (doc.status != 200) return
-  Object.assign(body, updates)
-  let patch = yield this.http.put('transaction/'+id).body(body)
-  body._rev = patch.body.rev
+  Object.assign(doc.body, updates)
+  let patch = yield this.http.put('transaction/'+id).body(doc.body)
+  if (patch.status != 201) return patch
+  doc.body._rev = patch.body.rev
 
-  return body
+  return doc
 }
 
 //TODO don't search for shipment if shipment._id doesn't have two periods (inventory)

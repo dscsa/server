@@ -1,8 +1,10 @@
 "use strict"
-let crypto       = require('crypto')
-let transaction = require('./transaction')
+let crypto = require('crypto')
 let secret = require('../development')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
+let transaction   = require('./transaction')
+
+
 
 
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
@@ -60,7 +62,7 @@ exports.show = {
   authorized(doc, req) {
     if ( ! doc)
       return {code:404}
-      
+
     return toJSON(req.query.open_revs ? [{ok:doc}]: doc) //Everyone can get/put/del all drugs
   }
 }
@@ -215,6 +217,5 @@ function *updatePrice(drug) {
   .then(res => { //need a "then" trigger to send request but we don't need to yield to it
     console.log(res.status == 201 ? 'drug price was updated' : 'drug price could not be updated', res.body)
   })
-
   return drug
 }
