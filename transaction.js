@@ -70,12 +70,13 @@ exports.filter = {
     if (doc._id.slice(0, 7) == '_design') return
     if (doc._deleted) return true
 
-    var account = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
+    var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc.shipment._id.split('.')
     return accounts[0] == account || accounts[1] == account
   }
 }
 
+    var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
 exports.view = {
   authorized(doc) {
     var accounts = doc.shipment._id.split('.')
@@ -99,7 +100,6 @@ exports.show = {
     if ( ! doc)
       return {code:404}
 
-    var account = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc.shipment._id.split('.')
 
     if (accounts[0] == account || accounts[1] == account)

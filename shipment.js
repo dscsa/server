@@ -43,7 +43,7 @@ exports.filter = {
 
     if (doc._id.slice(0, 7) == '_design') return
 
-    var account  = req.account || req.userCtx.roles[0]
+    var account  = req.userCtx.roles[0]
     var accounts = doc._id.split('.')
 
     return accounts[0] == account || accounts[1] == account
@@ -63,7 +63,7 @@ exports.show = {
     if ( ! doc)
       return {code:404}
 
-    var account  = req.account || req.userCtx.roles[0]   //called from PUT or CouchDB
+    var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc._id.split('.')
 
     if (accounts[0] == account || accounts[1] == account)

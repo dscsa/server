@@ -44,16 +44,8 @@ exports.view = {
 
 exports.show = {
   authorized(doc, req) {
-    log(doc)
-    log(req)
-    if ( ! doc)
-      return {code:404}
+    if ( ! doc) return {code:404}
 
-    if (doc._deleted) {
-      log('user._deleted')
-      log(doc)
-      return toJSON(doc)
-    }
     if (doc.account._id == req.userCtx.roles[0]  )
       return toJSON(req.query.open_revs ? [{ok:doc}]: doc)
 
