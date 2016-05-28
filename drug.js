@@ -73,7 +73,7 @@ exports.changes = function* () {
 
 //Retrieve drug and update its price if it is out of date
 exports.get = function*() {
-  this.body = yield search.call(this, JSON.parse(this.query.selector))
+  yield search.call(this, JSON.parse(this.query.selector))
 }
 
 exports.bulk_get = function* (id) {
@@ -94,7 +94,7 @@ exports.post = function* () {
     return this.body = res.body
 
   //Make sure user gets the updated drug price
-  this.body = yield search.call(this, {_id:drug._id})
+  yield search.call(this, {_id:drug._id})
 }
 
 exports.put = function* () {
@@ -145,11 +145,11 @@ function defaults(body) {
   body.price.goodrx = +(+body.price.goodrx).toFixed(4)
 }
 
-function *getNadac(drug) {
+function *getNadac() {
   var d = new Date()
   d.setDate(d.getDate() - d.getDay() - 4) //Last Wednesday (getDay: Monday = 1 Sunday = 7)
   d = d.toJSON().slice(0,10)+'T00:00:00.000'
-  let price = yield this.http.get(`http://data.medicaid.gov/resource/tau9-gfwr.json?$where=starts_with(ndc,"${drug.ndc9}")&as_of_date=${d}`).headers({})
+  let price = yield this.http.get(`http://data.medicaid.gov/resource/tau9-gfwr.json?$where=starts_with(ndc,"${this.body.ndc9}")&as_of_date=${d}`).headers({})
 
   if (price.body[0]) //API returns a status of 200 even on failure ;-(
     return +price.body[0].nadac_per_unit
@@ -157,8 +157,8 @@ function *getNadac(drug) {
   console.log("Drug's nadac price could not be updated", price)
 }
 
-function *getGoodrx(drug) {
-  let qs    = `name=${drug.generics[0].name}&dosage=${drug.generics[0].strength}&api_key=f46cd9446f`.replace(/ /g, '%20')
+function *getGoodrx() {
+  let qs    = `name=${this.body.generics[0].name}&dosage=${this.body.generics[0].strength}&api_key=f46cd9446f`.replace(/ /g, '%20')
   let sig   = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
   let price = yield this.http.get(`https://api.goodrx.com/fair-price?${qs}&sig=${sig}`).headers({})
 console.log('goodrx', price.body.data.price, price.body.data.quantity)
@@ -194,28 +194,28 @@ function *search(selector, fields, sort) {
 
   let drug = yield this.http.get(exports.show.authorized(selector._id))
 
-  if (drug.status != 200)
-    throw new Error('Drug with _id '+selector._id+' could not be found')
+  this.status = drug.status
+  this.body = drug.body
+  if (drug.status != 200) return
 
-  return yield updatePrice.call(this, drug.body)
+  return yield updatePrice.call(this)
 }
 
-function *updatePrice(drug) {
+function *updatePrice() {
 
-  if ( ! drug.price || new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)
-    return drug //! drug.price handles the open_revs [{ok:drug}] scenario.
+  if ( ! this.body.price || new Date() - new Date(this.body.price.updatedAt) < 7*24*60*60*1000)
+    return this.body //! drug.price handles the open_revs [{ok:drug}] scenario.
 
-  console.log('Updating drug price!', drug)
+  console.log('Updating drug price!', this.body)
   //TODO destructuring
-  let prices = yield [getNadac.call(this, drug), getGoodrx.call(this, drug)]
+  let prices = yield [getNadac.call(this), getGoodrx.call(this)]
 
-  drug.price.nadac  = prices[0] || drug.price.nadac
-  drug.price.goodrx = prices[1] || drug.price.goodrx
-  drug.price.updatedAt = new Date().toJSON()
+  this.body.price.nadac  = prices[0] || this.body.price.nadac
+  this.body.price.goodrx = prices[1] || this.body.price.goodrx
+  this.body.price.updatedAt = new Date().toJSON()
 
-  this.http.put('drug/'+drug._id).body(drug)
+  this.http.put('drug/'+this.body._id).body(this.body)
   .then(res => { //need a "then" trigger to send request but we don't need to yield to it
     console.log(res.status == 201 ? 'drug price was updated' : 'drug price could not be updated', res.body)
   })
-  return drug
 }
