@@ -98,6 +98,9 @@ exports.get = function* () {
     yield this.http(exports.show.authorized(selector._id), true)
   if (selector.email)
     yield this.http(exports.view.email(selector.email), true)
+  //show function cannot handle _deleted docs with open_revs, so handle manually here
+  if (this.status == 404 && this.query.open_revs)
+    yield this.http.get(this.path+'/'+selector._id, true)
 }
 
 exports.bulk_get = function* () {

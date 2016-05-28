@@ -74,6 +74,10 @@ exports.changes = function* () {
 //Retrieve drug and update its price if it is out of date
 exports.get = function*() {
   yield search.call(this, JSON.parse(this.query.selector))
+  //show function cannot handle _deleted docs with open_revs, so handle manually here
+  if (this.status == 404 && this.query.open_revs)
+    yield this.http.get(this.path+'/'+selector._id, true)
+
 }
 
 exports.bulk_get = function* (id) {

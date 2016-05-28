@@ -122,6 +122,9 @@ exports.get = function* () {
   if (selector._id && this.query.history) {
     this.body = yield history.call(this, selector._id)
   }
+  //show function cannot handle _deleted docs with open_revs, so handle manually here
+  if (this.status == 404 && this.query.open_revs)
+    yield this.http.get(this.path+'/'+selector._id, true)
 }
 
 exports.bulk_get = function* (id) {
