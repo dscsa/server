@@ -8,7 +8,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure.prefix = 'shipment'
 
   //Required
-  ensure('_id').assert(_id)
+  ensure('_id').isString.assert(_id)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('account.from.name').notNull.isString
   ensure('account.to.name').notNull.isString
@@ -20,8 +20,6 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('verifiedAt').isDate
 
   function _id(val) {
-    if (typeof val != 'string')
-      return 'is required to be a valid _id'
 
     val = val.split('.')
 
