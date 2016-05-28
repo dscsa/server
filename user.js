@@ -162,6 +162,13 @@ exports.session = {
     let login = yield this.http.body
 
     let user = yield this.http.get(exports.view.email(login.email))
+
+    if ( ! user.body.length) {
+      this.status = 404
+      this.message = 'No user exists with that email'
+      return
+    }
+
     user = user.body[0] //assume just one user per email for now
 
     yield this.http('_session', true).headers(this.headers).body({name:user._id, password:login.password})
