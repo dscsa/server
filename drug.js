@@ -47,23 +47,21 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 //them with a function that takes a key and returns the couchdb url needed to call them.
 exports.filter = {
   authorized(doc, req) {
-    return doc._id.slice(0, 7) != '_design' //Everyone can see all drugs except design documents
-    if (doc._deleted) return true
+    if(doc._id.slice(0, 7) == '_design') return
+    return true //Everyone can see all drugs except design documents
+  }
+}
+
+exports.show = {
+  authorized(doc, req) {
+    if ( ! doc) return {code:404}
+    return toJSON(req.query.open_revs ? [{ok:doc}]: doc) //Everyone can get/put/del all drugs
   }
 }
 
 exports.view = {
   authorized(doc) {
     emit(doc._id, {rev:doc._rev})
-  }
-}
-
-exports.show = {
-  authorized(doc, req) {
-    if ( ! doc)
-      return {code:404}
-
-    return toJSON(req.query.open_revs ? [{ok:doc}]: doc) //Everyone can get/put/del all drugs
   }
 }
 
@@ -74,6 +72,7 @@ exports.changes = function* () {
 //Retrieve drug and update its price if it is out of date
 exports.get = function*() {
   yield search.call(this, JSON.parse(this.query.selector))
+
   //show function cannot handle _deleted docs with open_revs, so handle manually here
   if (this.status == 404 && this.query.open_revs)
     yield this.http.get(this.path+'/'+selector._id, true)
@@ -188,7 +187,9 @@ function *updateTransactions(drug) {
       transaction.drug.price = drug.price
 
     //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
-    this.http.put('transaction/'+transaction._id).headers({authorization}).body(transaction).then(res => console.log(res)).catch(e => console.log(e))
+    this.http.put('transaction/'+transaction._id).headers({authorization}).body(transaction)
+    .then(res => console.log(res))
+    .catch(e => console.log(e))
   }
 }
 

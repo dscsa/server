@@ -50,18 +50,9 @@ exports.filter = {
   }
 }
 
-exports.view = {
-  authorized(doc) {
-    var accounts = doc._id.split('.')
-    emit(accounts[0], {rev:doc._rev})
-    emit(accounts[1], {rev:doc._rev})
-  }
-}
-
 exports.show = {
   authorized(doc, req) {
-    if ( ! doc)
-      return {code:404}
+    if ( ! doc) return {code:404}
 
     var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc._id.split('.')
@@ -73,6 +64,14 @@ exports.show = {
   }
 }
 
+exports.view = {
+  authorized(doc) {
+    var accounts = doc._id.split('.')
+    emit(accounts[0], {rev:doc._rev})
+    emit(accounts[1], {rev:doc._rev})
+  }
+}
+
 exports.changes = function* (db) {
   yield this.http(exports.filter.authorized(this.url), true)
 }
@@ -80,8 +79,10 @@ exports.changes = function* (db) {
 exports.get = function* () {
   let selector = JSON.parse(this.query.selector)
 
-  if (selector._id)
-    yield this.http(exports.show.authorized(selector._id), true)
+  if ( ! selector._id) return //TODO other search types
+
+  yield this.http(exports.show.authorized(selector._id), true)
+
   //show function cannot handle _deleted docs with open_revs, so handle manually here
   if (this.status == 404 && this.query.open_revs)
     yield this.http.get(this.path+'/'+selector._id, true)

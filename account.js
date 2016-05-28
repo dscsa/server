@@ -4,7 +4,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   if (newDoc._id.slice(0, 7) == '_local/') return
   if (newDoc._deleted) return
-
+  var id = /^[a-z0-9]{7}$/
   ensure.prefix = 'account'
 
   //Required
@@ -22,7 +22,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('ordered').isObject
 
   function _id(val) {
-    return ( ! newDoc._rev && /^[a-z0-9]{7}$/.test(val)) || userCtx.roles[0] == val || userCtx.roles[0] == '_admin' || 'can only be modified by one of its users'
+    return ( ! newDoc._rev && id.test(val)) || userCtx.roles[0] == val || userCtx.roles[0] == '_admin' || 'can only be modified by one of its users'
   }
 }
 
@@ -31,23 +31,22 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 //TODO this currently allows for anyone to modify any account.  We need a different way to check viewing vs editing
 exports.filter = {
   authorized(doc, req) {
-    if (doc._deleted) return true
-    return doc._id.slice(0, 7) != '_design' //Everyone can see all accounts except design documents
+    if (doc._id.slice(0, 7) == '_design') return
+    return true //Everyone can see all accounts except design documents
+  }
+}
+
+exports.show = {
+  authorized(doc, req) {
+    if ( ! doc) return {code:404}
+
+    return toJSON(req.query.open_revs ? [{ok:doc}]: doc) //Everyone can get/put/del all accounts
   }
 }
 
 exports.view = {
   authorized(doc) {
     emit(doc._id, {rev:doc._rev})
-  }
-}
-
-exports.show = {
-  authorized(doc, req) {
-    if ( ! doc)
-      return {code:404}
-
-    return toJSON(req.query.open_revs ? [{ok:doc}]: doc) //Everyone can get/put/del all accounts
   }
 }
 
@@ -62,8 +61,10 @@ exports.list = function* () {
 exports.get = function* () {
   let selector = JSON.parse(this.query.selector)
 
-  if (selector._id)
-    yield this.http(exports.show.authorized(selector._id), true)
+  if ( ! selector._id) return //TODO other search types
+
+  yield this.http(exports.show.authorized(selector._id), true)
+
   //show function cannot handle _deleted docs with open_revs, so handle manually here
   if (this.status == 404 && this.query.open_revs)
     yield this.http.get(this.path+'/'+selector._id, true)

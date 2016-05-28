@@ -33,15 +33,6 @@ exports.filter = {
   }
 }
 
-exports.view = {
-  authorized(doc) {
-    emit(doc.account._id, {rev:doc._rev})
-  },
-  email(doc) { //for session login
-    emit(doc.email)
-  }
-}
-
 exports.show = {
   authorized(doc, req) {
     if ( ! doc) return {code:404}
@@ -53,13 +44,19 @@ exports.show = {
   }
 }
 
+exports.view = {
+  authorized(doc) {
+    emit(doc.account._id, {rev:doc._rev})
+  },
+  email(doc) { //for session login
+    emit(doc.email)
+  }
+}
+
 exports.changes = function* (db) {
   yield this.http(exports.filter.authorized(this.url), true)
 }
 
-exports.list = function* () {
-  yield this.http(exports.view.authorized(this.account), true)
-}
 
 //TODO get rid of id in path and use query string instead.  Paths would be
 
@@ -94,10 +91,13 @@ exports.get = function* () {
 
   let selector = JSON.parse(this.query.selector)
 
-  if (selector._id)
-    yield this.http(exports.show.authorized(selector._id), true)
   if (selector.email)
     yield this.http(exports.view.email(selector.email), true)
+
+  if ( ! selector._id) return //TODO other search types
+
+  yield this.http(exports.show.authorized(selector._id), true)
+
   //show function cannot handle _deleted docs with open_revs, so handle manually here
   if (this.status == 404 && this.query.open_revs)
     yield this.http.get(this.path+'/'+selector._id, true)

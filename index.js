@@ -164,10 +164,6 @@ r('/transaction/_bulk_get')
 app.use(function* (next) {
   if (this.method == 'GET') {
 
-    // if (this.query.revs) {
-    //   return yield this.http.get(null, true)
-    // }
-
     let path = this.path.split('/')
 
     if (path.length == 3) {

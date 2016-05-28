@@ -76,7 +76,20 @@ exports.filter = {
   }
 }
 
+exports.show = {
+  authorized(doc, req) {
+    if ( ! doc) return {code:404}
+
     var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
+    var accounts = doc.shipment._id.split('.')
+
+    if (accounts[0] == account || accounts[1] == account)
+      return toJSON(req.query.open_revs ? [{ok:doc}]: doc)
+
+    return {code:401}
+  }
+}
+
 exports.view = {
   authorized(doc) {
     var accounts = doc.shipment._id.split('.')
@@ -95,33 +108,21 @@ exports.view = {
   }
 }
 
-exports.show = {
-  authorized(doc, req) {
-    if ( ! doc)
-      return {code:404}
-
-    var accounts = doc.shipment._id.split('.')
-
-    if (accounts[0] == account || accounts[1] == account)
-      return toJSON(req.query.open_revs ? [{ok:doc}]: doc)
-
-      return {code:401}
-  }
-}
-
 exports.changes = function* () {
   yield this.http(exports.filter.authorized(this.url), true)
 }
 
 exports.get = function* () {
+
   let selector = JSON.parse(this.query.selector)
 
-  if (selector._id)
-    yield this.http(exports.show.authorized(selector._id), true)
+  if ( ! selector._id) return //TODO other search types
 
-  if (selector._id && this.query.history) {
-    this.body = yield history.call(this, selector._id)
-  }
+  if (this.query.history)
+    return this.body = yield history(this, selector._id)
+
+  yield this.http.get(exports.show.authorized(selector._id), true)
+
   //show function cannot handle _deleted docs with open_revs, so handle manually here
   if (this.status == 404 && this.query.open_revs)
     yield this.http.get(this.path+'/'+selector._id, true)
@@ -284,11 +285,8 @@ function *patch(id, updates) {
 
 //TODO don't search for shipment if shipment._id doesn't have two periods (inventory)
 //TODO option to include full from/to account information
-function *history(id) {
+function *history($this, id) {
 
-  let body = yield this.http.body
-  let count  = 0
-  let $this  = this
   let result = []
 
   return yield history(id, result)
