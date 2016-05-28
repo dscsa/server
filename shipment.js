@@ -26,15 +26,13 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
     if (val[0] == val[1])
       return 'cannot have account.from._id == account.to._id'
 
-    if (val.length == 3 && id.test(val[2])) {
+    if (val.length == 3 && id.test(val[2])) { //Part of a shipment
       if (val[0] == newDoc.account.from._id && val[0] == userCtx.roles[0] && id.test(val[1])) return
       if (val[1] == newDoc.account.to._id   && val[1] == userCtx.roles[0] && id.test(val[0])) return
-      if (userCtx.roles[0] == "_admin") return
+      if (userCtx.roles[0] == "_admin" && id.test(val[0]) && id.test(val[1])) return
     }
 
-    if (val.length == 1 && val[0] == newDoc.account.from._id && val[0] == userCtx.roles[0]) return
-
-    return 'must be in the format <account.from._id> or <account.from._id>.<account.to._id>.<_id>'
+    return 'must be in the format <account.from._id>.<account.to._id>.<_id>'
   }
 }
 
