@@ -20,11 +20,11 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('history').notNull.isArray
   ensure('history.transaction._id').notNull.regex(id)
   ensure('history.qty').notNull.isNumber
-  ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
-  ensure('drug.generics').notNull.isArray.length(1, 10)
+  ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/).notChanged
+  ensure('drug.generics').notNull.isArray.length(1, 10).notChanged
   ensure('drug.generics.name').notNull.isString.length(1, 50)
   ensure('drug.generics.strength').notNull.isString.length(1, 10)
-  ensure('drug.form').notNull.isString.length(1, 20)
+  ensure('drug.form').notNull.isString.length(1, 20).notChanged
   ensure('drug.price.updatedAt').notNull.isDate
 
   //Optional
@@ -66,9 +66,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 //them with a function that takes a key and returns the couchdb url needed to call them.
 exports.filter = {
   authorized(doc, req) {
-
-    if (doc._id.slice(0, 7) == '_design') return
-    if (doc._deleted) return true
+    if ( ! doc.shipment) return doc._deleted //true for _deleted false for _design
 
     var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc.shipment._id.split('.')
@@ -137,28 +135,20 @@ exports.post = function* () {
   let transaction = yield this.http.body
 
   defaults.call(this, transaction)
+
   //Making sure these are accurate and upto date is too
   //costly to do on every save so just do it on creation
-  this.query.selector = JSON.stringify({_id:transaction.drug._id})
-  yield drugs.get.call(this)
+  let drug = yield drugs.search.call(this, {_id:transaction.drug._id})
 
-  if (this.status != 200)
-    return
+  transaction.drug.price    = drug.price
+  transaction.drug.generics = drug.generics
+  transaction.drug.form     = drug.form
 
-  transaction.drug.price    = this.body.price
-  transaction.drug.generics = this.body.generics
-  transaction.drug.form     = this.body.form
+  let save = yield this.http.put('transaction/'+this.http.id).body(transaction)
 
-  let create = yield this.http.put('transaction/'+this.http.id).body(transaction)
-
-  this.status = create.status
-
-  if (this.status != 201)
-    return this.body = create.body
-
-  this.body      = transaction
-  this.body._id  = create.body.id
-  this.body._rev = create.body.rev
+  transaction._id  = save.id
+  transaction._rev = save.rev
+  this.body = transaction
 }
 
 exports.put = function* () {
@@ -170,45 +160,35 @@ exports.bulk_docs = function* () {
 }
 
 exports.delete = function* () {
+  let doc = yield this.http.body
+  let inv = yield this.http.get(exports.view.history(doc._id))
 
-  let body = yield this.http.body
-  let inventory = yield this.http.get(exports.view.history(body._id))
+  if ( ! inv[0]) //Only delete inventory if id is not in subsequent transaction
+    return yield this.http(null, true)
 
-  if (inventory[0]) { //Do not delete inventory if id is in subsequent transaction
-    this.status  = 409
-    this.message = `Cannot delete this transaction because transaction ${inventory[0]._id} has _id ${body._id} in its history`
-    return
-  }
-
-  yield this.http(null, true)
+  this.status  = 409
+  this.message = `Cannot delete this transaction because transaction ${inv[0]._id} has _id ${doc._id} in its history`
 }
 
 exports.verified = {
   *post() {
-    let body = yield this.http.body
-    let inventory = yield this.http.get(exports.view.history(body._id))
+    let doc = yield this.http.body
+    let inv = yield this.http.get(exports.view.history(doc._id))
 
-    if (inventory.body[0]) {
+    if (inv[0]) {
       this.status  = 409
-      this.message = `Cannot verify this transaction because transaction ${inventory.body[0]._id} with _id ${body._id} already has this transaction in its history`
+      this.message = `Cannot verify this transaction because transaction ${inv[0]._id} with _id ${doc._id} already has this transaction in its history`
       return
     }
 
-    let doc = yield patch.call(this, body._id, {verifiedAt:new Date().toJSON()})
+    doc = yield patch.call(this, doc._id, {verifiedAt:new Date().toJSON()})
 
-    if (doc.status != 200) {
-      this.status = doc.status
-      this.body   = doc.body
-      return
-    }
-
-    doc = doc.body
-    //TODO test if previous call was successful.
+    //Create the new inventory item
     inventory = defaults.call(this, {
       drug:doc.drug,
       verifiedAt:null,
       history:[{
-        transaction:{_id:body._id},
+        transaction:{_id:doc._id},
         qty:doc.qty.to || doc.qty.from
       }],
       qty:{
@@ -224,7 +204,7 @@ exports.verified = {
         from:doc.lot.to || doc.lot.from
       }
     })
-    //Create the inventory
+
     yield this.http.put('transaction/'+this.http.id, true).body(inventory)
     //TODO rollback verified if the adding the new item is not successful
   },
@@ -235,23 +215,24 @@ exports.verified = {
   //3. Delete the item with inventory._id
   //4. Update the original transaction with verified_at = null
   *delete() {
-    let body = yield this.http.body
-    let inventory = yield this.http.get(exports.view.history(body._id))
+    let doc = yield this.http.body
+    let inv = yield this.http.get(exports.view.history(body._id))
+    inv = inv[0]
 
-    if ( ! inventory.body[0]) { //Only delete inventory if it actually exists
+    if ( ! inv) { //Only delete inventory if it actually exists
       this.status  = 409
-      this.message = 'Cannot find a transaction with history.transaction = '+body._id+'.  Has this transaction been deleted already?'
+      this.message = 'Cannot find a transaction with history.transaction = '+doc._id+'.  Has this transaction been deleted already?'
       return
     }
 
-    if (inventory.body[0].shipment._id != this.user.account._id) {
+    if (inv.shipment._id != this.user.account._id) {
       this.status  = 409
       this.message = 'The inventory for this transaction has already been assigned to another shipment'
       return
     }
 
-    yield patch.call(this, body._id, {verifiedAt:null}) //Un-verify transaction
-    yield this.http.delete('transaction/'+inventory.body[0]._id+'?rev='+inventory.body[0]._rev, true).body(inventory.body[0])
+    yield patch.call(this, doc._id, {verifiedAt:null}) //Un-verify transaction
+    yield this.http.delete('transaction/'+inv._id+'?rev='+inv._rev, true)
   }
 }
 
@@ -272,14 +253,10 @@ function defaults(body) {
 /* Makeshift PATCH */
 function *patch(id, updates) {
 
-  let doc = yield this.http.get(exports.show.authorized(id))
+  let doc  = yield this.http.get(exports.show.authorized(id))
+  let save = yield this.http.put('transaction/'+id).body(Object.assign(doc, updates))
 
-  if (doc.status != 200) return
-  Object.assign(doc.body, updates)
-  let patch = yield this.http.put('transaction/'+id).body(doc.body)
-  if (patch.status != 201) return patch
-  doc.body._rev = patch.body.rev
-
+  doc._rev = save.rev
   return doc
 }
 
@@ -294,13 +271,6 @@ function *history($this, id) {
   function *history (_id, list) {
     let trans = yield $this.http.get('transaction/'+_id) //don't use show function because we might need to see transactions not directly authorized
 
-    if (trans.status == 404) {
-      $this.status  = 404
-      $this.message = 'Cannot find transaction '+_id
-      return false
-    }
-
-    trans = trans.body
     list.push(trans)
 
     let indentedList = [], len = trans.history.length
@@ -331,14 +301,8 @@ function *history($this, id) {
     //Search for transaction's ancestors and shipment in parallel
     all = yield all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
 
-    if (all[0].status == 404) {
-      $this.status  = 404
-      $this.message = `Malformed transaction ${trans._id} does not have a shipment ${trans.shipment._id}`
-      return result
-    }
-
-    trans.shipment = all[0].body
-    let account = trans.shipment.account
+    trans.shipment = all[0]
+    let account    = all[0].account
 
     //TODO this call is serial. Can we do in parallel with next async call?
     //TODO this is co specific won't work when upgrading to async/await which need Promise.all
@@ -347,8 +311,8 @@ function *history($this, id) {
       account.to && $this.http.get('account/'+account.to._id)
     ]
 
-    account.from = accounts[0].body
-    account.to   = accounts[1].body //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
+    account.from = accounts[0]
+    account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
     return result
   }
 }

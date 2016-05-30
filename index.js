@@ -85,10 +85,22 @@ app.use(function *(next) {
   try {
     yield next
   } catch (err) {
-    this.status = err.status || 500;
-    this.body   = err.message+"\n"+err.stack;
+    this.status = this.status || 500
+    this.body   = err
+
+    if (err instanceof Error) {
+      this.message = err.name
+      this.body    = err.stack
+    } else if (err.error && err.reason) {
+      //Standardize couch standard and custom errors
+      let msg = err.reason.msg || err.reason
+      this.message = err.error+': '+msg
+      this.body    = {name:msg, body:err.reason.doc || 'unknown'}
+    } else if (this.status != 404){
+      console.log('Interesting Error', err)
+    }
   }
-});
+})
 
 //Undocumented routes needed on all databases for PouchDB replication
 r('/')                    //Not sure why we need this.  Shows welcome UUID & Version

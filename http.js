@@ -74,8 +74,8 @@ function init(defaults, ctx) {
 
           var req = http.request(config)
 
-          if(config.method == 'GET')
-            req.end('')  //Don't drain req body with GET request
+          if(config.method == 'GET' || (config.method == 'DELETE' && ! config.body))
+            req.end('')  //Don't drain req body with GET request, Delete requests have optional body
 
           else if ( ! config.body)
             console.log(`Error: you forgot to set request body for ${config.method} ${config.path}`, config)
@@ -96,21 +96,20 @@ function init(defaults, ctx) {
           })
         })
         .then(res => {
-          //console.log(config.method, config.path, body)
-          if ( ! proxy)
-            return api.json(res).then(body => {
-              return {body, status:res.statusCode, headers:res.headers}
-            })
 
-          //console.log('path', res.statusCode, config.path)
-          ctx.body    = res
-          ctx.status  = res.statusCode
-          ctx.set(res.headers)
-        })
-        .catch(err => {
-          console.error()
-          console.error(defaults.middleware ? 'this.'+defaults.middleware+' error' : 'http', err.stack)
-          console.error()
+          ctx.status = res.statusCode
+
+          let err = ctx.status < 200 || ctx.status >= 300
+
+          if (proxy === true && ! err) {
+            ctx.set && ! ctx.headerSent && ctx.set(res.headers)
+            return ctx.body = res
+          }
+
+          return api.json(res).then(body => {
+            if (err) throw body
+            return body
+          })
         })
         .then(a,b)
       },

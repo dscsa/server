@@ -26,8 +26,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 //them with a function that takes a key and returns the couchdb url needed to call them.
 exports.filter = {
   authorized(doc, req) {
-    if (doc._id.slice(0, 7) == '_design') return
-    if (doc._deleted) return true
+    if ( ! doc.account) return doc._deleted //true for _deleted false for _design
 
     return doc.account._id == req.userCtx.roles[0] //Only see users within your account
   }
@@ -92,7 +91,7 @@ exports.get = function* () {
   let selector = JSON.parse(this.query.selector)
 
   if (selector.email)
-    yield this.http(exports.view.email(selector.email), true)
+    return yield this.http(exports.view.email(selector.email), true)
 
   if ( ! selector._id) return //TODO other search types
 
@@ -109,34 +108,23 @@ exports.bulk_get = function* () {
 
 //CouchDB requires an _id based on the user's name
 exports.post = function* () {
-  this.body  = yield this.http.body
-  let id     = this.http.id
-  let res    = yield this.http
-  .put('_users/org.couchdb.user:'+id).headers({authorization})
-  .body({
-    name:id,
+  let name = this.http.id
+  let user = yield this.http.body
+  let save = yield this.http.put('_users/org.couchdb.user:'+name).headers({authorization}).body({
+    name,
     type:'user',
-    roles:[this.body.account._id],
-    password:this.body.password
+    roles:[user.account._id],
+    password:user.password
   })
 
-  this.status = res.status
+  user.createdAt = new Date().toJSON()
+  user.password  = undefined
 
-  if (this.status != 201)
-    return this.body = res.body
+  save = yield this.http.put('user/'+id).body(user)
 
-  this.body.createdAt = new Date().toJSON()
-  this.body.password  = undefined
-
-  res = yield this.http.put('user/'+id).body(this.body)
-
-  this.status = res.status
-
-  if (this.status != 201)
-    return this.body = res.body
-
-  this.body._id  = res.body.id
-  this.body._rev = res.body.rev
+  user._id  = save.id
+  user._rev = save.rev
+  this.body = user
 }
 
 //TODO switch this to using email once bulk_get is working
@@ -161,29 +149,24 @@ exports.email = function* () {
 //TODO consider putting account's State as user role
 exports.session = {
   *post() {
-
     let login = yield this.http.body
+    let user  = yield this.http.get(exports.view.email(login.email))
+    user = user[0] //assume just one user per email for now
 
-    let user = yield this.http.get(exports.view.email(login.email))
-
-    if ( ! user.body.length) {
+    if ( ! user) {
       this.status = 404
-      this.message = 'No user exists with that email'
+      this.message = 'No user exists with that email.'
       return
     }
 
-    user = user.body[0] //assume just one user per email for now
-
     yield this.http('_session', true).headers(this.headers).body({name:user._id, password:login.password})
 
-    if (this.status != 200) return
     this.body = {_id:user._id, account:{_id:user.account._id}}
     this.cookies.set('AuthUser', JSON.stringify(this.body), {httpOnly:false})
   },
 
   *delete() {
     yield this.http('_session', true)
-    //This has to be set after the proxy since proxy will overwrite our cookie
-    this.cookies.set('AuthUser', '')
+    this.cookies.set('AuthUser', '') //This has to be set after the proxy since proxy will overwrite our cookie
   }
 }

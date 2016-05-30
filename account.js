@@ -54,10 +54,6 @@ exports.changes = function* () {
   yield this.http(exports.filter.authorized(this.url), true)
 }
 
-exports.list = function* () {
-  yield this.http(exports.view.authorized(), true)
-}
-
 exports.get = function* () {
   let selector = JSON.parse(this.query.selector)
 
@@ -78,17 +74,12 @@ exports.post = function* () {
   this.body            = yield this.http.body
   this.body.createdAt  = new Date().toJSON()
   this.body.authorized = this.body.authorized || []
-  delete this.body._rev
+  this.body._rev       = undefined
 
-  let res = yield this.http.put('account/'+this.http.id).body(this.body)
+  let save = yield this.http.put('account/'+this.http.id).body(this.body)
 
-  this.status = res.status
-
-  if (this.status != 201)
-    return this.body = res.body
-
-  this.body._id  = res.body.id
-  this.body._rev = res.body.rev
+  this.body._id  = save.id
+  this.body._rev = save.rev
 }
 
 exports.put = function* () {
@@ -119,7 +110,6 @@ exports.authorized = {
     let body    = yield this.http.body
     let account = yield this.http.get(exports.show.authorized(this.user.account._id))
 
-    account = account.body
     if (account.authorized.includes(body._id)) {
       this.status  = 409
       this.message = 'This account is already authorized'
@@ -132,9 +122,7 @@ exports.authorized = {
     //Unauthorize a sender
     let body    = yield this.http.body
     let account = yield this.http.get(exports.show.authorized(this.user.account._id))
-
-    account   = account.body
-    let index = account.authorized.indexOf(body._id)
+    let index   = account.authorized.indexOf(body._id)
 
     if (index == -1) {
       this.status  = 409

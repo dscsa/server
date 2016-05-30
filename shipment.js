@@ -103,16 +103,11 @@ exports.post = function* () { //TODO querystring with label=fedex creates label,
 
   //Complicated id is not need for shipment, but is needed for transaction that references shipment
   //this way a list function ensure transactions are only provided to the correct from/to accounts
-  let id  = `${this.body.account.from._id}.${this.body.account.to._id}.${this.http.id}`
-  let res = yield this.http.put('shipment/'+id).body(this.body)
+  let _id = `${this.body.account.from._id}.${this.body.account.to._id}.${this.http.id}`
+  let res = yield this.http.put('shipment/'+_id).body(this.body)
 
-  this.status = res.status
-
-  if (this.status != 201)
-    return this.body = res.body
-
-  this.body._id  = res.body.id
-  this.body._rev = res.body.rev
+  this.body._id  = res.id
+  this.body._rev = res.rev
 }
 
 exports.put = function* () {

@@ -138,8 +138,11 @@ function *addDesignDocs (name) {
   let db = require('./'+name)
 
   //yield http.delete(name).headers({authorization}).body(true)
-  let res = yield http.put(name).headers({authorization}).body(true) //Create the database
+  try {
+    yield http.put(name).headers({authorization}).body(true) //Create the database
+  } catch (err) {
 
+  }
   //This may be too much magic for best practice but its really elegant.  Replace the export function
   //with the url used to call the export so the original module can call it properly
   for (let view in db.view) {
@@ -164,7 +167,7 @@ function *addDesignDocs (name) {
   let validate_doc_update = toString(db.validate_doc_update).replace('{', "{\n"+ensure)
 
   yield http.put(name+'/_design/auth').headers({authorization}).body({
-    _rev:design.body._rev,
+    _rev:design._rev,
     views,
     filters,
     shows,
@@ -180,6 +183,6 @@ co(function*() {
     yield all //TODO Promise.all[] doesn't work for generators although this is deprecated in Koa v2
     console.log('Success adding design docs to database')
   } catch(err) {
-    console.log('Error adding design docs to database', err.stack)
+    console.log('Error adding design docs to database\n', err instanceof Error ? err.stack : err)
   }
 })
