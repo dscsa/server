@@ -76,7 +76,7 @@ exports.filter = {
 
 exports.show = {
   authorized(doc, req) {
-    if ( ! doc) return {code:404}
+    if ( ! doc) return {code:204}
 
     var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
     var accounts = doc.shipment._id.split('.')
@@ -122,7 +122,7 @@ exports.get = function* () {
   yield this.http.get(exports.show.authorized(selector._id), true)
 
   //show function cannot handle _deleted docs with open_revs, so handle manually here
-  if (this.status == 404 && this.query.open_revs)
+  if (this.status == 204 && this.query.open_revs)
     yield this.http.get(this.path+'/'+selector._id, true)
 }
 
@@ -138,7 +138,8 @@ exports.post = function* () {
 
   //Making sure these are accurate and upto date is too
   //costly to do on every save so just do it on creation
-  let drug = yield drugs.search.call(this, {_id:transaction.drug._id})
+  let drug = yield this.http.get(drugs.show.authorized(transaction.drug._id))
+  yield drugs.updatePrice.call(this, drug)
 
   transaction.drug.price    = drug.price
   transaction.drug.generics = drug.generics

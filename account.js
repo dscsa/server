@@ -38,7 +38,7 @@ exports.filter = {
 
 exports.show = {
   authorized(doc, req) {
-    if ( ! doc) return {code:404}
+    if ( ! doc) return {code:204}
 
     return toJSON(req.query.open_revs ? [{ok:doc}]: doc) //Everyone can get/put/del all accounts
   }
@@ -62,7 +62,7 @@ exports.get = function* () {
   yield this.http(exports.show.authorized(selector._id), true)
 
   //show function cannot handle _deleted docs with open_revs, so handle manually here
-  if (this.status == 404 && this.query.open_revs)
+  if (this.status == 204 && this.query.open_revs)
     yield this.http.get(this.path+'/'+selector._id, true)
 }
 
