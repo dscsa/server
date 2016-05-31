@@ -71,35 +71,36 @@ exports.changes = function* () {
 
 //Retrieve drug and update its price if it is out of date
 exports.get = function*() {
-  try {
+    let selector = JSON.parse(this.query.selector)
 
-    this.body = yield exports.search.call(this, JSON.parse(this.query.selector))
+    if ( ! selector._id) return //TODO other search types
 
-    if ( ! this.query.open_revs) {
-      yield updatePrice.call(this, drug)
-
-      this.http.put('drug/'+drug._id).body(drug)
-      .catch(res => { //need a "then" trigger to send request but we don't need to yield to it
-        console.log('drug price could not be updated', drug, res)
-      })
-    }
-
-  } catch (err) {
-    if (this.status == 204 && this.query.open_revs)
-
-      throw err
+    this.body = yield this.http(exports.show.authorized(selector._id))
 
     //show function cannot handle _deleted docs with open_revs, so handle manually here
-    yield this.http.get(this.path+'/'+selector._id, true)
-  }
+    if (this.status == 204 && this.query.open_revs)
+      return yield this.http.get(this.path+'/'+selector._id, true)
+
+    yield exports.updatePrice.call(this, this.body)
+
+    this.http.put('drug/'+drug._id).body(this.body)
+    .catch(res => { //need a "then" trigger to send request but we don't need to yield to it
+      console.log('drug price could not be updated', drug, res)
+    })
 }
 
 //Exporting non-standard method, but is used by transaction.js
-exports.search = function *(selector, fields, sort) {
+exports.updatePrice = function* (drug) {
 
-  if ( ! selector._id) return //TODO implement other searches
+  if ( ! drug.price || new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)
+    return //! drug.price handles the open_revs [{ok:drug}] scenario.
 
-  return yield this.http.get(exports.show.authorized(selector._id))
+  //TODO destructuring
+  let prices = yield [getNadac.call(this, drug), getGoodrx.call(this, drug)]
+
+  drug.price.nadac  = prices[0] || drug.price.nadac
+  drug.price.goodrx = prices[1] || drug.price.goodrx
+  drug.price.updatedAt = new Date().toJSON()
 }
 
 exports.bulk_get = function* (id) {
@@ -112,7 +113,7 @@ exports.post = function* () {
 
   defaults(drug)
 
-  yield updatePrice.call(this, drug)
+  yield exports.updatePrice.call(this, drug)
 
   let save = yield this.http.put('drug/'+drug._id).body(drug)
 
@@ -200,17 +201,4 @@ function *updateTransactions(drug) {
     .then(res => console.log(res))
     .catch(err => console.log(err))
   }
-}
-
-function *updatePrice(drug) {
-
-  if ( ! drug.price || new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)
-    return //! drug.price handles the open_revs [{ok:drug}] scenario.
-
-  //TODO destructuring
-  let prices = yield [getNadac.call(this, drug), getGoodrx.call(this, drug)]
-
-  drug.price.nadac  = prices[0] || drug.price.nadac
-  drug.price.goodrx = prices[1] || drug.price.goodrx
-  drug.price.updatedAt = new Date().toJSON()
 }
