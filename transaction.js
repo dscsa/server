@@ -46,9 +46,9 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
       return 'cannot have account.from._id == account.to._id'
 
     if (val.length == 3 && id.test(val[2])) {
-      if (val[0] == userCtx.roles[0] && id.test(val[1])) return
-      if (val[1] == userCtx.roles[0] && id.test(val[0])) return
-      if (userCtx.roles[0] == "_admin") return
+      if (val[0]   == userCtx.roles[0] && id.test(val[1])) return
+      if (val[1]   == userCtx.roles[0] && id.test(val[0])) return
+      if ("_admin" == userCtx.roles[0] && id.test(val[0]) && id.test(val[1])) return
     }
 
     if(val.length == 1 && (val[0] == userCtx.roles[0] || '_admin' == userCtx.roles[0])) return
@@ -185,7 +185,7 @@ exports.verified = {
     doc = yield patch.call(this, doc._id, {verifiedAt:new Date().toJSON()})
 
     //Create the new inventory item
-    inventory = defaults.call(this, {
+    inv = defaults.call(this, {
       drug:doc.drug,
       verifiedAt:null,
       history:[{
@@ -206,7 +206,7 @@ exports.verified = {
       }
     })
 
-    yield this.http.put('transaction/'+this.http.id, true).body(inventory)
+    yield this.http.put('transaction/'+this.http.id, true).body(inv)
     //TODO rollback verified if the adding the new item is not successful
   },
 

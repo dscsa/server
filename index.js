@@ -85,10 +85,10 @@ app.use(function *(next) {
   try {
     yield next
   } catch (err) {
-    this.status = this.status || 500
     this.body   = err
 
     if (err instanceof Error) {
+      this.status  = 500
       this.message = err.name
       this.body    = err.stack
     } else if (err.error && err.reason) {
