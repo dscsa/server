@@ -49,7 +49,7 @@ function init(defaults, ctx) {
   //Right now {parse:true} is only option, eventually we can suppose {forms, json, multipart}
   function api(path, proxy) {
 
-    let body, config = parseUrl(path)
+    let body, stack = new Error().stack, config = parseUrl(path)
 
     return {
       headers(headers) {
@@ -96,7 +96,7 @@ function init(defaults, ctx) {
           })
         })
         .then(res => {
-
+        
           ctx.status = res.statusCode
 
           let err = ctx.status < 200 || ctx.status >= 300
@@ -107,7 +107,10 @@ function init(defaults, ctx) {
           }
 
           return api.json(res).then(body => {
-            if (err) throw body
+            if (err) {
+              body.stack = stack
+              throw body
+            }
             return body
           })
         })
