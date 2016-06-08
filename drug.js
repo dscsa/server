@@ -83,7 +83,7 @@ exports.get = function*() {
 
     yield exports.updatePrice.call(this, this.body)
 
-    this.http.put('drug/'+drug._id).body(this.body)
+    this.http.put('drug/'+selector._id).body(this.body)
     .catch(res => { //need a "then" trigger to send request but we don't need to yield to it
       console.log('drug price could not be updated', drug, res)
     })
