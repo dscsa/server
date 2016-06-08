@@ -36,7 +36,7 @@ function ensure(path) {
       for (var j in vals) {
 
         if ( ! vals[j])
-          throw({forbidden:{msg:ensure.prefix+'.'+path+' does not exist. Got '+toJSON(vals[j])+'.'+keys[i], doc:newDoc}})
+          throw({forbidden:ensure.prefix+'.'+path+', '+toJSON(vals[j])+'.'+keys[i]+', does not exist'})
 
         var innerObj = vals[j][keys[i]]
 
@@ -63,7 +63,7 @@ function ensure(path) {
       for (var i in values) {
         var msg = callback(values[i], i)
         if (typeof msg == 'string') {
-          throw({forbidden:{msg:ensure.prefix+'.'+path+' '+msg+'. Got '+toJSON(values[i]), doc:newDoc}})
+          throw({forbidden:ensure.prefix+'.'+path+', '+toJSON(values[i])+', '+msg})
         }
       }
       return api

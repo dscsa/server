@@ -85,22 +85,49 @@ app.use(function *(next) {
   try {
     yield next
   } catch (err) {
-    this.body   = err
-
+    this.body = err
+    //Handle three types of errors
+    //1 & 2) actual coding errors & this.throw() errors from my code.
+    //2) couchdb errors thrown by http.js
     if (err instanceof Error) {
-      this.status  = 500
-      this.message = err.name
-      this.body    = err.stack
-    } else if (err.error && err.reason) {
-      //Standardize couch standard and custom errors
-      let msg = err.reason.msg || err.reason
-      this.message = err.error+': '+msg
-      this.body    = {name:msg, body:err.reason.doc || 'unknown'}
-    } else if (this.status != 404){
-      console.log('Interesting Error', err)
+      this.status = err.status || 500
+      this.body   = { //Mimic the a CouchDB error structure as closely as possible
+        error:err.name,
+        reason:err.message
+      }
     }
+
+    this.body.request = this.req.body && JSON.parse(this.req.body)
+    this.body.stack   = err.stack.split("\n").slice(1) //don't repeat err.message on line 1 TODO:security
+    this.body.status  = this.status
+    this.message = this.body.error+': '+this.body.reason
   }
 })
+
+// CRUD Enpoints (common accross resources)
+// GET    users?selector={"email":"adam@sirum.org"} || users?selector={"_id":"abcdef"} || selector={"name.first":"adam"}
+// POST   users
+// PUT    users {_id:abcdef, _rev:abcdef}
+// DELETE users {_id:abcdef, _rev:abcdef}
+
+//Custom endpoints (specific to this resource)
+// POST   users/session        {email:adam@sirum.org, password}
+// POST   users/email          {email:adam@sirum.org, subject, message, attachment}
+
+//Replication Endpoints (for pouchdb, begin with underscore)
+// POST   users/_bulk_get
+// POST   users/_bulk_docs
+// POST   users/_all_docs
+// POST   users/_revs_diff
+// POST   users/_changes
+
+//Client
+//this.db.users.get({email:adam@sirum.org})
+//this.db.users.post({})
+//this.db.users.put({})
+//this.db.users.delete({})
+//this.db.users.session.post({})
+//this.db.users.email.post({})
 
 //Undocumented routes needed on all databases for PouchDB replication
 r('/')                    //Not sure why we need this.  Shows welcome UUID & Version

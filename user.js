@@ -56,35 +56,6 @@ exports.changes = function* (db) {
   yield this.http(exports.filter.authorized(this.url), true)
 }
 
-
-//TODO get rid of id in path and use query string instead.  Paths would be
-
-//CRUD Enpoints (common accross resources)
-// GET    users?selector={"email":"adam@sirum.org"} || users?selector={"_id":"abcdef"} || selector={"name.first":"adam"}
-// POST   users
-// PUT    users {_id:abcdef, _rev:abcdef}
-// DELETE users {_id:abcdef, _rev:abcdef}
-
-//Custom endpoints (specific to this resource)
-// POST   users/session        {email:adam@sirum.org, password}
-// POST   users/email          {email:adam@sirum.org, subject, message, attachment}
-
-//Replication Endpoints (for pouchdb, begin with underscore)
-// POST   users/_bulk_get
-// POST   users/_bulk_docs
-// POST   users/_all_docs
-// POST   users/_revs_diff
-// POST   users/_changes
-
-//Client
-//this.db.users.get({email:adam@sirum.org})
-//this.db.users.post({})
-//this.db.users.put({})
-//this.db.users.delete({})
-//this.db.users.session.post({})
-//this.db.users.email.post({})
-
-
 //TODO switch this to using email once bulk_get is working
 exports.get = function* () {
 
@@ -120,7 +91,7 @@ exports.post = function* () {
   user.createdAt = new Date().toJSON()
   user.password  = undefined
 
-  save = yield this.http.put('user/'+id).body(user)
+  save = yield this.http.put('user/'+name).body(user)
 
   user._id  = save.id
   user._rev = save.rev
@@ -153,11 +124,8 @@ exports.session = {
     let user  = yield this.http.get(exports.view.email(login.email))
     user = user[0] //assume just one user per email for now
 
-    if ( ! user) {
-      this.status = 404
-      this.message = 'No user exists with that email.'
-      return
-    }
+    if ( ! user)
+      this.throw(404, 'No user exists with the email '+login.email)
 
     yield this.http('_session', true).headers(this.headers).body({name:user._id, password:login.password})
 
