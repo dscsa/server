@@ -16,7 +16,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('roles').notChanged
   ensure('password').notChanged
 
-  ensure('email').notNull.regex(/\w{2,}@\w{3,}\.(com|org|net|gov)/).notChanged
+  ensure('email').notNull.regex(/[\w._]{2,}@\w{3,}\.(com|org|net|gov)/).notChanged
   ensure('createdAt').notNull.isDate.notChanged
   ensure('name.first').notNull.isString
   ensure('name.last').notNull.isString
