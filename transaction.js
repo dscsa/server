@@ -53,12 +53,12 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
     if(val.length == 1 && (val[0] == userCtx.roles[0] || '_admin' == userCtx.roles[0])) return
 
-    return 'must be in the format <account.from._id> or <account.from._id>.<account.to._id>.<_id>'
+    return 'must be in the format "account.from._id" or "account.from._id"."account.to._id"."_id"'
   }
 
   function verifiedAt(val) {
     if (val && ! newDoc.qty.to && ! newDoc.qty.from)
-      return 'cannot be set if both transaction.qty.to and transaction.qty.from are not set'
+      return 'cannot be set if neither "qty.to" nor "qty.from" is set'
   }
 }
 
