@@ -90,13 +90,12 @@ function init(defaults, ctx) {
             config.body.pipe(req, {end: true})
 
           return new Promise((resolve, reject) => {
-
             req.once('response', resolve)
             req.once('error', reject)
           })
         })
         .then(res => {
-        
+
           ctx.status = res.statusCode
 
           let err = ctx.status < 200 || ctx.status >= 300
@@ -161,7 +160,15 @@ function init(defaults, ctx) {
     return new Promise((resolve, reject) => {
       stream.on('error', reject)
       stream.on('data', data => stream.body += data)
-      stream.on('end', _ => resolve(JSON.parse(stream.body || '{}'))) //default to {} this is what other body parsers do in strict mode.  Not sure what we want to do here.
+      stream.on('end', _ => {
+        try {
+          resolve(JSON.parse(stream.body || '{}'))
+        } catch (err) {
+          err.stack   = stack
+          console.log('Invalid JSON', stream, ctx)
+          throw err
+        }
+      }) //default to {} this is what other body parsers do in strict mode.  Not sure what we want to do here.
     })
   }
 

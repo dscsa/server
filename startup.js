@@ -63,7 +63,7 @@ function ensure(path) {
       for (var i in values) {
         var msg = callback(values[i], i)
         if (typeof msg == 'string') {
-          throw({forbidden:ensure.prefix+'.'+path+', '+toJSON(values[i])+', '+msg})
+          throw({forbidden:ensure.prefix+'.'+path+' == '+toJSON(values[i])+', but '+msg})
         }
       }
       return api
@@ -162,7 +162,10 @@ function *addDesignDocs (name) {
     db.show[show] = id => `${name}/_design/auth/_show/${show}/${id}`
   }
 
-  let design = yield http.get(name+'/_design/auth').headers({authorization})
+  let design = {}
+  try {
+    design = yield http.get(name+'/_design/auth').headers({authorization})
+  } catch (err) {}
 
   let validate_doc_update = toString(db.validate_doc_update).replace('{', "{\n"+ensure)
 

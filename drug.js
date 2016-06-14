@@ -1,4 +1,5 @@
 "use strict"
+let co     = require('koa/node_modules/co')
 let crypto = require('crypto')
 let secret = require('../development')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
@@ -20,7 +21,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   //Required
   ensure('_id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
   ensure('createdAt').notNull.isDate.notChanged
-  ensure('price.updatedAt').notNull.isDate
+  ensure('price.updatedAt').isDate
   ensure('generics').notNull.isArray.length(1, 10)
   ensure('generics.name').notNull.isString.length(1, 50)
   ensure('generics.strength').notNull.isString.length(1, 10)
@@ -78,20 +79,20 @@ exports.get = function*() {
     this.body = yield this.http(exports.show.authorized(selector._id))
 
     //show function cannot handle _deleted docs with open_revs, so handle manually here
-    if (this.status == 204 && this.query.open_revs)
-      return yield this.http.get(this.path+'/'+selector._id, true)
+    //don't do pricing update even if there is an open_revs since its pouchdb not a user
+    if (this.query.open_revs)
+      return yield this.status == 204 && this.http.get(this.path+'/'+selector._id, true)
 
     yield exports.updatePrice.call(this, this.body)
 
-    this.http.put('drug/'+selector._id).body(this.body)
-    .catch(res => { //need a "then" trigger to send request but we don't need to yield to it
+    //need a "then" trigger to send request but we don't need to yield to it
+    this.http.put('drug/'+selector._id).body(this.body).catch(res => {
       console.log('drug price could not be updated', drug, res)
     })
 }
 
 //Exporting non-standard method, but is used by transaction.js
 exports.updatePrice = function* (drug) {
-
   if ( ! drug.price || new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)
     return //! drug.price handles the open_revs [{ok:drug}] scenario.
 
@@ -101,6 +102,8 @@ exports.updatePrice = function* (drug) {
   drug.price.nadac  = prices[0] || drug.price.nadac
   drug.price.goodrx = prices[1] || drug.price.goodrx
   drug.price.updatedAt = new Date().toJSON()
+
+  yield this.http.put('drug/'+drug._id).body(drug)
 }
 
 exports.bulk_get = function* (id) {
@@ -109,16 +112,18 @@ exports.bulk_get = function* (id) {
 
 //Drug product NDC is a good natural key
 exports.post = function* () {
-  let drug = yield this.http.body
+  let body = yield this.http.body
 
-  defaults(drug)
+  if (typeof body != 'object' || Array.isArray(body))
+    this.throw(422, 'drug must be an object')
 
-  yield exports.updatePrice.call(this, drug)
+  defaults(body)
 
-  let save = yield this.http.put('drug/'+drug._id).body(drug)
+  yield exports.updatePrice.call(this, body)
 
-  drug._rev   = save.rev
-  this.body   = drug
+  //Return the drug with updated pricing and the new _rev
+  this.body   = yield this.http.get('drug/'+body._id)
+  this.status = 201
 }
 
 exports.put = function* () {
@@ -130,14 +135,30 @@ exports.put = function* () {
 
 exports.bulk_docs = function* () {
 
-  let body  = yield this.http.body
-  yield this.http(null, true).body(body)
+  let body = yield this.http.body
 
-  if (body.new_edits) return //Pouch uses this for local docs
+  if (body.new_edits) //Pouch uses this for local docs.
+    return yield this.http(null, true).body(body)
 
-  yield body.docs.map(drug => {
-      return updateTransactions.call(this, drug)
-  })
+  for (let drug of body.docs) defaults(drug)
+
+  this.body = yield this.http().body(body)
+
+  let chain = Promise.resolve()
+
+  for (let i in this.body) {
+    let drug  = body.docs[i]
+    let _rev  = drug._rev
+    drug._rev = this.body[i].rev
+    //Don't wait for these updates since they could take a while.  Existing drugs needs their denormalized data updated. New drugs need current prices set.
+    //If done in parrallel for a large number of transactions updates CouchDB will crash with ENFILE. https://issues.apache.org/jira/browse/COUCHDB-180.
+    //Instead we create a promise chain the executes serially.  May be able to be improved with _bulk_docs
+    chain = chain.then(_ => {
+       co(_rev ? updateTransactions.call(this, drug) : exports.updatePrice.call(this, drug))
+    })
+
+    yield function(cb) { setTimeout(cb, 500) }
+  }
 }
 
 exports.delete = function* (id) {
@@ -153,33 +174,35 @@ function defaults(body) {
   body.ndc9  = labelerCode+productCode
   body.upc   = body._id.replace('-', '')
   body.price = body.price || {}
-  body.price.nadac = +(+body.price.nadac).toFixed(4)
-  body.price.goodrx = +(+body.price.goodrx).toFixed(4)
+  body.price.nadac = body.price.nadac ? +(+body.price.nadac).toFixed(4) : null
+  body.price.goodrx = body.price.goodrx ? +(+body.price.goodrx).toFixed(4) : null
 }
 
 function *getNadac(drug) {
-  var d = new Date()
-  d.setDate(d.getDate() - d.getDay() - 4) //Last Wednesday (getDay: Monday = 1 Sunday = 7)
-  d = d.toJSON().slice(0,10)+'T00:00:00.000'
+  //Datbase not always up to date so can't always do last week.  On 2016-06-18 last as_of_date was 2016-05-11.
+  let date = new Date(new Date().getFullYear(), 0, 1).toJSON().slice(0, -1)
+  let url  = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=starts_with(ndc,"${drug.ndc9}") AND as_of_date>"${date}"`
 
-  let price = yield this.http.get(`http://data.medicaid.gov/resource/tau9-gfwr.json?$where=starts_with(ndc,"${drug.ndc9}")&as_of_date=${d}`).headers({})
-
-  if (price[0]) //API returns a status of 200 even on failure ;-(
-    return +price[0].nadac_per_unit
-
-  console.log("Drug's nadac price could not be updated", price)
+  try {
+    let prices = yield this.http.get(url).headers({})
+    if (prices.length) //API returns a status of 200 even on failure ;-(
+      return +(+prices.pop().nadac_per_unit).toFixed(4)
+    console.log("Drug's nadac price could not be updated", prices)
+  } catch (err) {
+    console.log('problem with nadac price', JSON.stringify(err, null, " "), url)
+  }
 }
 
 function *getGoodrx(drug) {
-  let qs    = `name=${drug.generics[0].name}&dosage=${drug.generics[0].strength}&api_key=f46cd9446f`.replace(/ /g, '%20')
-  let sig   = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
+  let name = drug.generics[0].name.split(' ')[0] //suffixes like hydrochloride don't get a match
+  let qs   = `name=${name}&dosage=${drug.generics[0].strength}&api_key=f46cd9446f`.replace(/ /g, '%20')
+  let sig  = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
 
   try {
     let price = yield this.http.get(`https://api.goodrx.com/fair-price?${qs}&sig=${sig}`).headers({})
-    console.log('goodrx', price.data.price, price.data.quantity)
-    return price.data.quantity ? price.data.price/price.data.quantity : null
+    return price.data.quantity ? +(price.data.price/price.data.quantity).toFixed(4) : null
   } catch(err) {
-    console.log("Drug's goodrx price could not be updated", err) //409 error means qs not properly encoded, 400 means missing drug
+    console.log("Drug's goodrx price could not be updated", JSON.stringify(err, null, " ")) //409 error means qs not properly encoded, 400 means missing drug
   }
 }
 
