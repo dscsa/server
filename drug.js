@@ -81,7 +81,7 @@ exports.get = function*() {
     //show function cannot handle _deleted docs with open_revs, so handle manually here
     //don't do pricing update even if there is an open_revs since its pouchdb not a user
     if (this.query.open_revs)
-      return yield this.status == 204 && this.http.get(this.path+'/'+selector._id, true)
+      return this.status == 204 ? yield this.http.get(this.path+'/'+selector._id, true) : null
 
     yield exports.updatePrice.call(this, this.body)
 
@@ -157,7 +157,9 @@ exports.bulk_docs = function* () {
        co(_rev ? updateTransactions.call(this, drug) : exports.updatePrice.call(this, drug))
     })
 
-    yield function(cb) { setTimeout(cb, 500) }
+    yield cb => {
+      console.log('bulk upload', i, 'of', this.body.length)
+      setTimeout(cb, 500) }
   }
 }
 
@@ -187,9 +189,9 @@ function *getNadac(drug) {
     let prices = yield this.http.get(url).headers({})
     if (prices.length) //API returns a status of 200 even on failure ;-(
       return +(+prices.pop().nadac_per_unit).toFixed(4)
-    console.log("Drug's nadac price could not be updated", prices)
+    console.log("A matching nadac price could not be found", prices)
   } catch (err) {
-    console.log('problem with nadac price', JSON.stringify(err, null, " "), url)
+    console.log("Drug's nadac price could not be updated", drug._id, drug.generics, JSON.stringify(err, null, " "), url)
   }
 }
 
@@ -202,7 +204,7 @@ function *getGoodrx(drug) {
     let price = yield this.http.get(`https://api.goodrx.com/fair-price?${qs}&sig=${sig}`).headers({})
     return price.data.quantity ? +(price.data.price/price.data.quantity).toFixed(4) : null
   } catch(err) {
-    console.log("Drug's goodrx price could not be updated", JSON.stringify(err, null, " ")) //409 error means qs not properly encoded, 400 means missing drug
+    console.log("Drug's goodrx price could not be updated", drug._id, drug.generics, JSON.stringify(err.errors, null, " ")) //409 error means qs not properly encoded, 400 means missing drug
   }
 }
 
