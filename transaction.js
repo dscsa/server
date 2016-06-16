@@ -246,7 +246,7 @@ function defaults(body) {
   //Empty string -> null, string -> number, number -> number (including 0)
   body.qty.to     = body.qty.to != null && body.qty.to !== '' ? +body.qty.to : null     //don't turn null to 0 since it will get erased
   body.qty.from   = body.qty.from != null && body.qty.from !== '' ? +body.qty.from : null //don't turn null to 0 since it will get erased
-  body.shipment   = body.shipment || {_id:this.user.account._id}
+  body.shipment   = body.shipment && body.shipment._id ? body.shipment : {_id:this.user.account._id}
 
   return body
 }
