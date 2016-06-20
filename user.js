@@ -16,7 +16,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('roles').notChanged
   ensure('password').notChanged
 
-  ensure('email').notNull.regex(/[\w._]{2,}@\w{3,}\.(com|org|net|gov)/).notChanged
+  ensure('email').notNull.regex(/[\w._]{2,}@\w{3,}\.(com|org|net|gov)/)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('name.first').notNull.isString
   ensure('name.last').notNull.isString
@@ -105,12 +105,21 @@ exports.put = function* () {
 }
 
 exports.bulk_docs = function* () {
-  yield this.http(this.url, true)
+  let body = yield this.http.body
+
+  for (let doc of body.docs)
+    if (doc._deleted) {
+      let url  = '_users/org.couchdb.user:'+doc._id
+      let user = yield this.http.get(url).headers({authorization})
+      this.body = yield this.http.delete(url+'?rev='+user._rev).headers({authorization}).body(user) //set _rev in url since _rev within body still triggered 409 conflict
+    }
+
+  yield this.http(this.url, true).body(body)
 }
 
 exports.delete = function* () {
   yield this.http(this.url, true)
-  yield this.http(this.url.replace('user', '_users'), true)
+  yield this.http(this.url.replace('user', '_users'), true).headers({authorization})
 }
 
 exports.email = function* () {
