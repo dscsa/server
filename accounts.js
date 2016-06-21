@@ -1,5 +1,5 @@
 var couch = require('./couch')
-//Testing git with this line, disregard.
+//Testing git with this line, disregard. Testing.
 exports.list  = couch.list
 exports.doc   = couch.doc
 exports.post = function* () {
