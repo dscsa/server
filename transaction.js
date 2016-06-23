@@ -176,6 +176,7 @@ exports.verified = {
     let doc = yield this.http.body
     let inv = yield this.http.get(exports.view.history(doc._id))
 
+    //TODO We should make sure verifiedAt is saved as true for this transaction
     if (inv[0]) {
       this.status  = 409
       this.message = `Cannot verify this transaction because transaction ${inv[0]._id} with _id ${doc._id} already has this transaction in its history`
@@ -217,7 +218,7 @@ exports.verified = {
   //4. Update the original transaction with verified_at = null
   *delete() {
     let doc = yield this.http.body
-    let inv = yield this.http.get(exports.view.history(body._id))
+    let inv = yield this.http.get(exports.view.history(doc._id))
     inv = inv[0]
 
     if ( ! inv) { //Only delete inventory if it actually exists
@@ -233,7 +234,7 @@ exports.verified = {
     }
 
     yield patch.call(this, doc._id, {verifiedAt:null}) //Un-verify transaction
-    yield this.http.delete('transaction/'+inv._id+'?rev='+inv._rev, true)
+    yield this.http.delete('transaction/'+inv._id+'?rev='+inv._rev, true).body(inv)
   }
 }
 
