@@ -129,6 +129,12 @@ app.use(function *(next) {
 //this.db.users.session.post({})
 //this.db.users.email.post({})
 
+r('/goodrx/:ndc9/:name')
+  .get(function*(ndc9, generics) {
+    console.log(generics, JSON.parse(generics))
+    this.body = yield drug.goodrx.call(this, {ndc9, generics:JSON.parse(generics)})
+  })
+
 //Undocumented routes needed on all databases for PouchDB replication
 r('/')                    //Not sure why we need this.  Shows welcome UUID & Version
   .get(proxy)

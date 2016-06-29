@@ -195,17 +195,35 @@ function *getNadac(drug) {
   }
 }
 
+exports.goodrx = getGoodrx
 function *getGoodrx(drug) {
-  let name = drug.generics[0].name.split(' ')[0] //suffixes like hydrochloride don't get a match
-  let qs   = `name=${name}&dosage=${drug.generics[0].strength}&api_key=f46cd9446f`.replace(/ /g, '%20')
-  let sig  = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
 
-  try {
-    let price = yield this.http.get(`https://api.goodrx.com/fair-price?${qs}&sig=${sig}`).headers({})
-    return price.data.quantity ? +(price.data.price/price.data.quantity).toFixed(4) : null
-  } catch(err) {
-    console.log("Drug's goodrx price could not be updated", drug._id, drug.generics, JSON.stringify(err.errors, null, " ")) //409 error means qs not properly encoded, 400 means missing drug
+  let makeUrl = (name, dosage) => {
+    let qs  =`name=${name}&dosage=${dosage}&api_key=f46cd9446f`.replace(/ /g, '%20')
+    let sig = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
+    return `https://api.goodrx.com/fair-price?${qs}&sig=${sig}`
   }
+
+  //Brand better for compound name. Otherwise use first word since, suffixes like hydrochloride sometimes don't match
+  let fullName = drug.brand || drug.generics.map(generic => generic.name).join('-') //.split(' ')[0]
+  let strength = drug.generics.map(generic => generic.strength.replace(' ', '')).join('-')
+  let price = {data:{}}
+  try {
+    let url = makeUrl(fullName, strength)
+    price = yield this.http.get(url).headers({})
+    console.log('GoodRx price updated by full name strategy', url, price)
+  } catch(err) {
+    try {
+      let url = makeUrl(err.errors[0].candidates[0], strength)
+      price = yield this.http.get(url).headers({})
+      console.log('GoodRx price updated by alternate suggestions', url, err.errors[0].candidates[0])
+    } catch(err) {
+      //409 error means qs not properly encoded, 400 means missing drug
+      console.log("Drug's goodrx price could not be updated", drug._id, drug.generics, JSON.stringify(err.errors, null, " "))
+    }
+  }
+
+  return price.data.quantity ? +(price.data.price/price.data.quantity).toFixed(4) : null
 }
 
 //Get all transactins using this drug so we can update denormalized database
