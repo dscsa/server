@@ -1,6 +1,8 @@
 "use strict"
 
 require('./startup')
+let fs          = require('fs')
+let extname     = require('path').extname
 let app         = require('koa')()
 let route       = require('koa-route')
 let http        = require('./http')
@@ -136,8 +138,32 @@ r('/goodrx/:ndc9/:name')
   })
 
 //Undocumented routes needed on all databases for PouchDB replication
-r('/')                    //Not sure why we need this.  Shows welcome UUID & Version
-  .get(proxy)
+r('/')
+  .get(function*() {
+    if(this.headers.origin) //Not sure why we need this.  Shows welcome UUID & Version
+      return yield proxy.call(this)
+
+    this.type = 'html'
+    this.body = fs.createReadStream(__dirname + '/../client/index.html')
+  })
+
+r('/client/assets/:file')
+  .get(function*(file) {
+    this.type = extname(file)
+    this.body = fs.createReadStream(__dirname + '/../client/assets/'+file)
+  })
+
+r('/db/:file')
+  .get(function*(file) {
+    this.type = extname(file)
+    this.body = fs.createReadStream(__dirname + '/../db/'+file)
+  })
+
+r('/csv/:file')
+  .get(function*(file) {
+    this.type = extname(file)
+    this.body = fs.createReadStream(__dirname + '/../csv/'+file)
+  })
 
 r('/:db/', {strict:true}) //Shows DB info including update_seq#
   .get(proxy)

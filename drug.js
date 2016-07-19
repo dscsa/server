@@ -1,7 +1,7 @@
 "use strict"
 let co     = require('koa/node_modules/co')
 let crypto = require('crypto')
-let secret = require('../development')
+let secret = require('../keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 let transaction   = require('./transaction')
 
