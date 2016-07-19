@@ -1,5 +1,5 @@
 "use strict"
-let secret = require('../keys/dev')
+let secret = require('./keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
