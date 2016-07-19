@@ -1,6 +1,6 @@
 "use strict"
 
-let co        = require('../koa/node_modules/co')
+let co        = require('../co')
 let http      = require('./http')({hostname:'localhost', port: 5984, middleware:false})
 let secret    = require('./keys/dev')
 
