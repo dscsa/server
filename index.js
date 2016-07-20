@@ -11,7 +11,7 @@ let account     = require('./account')
 let user        = require('./user')
 let shipment    = require('./shipment')
 let transaction = require('./transaction')
-let config      = require('../../aurelia_project/aurelia')
+let config      = require('../client/aurelia_project/aurelia')
 
 console.log('config', config)
 
