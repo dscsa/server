@@ -153,7 +153,6 @@ r('/'+assets+'/:file', {end:false})
   .get(function*(file) {
     this.type = extname(this.url)
     let path = project.paths['/'+assets+'/'+file]
-    console.log(this.url, file, path, __dirname + (path ? this.url.replace(assets+'/'+file, '../'+path) : '/../client'+this.url))
     this.body = fs.createReadStream(__dirname + (path ? this.url.replace(assets+'/'+file, '../'+path) : '/../client'+this.url))
   })
 
