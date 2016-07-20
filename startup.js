@@ -2,7 +2,7 @@
 
 let co        = require('../co')
 let http      = require('./http')({hostname:'localhost', port: 5984, middleware:false})
-let secret    = require('./keys/dev')
+let secret    = require('../../keys/dev')
 
 //TODO set _users db admin role to ['user']
 //TODO set this on the command line rather than in code

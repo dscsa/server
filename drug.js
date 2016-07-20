@@ -1,7 +1,7 @@
 "use strict"
 let co     = require('../co')
 let crypto = require('crypto')
-let secret = require('./keys/dev')
+let secret = require('../../keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 let transaction   = require('./transaction')
 
