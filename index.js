@@ -11,6 +11,9 @@ let account     = require('./account')
 let user        = require('./user')
 let shipment    = require('./shipment')
 let transaction = require('./transaction')
+let config      = require('../../aurelia_project/aurelia')
+
+console.log('config', config)
 
 function r(url, options) {
 
@@ -144,10 +147,10 @@ r('/')
       return yield proxy.call(this)
 
     this.type = 'html'
-    this.body = fs.createReadStream(__dirname + '/../client/index.html')
+    this.body = fs.createReadStream(__dirname + '/../client/src/views/index.html')
   })
 
-r('/client/assets/:file')
+r('/assets/:file')
   .get(function*(file) {
     this.type = extname(file)
     this.body = fs.createReadStream(__dirname + '/../client/assets/'+file)
@@ -325,4 +328,4 @@ r('/transaction/verified')
 //all(/on?deep.field=this)
 //all(/event)
 
-app.listen(80); console.log('listening on port 3000')
+app.listen(80); console.log('listening on port 80')
