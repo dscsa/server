@@ -11,9 +11,8 @@ let account     = require('./account')
 let user        = require('./user')
 let shipment    = require('./shipment')
 let transaction = require('./transaction')
-let config      = require('../client/aurelia_project/aurelia')
-
-console.log('config', config)
+let project     = require('../client/aurelia_project/aurelia')
+let assets      = project.build.targets[0].output
 
 function r(url, options) {
 
@@ -147,25 +146,15 @@ r('/')
       return yield proxy.call(this)
 
     this.type = 'html'
-    this.body = fs.createReadStream(__dirname + '/../client/src/views/index.html')
+    this.body = fs.createReadStream(__dirname + '/../client/'+project.paths.root+'/'+project.paths['/']+'index.html')
   })
 
-r('/assets/:file')
+r('/'+assets+'/:file', {end:false})
   .get(function*(file) {
-    this.type = extname(file)
-    this.body = fs.createReadStream(__dirname + '/../client/assets/'+file)
-  })
-
-r('/db/:file')
-  .get(function*(file) {
-    this.type = extname(file)
-    this.body = fs.createReadStream(__dirname + '/../db/'+file)
-  })
-
-r('/csv/:file')
-  .get(function*(file) {
-    this.type = extname(file)
-    this.body = fs.createReadStream(__dirname + '/../csv/'+file)
+    this.type = extname(this.url)
+    let path = project.paths['/'+assets+'/'+file]
+    console.log(this.url, file, path, __dirname + (path ? this.url.replace(assets+'/'+file, '../'+path) : '/../client'+this.url))
+    this.body = fs.createReadStream(__dirname + (path ? this.url.replace(assets+'/'+file, '../'+path) : '/../client'+this.url))
   })
 
 r('/:db/', {strict:true}) //Shows DB info including update_seq#
