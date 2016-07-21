@@ -142,7 +142,7 @@ r('/goodrx/:ndc9/:name')
 //Undocumented routes needed on all databases for PouchDB replication
 r('/')
   .get(function*() {
-    if(this.headers.origin) //Not sure why we need this.  Shows welcome UUID & Version
+    if(this.headers.origin || this.headers.referer) //Not sure why we need this.  Shows welcome UUID & Version
       return yield proxy.call(this)
 
     this.type = 'html'
