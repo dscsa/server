@@ -67,7 +67,7 @@ exports.view = {
 }
 
 exports.changes = function* () {
-  yield this.http(exports.filter.authorized(this.url), true)
+  yield this.http(exports.filter.authorized(this.path), true)
 }
 
 //Retrieve drug and update its price if it is out of date

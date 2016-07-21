@@ -53,7 +53,7 @@ exports.view = {
 }
 
 exports.changes = function* (db) {
-  yield this.http(exports.filter.authorized(this.url), true)
+  yield this.http(exports.filter.authorized(this.path), true)
 }
 
 //TODO switch this to using email once bulk_get is working
@@ -101,7 +101,7 @@ exports.post = function* () {
 //TODO switch this to using email once bulk_get is working
 //TODO use an id?  Rely on _id being embedded? Maybe make PUTs default behavior to be PATCH?
 exports.put = function* () {
-  yield this.http(this.url, true)
+  yield this.http(this.path, true)
 }
 
 exports.bulk_docs = function* () {
@@ -114,12 +114,12 @@ exports.bulk_docs = function* () {
       this.body = yield this.http.delete(url+'?rev='+user._rev).headers({authorization}).body(user) //set _rev in url since _rev within body still triggered 409 conflict
     }
 
-  yield this.http(this.url, true).body(body)
+  yield this.http(this.path, true).body(body)
 }
 
 exports.delete = function* () {
-  yield this.http(this.url, true)
-  yield this.http(this.url.replace('user', '_users'), true).headers({authorization})
+  yield this.http(this.path, true)
+  yield this.http(this.path.replace('user', '_users'), true).headers({authorization})
 }
 
 exports.email = function* () {

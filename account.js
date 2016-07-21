@@ -51,7 +51,7 @@ exports.view = {
 }
 
 exports.changes = function* () {
-  yield this.http(exports.filter.authorized(this.url), true)
+  yield this.http(exports.filter.authorized(this.path), true)
 }
 
 exports.get = function* () {

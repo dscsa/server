@@ -64,7 +64,6 @@ function r(url, options) {
 app.use(http({hostname:'localhost', port: 5984, middleware:'http'}))
 
 function* proxy() {
-  console.log('proxy used for', this.path, this.url, this.headers)
   yield this.http(this.path, true)
 }
 
@@ -151,9 +150,9 @@ r('/')
 
 r('/'+assets+'/:file', {end:false})
   .get(function*(file) {
-    this.type = extname(this.url)
+    this.type = extname(this.path)
     let path = project.paths['/'+assets+'/'+file]
-    this.body = fs.createReadStream(__dirname + (path ? this.url.replace(assets+'/'+file, path.slice(3)) : '/../client'+this.url))
+    this.body = fs.createReadStream(__dirname + (path ? this.path.replace(assets+'/'+file, path.slice(3)) : '/../client'+this.path))
   })
 
 r('/:db/', {strict:true}) //Shows DB info including update_seq#
