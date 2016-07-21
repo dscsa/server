@@ -153,7 +153,7 @@ r('/'+assets+'/:file', {end:false})
   .get(function*(file) {
     this.type = extname(this.url)
     let path = project.paths['/'+assets+'/'+file]
-    this.body = fs.createReadStream(__dirname + (path ? this.url.replace(assets+'/'+file, '../'+path) : '/../client'+this.url))
+    this.body = fs.createReadStream(__dirname + (path ? this.url.replace(assets+'/'+file, path.slice(3)) : '/../client'+this.url))
   })
 
 r('/:db/', {strict:true}) //Shows DB info including update_seq#
