@@ -64,7 +64,7 @@ function r(url, options) {
 app.use(http({hostname:'localhost', port: 5984, middleware:'http'}))
 
 function* proxy() {
-  //console.log('proxy used for', this.url)
+  console.log('proxy used for', this.path, this.url, this.headers)
   yield this.http(this.path, true)
 }
 
