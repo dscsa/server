@@ -65,7 +65,7 @@ app.use(http({hostname:'localhost', port: 5984, middleware:'http'}))
 
 function* proxy() {
   //console.log('proxy used for', this.url)
-  yield this.http(this.url, true)
+  yield this.http(this.path, true)
 }
 
 function* all_docs(db) {
@@ -142,7 +142,7 @@ r('/goodrx/:ndc9/:name')
 //Undocumented routes needed on all databases for PouchDB replication
 r('/')
   .get(function*() {
-    if(this.headers.origin || this.headers.referer) //Not sure why we need this.  Shows welcome UUID & Version
+    if(this.headers.origin || this.headers.referer) //Not sure why pouchdb checks this.  Shows welcome UUID & Version
       return yield proxy.call(this)
 
     this.type = 'html'
