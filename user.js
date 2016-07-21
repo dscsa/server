@@ -115,6 +115,7 @@ exports.bulk_docs = function* () {
     }
 
   yield this.http(this.path, true).body(body)
+  console.log('user._bulk_docs', this.status, this.body)
 }
 
 exports.delete = function* () {
