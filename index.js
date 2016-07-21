@@ -146,7 +146,7 @@ r('/')
       return yield proxy.call(this)
 
     this.type = 'html'
-    this.body = fs.createReadStream(__dirname + '/../client/'+project.paths.root+'/'+project.paths['/']+'index.html')
+    this.body = fs.createReadStream(__dirname + '/../client/'+project.paths.root+'/'+project.paths['/']+'/index.html')
   })
 
 r('/'+assets+'/:file', {end:false})
