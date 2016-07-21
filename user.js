@@ -106,16 +106,14 @@ exports.put = function* () {
 
 exports.bulk_docs = function* () {
   let body = yield this.http.body
-  console.log('user._bulk_docs1', body)
   for (let doc of body.docs)
     if (doc._deleted) {
       let url  = '_users/org.couchdb.user:'+doc._id
       let user = yield this.http.get(url).headers({authorization})
       this.body = yield this.http.delete(url+'?rev='+user._rev).headers({authorization}).body(user) //set _rev in url since _rev within body still triggered 409 conflict
     }
-  console.log('user._bulk_docs1', this.path, body)
+
   yield this.http(this.path, true).body(body)
-  console.log('user._bulk_docs3', this.status, this.body)
 }
 
 exports.delete = function* () {
