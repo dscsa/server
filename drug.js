@@ -193,8 +193,20 @@ function *getNadac(drug) {
     if (prices.length) //API returns a status of 200 even on failure ;-(
       return +(+prices.pop().nadac_per_unit).toFixed(4)
     console.log("A matching nadac price could not be found", prices)
+    throw(err)
   } catch (err) {
-    console.log("Drug's nadac price could not be updated", drug._id, drug.generics, JSON.stringify(err, null, " "), url)
+    try{
+          url = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=ndc_description like '%25${drug.generics.map(generic =>
+            generic.name.toUpperCase().substring(0,3)).join('%25')}%25${drug.generics.map(generic =>
+              ((generic.strength[0] == '.') ? ('0'.concat(generic.strength)) : generic.strength).replace(' ', '').substring(0,generic.strength.indexOf('m'))).join('%25')}%25' AND as_of_date>"${date}"`
+          let prices = yield this.http.get(url).headers({})
+          if (prices.length){ //API returns a status of 200 even on failure ;-(
+              console.log("Updating NADAC pricing with ndc_description")
+              return  +(+prices.pop().nadac_per_unit).toFixed(4)
+            }
+    } catch (err) {
+        console.log("Drug's nadac price could not be updated", drug._id, drug.generics, JSON.stringify(err, null, " "), url)
+    }
   }
 }
 
