@@ -137,6 +137,9 @@ exports.bulk_docs = function* () {
 
   let body = yield this.http.body
 
+  //match timeout in dscsa-pouch
+  this.req.setTimeout(body.docs.length * 1000)
+
   if (body.new_edits) //Pouch uses this for local docs.
     return yield this.http(null, true).body(body)
 
