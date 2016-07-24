@@ -25,6 +25,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('drug.generics.name').notNull.isString.length(1, 50)
   ensure('drug.generics.strength').notNull.isString.length(1, 10)
   ensure('drug.form').notNull.isString.length(1, 20).notChanged
+  ensure('drug.pkg').isString.length(1, 2).notChanged
   ensure('drug.price.updatedAt').notNull.isDate
 
   //Optional
