@@ -162,7 +162,7 @@ exports.bulk_docs = function* () {
 
     yield cb => {
       console.log('bulk upload', i, 'of', this.body.length)
-      setTimeout(cb, 500) }
+      setTimeout(cb, 100) }
   }
 }
 
