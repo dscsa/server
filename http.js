@@ -147,14 +147,17 @@ function init(defaults, ctx) {
   }
 
   api.json = stream => {
+
+    let stack = new Error().stack
+
     if (stream.body) //maybe this stream has already been collected.
       return Promise.resolve(stream.body)
 
     if (typeof stream.on != 'function') //ducktyping http://stackoverflow.com/questions/23885095/nodejs-check-if-variable-is-readable-stream
-      return console.log(new Error('http.json was not given a stream').stack, stream)
+      return console.log('http.json was not given a stream', stack, stream)
 
     if ( ! stream.readable)
-      return console.log(new Error('http.json stream is already closed').stack, stream)
+      return console.log('http.json stream is already closed', stack, stream)
 
     stream.body = ''
     return new Promise((resolve, reject) => {
