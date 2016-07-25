@@ -187,27 +187,47 @@ function *getNadac(drug) {
   //Datbase not always up to date so can't always do last week.  On 2016-06-18 last as_of_date was 2016-05-11.
   let date = new Date(new Date().getFullYear(), 0, 1).toJSON().slice(0, -1)
   let url  = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=starts_with(ndc,"${drug.ndc9}") AND as_of_date>"${date}"`
+  let prices = ""
 
   try {
-    let prices = yield this.http.get(url).headers({})
-    if (prices.length) //API returns a status of 200 even on failure ;-(
-      return +(+prices.pop().nadac_per_unit).toFixed(4)
-    console.log("A matching nadac price could not be found", prices)
-    throw(err)
+      prices = yield this.http.get(url).headers({})
+      if (prices.length){ //API returns a status of 200 even on failure ;-(
+        console.log("Found NADAC with NDC", drug._id)
+      } else {
+        console.log("A matching price could not be found with NDC, trying with Description", drug._id)
+        throw err
+      }
   } catch (err) {
-    try{
-          url = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=ndc_description like '%25${drug.generics.map(generic =>
-            generic.name.toUpperCase().substring(0,3)).join('%25')}%25${drug.generics.map(generic =>
-              ((generic.strength[0] == '.') ? ('0'.concat(generic.strength)) : generic.strength).replace(' ', '').substring(0,generic.strength.indexOf('m'))).join('%25')}%25' AND as_of_date>"${date}"`
-          let prices = yield this.http.get(url).headers({})
-          if (prices.length){ //API returns a status of 200 even on failure ;-(
-              console.log("Updating NADAC pricing with ndc_description")
-              return  +(+prices.pop().nadac_per_unit).toFixed(4)
-            }
-    } catch (err) {
-        console.log("Drug's nadac price could not be updated", drug._id, drug.generics, JSON.stringify(err, null, " "), url)
-    }
+      //This helper function will return a string with all generic names trimed to first 3 chars to work with NADAC (arbitrary #)
+      //search, and then concatenated with a % sign to serve as a wildcard.
+      function formatGenericNames(){
+        return drug.generics.map(generic =>
+          generic.name.toUpperCase().slice(0,3)).join('%')
+      }
+
+      //This helper function returns a string that concatenates the strengths with % to serve as a wildcard
+      //If there is a .x strenght, then a 0 must be appended in order to have 0.x for search to work.
+      //Uses a slice() to take only the numbers of strength, disregarding unit of measure.
+      function formatStrengths(){
+        return drug.generics.map(generic =>
+            ((generic.strength[0] == '.') ? ('0'.concat(generic.strength)) : generic.strength).slice(0,generic.strength.indexOf('m'))).join('%')
+      }
+
+      try{
+        url = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=ndc_description like '%${formatGenericNames()}%${formatStrengths()}%' AND as_of_date>"${date}"`
+        url = url.replace(/%/g, '%25')    //In order to make sure Chrome recognizes as % symbol, necessary to represent wildcard in api
+        console.log(url)
+        prices = yield this.http.get(url).headers({})
+
+        if( ! prices.length) return   //When the price is not found but no error is thrown
+
+        console.log("Successfully updating NADAC pricing with ndc_description", drug._id)
+
+      } catch (err) {
+        console.log("Error, Nadac could not be updated", drug._id, drug.generics, JSON.stringify(err, null, " "), url)
+      }
   }
+  return +(+prices.pop().nadac_per_unit).toFixed(4) //In either case where price is found, will return here
 }
 
 exports.goodrx = getGoodrx
@@ -248,9 +268,11 @@ function *updateTransactions(drug) {
   let transactions = yield this.http.get(transaction.view.drugs(drug._id))
 
   for (let transaction of transactions) {
+    if((transaction.drug.generics == drug.generics) && (transaction.drug.form == drug.form) && (transaction.drug.brand == drug.brand)) continue
+
     transaction.drug.generics = drug.generics
     transaction.drug.form     = drug.form
-
+    transaction.drug.brand    = drug.brand
     if ( ! transaction.drug.price)
       transaction.drug.price = drug.price
 
