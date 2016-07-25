@@ -199,7 +199,7 @@ function *getNadac(drug) {
       //search, and then concatenated with a % sign to serve as a wildcard.
       function formatGenericNames(){
         return drug.generics.map(generic =>
-          generic.name.toUpperCase().substring(0,3)).join('%')
+          generic.name.toUpperCase().slice(0,3)).join('%')
       }
 
       //This helper function returns a string that concatenates the strengths with % to serve as a wildcard
