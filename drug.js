@@ -189,7 +189,7 @@ function *getNadac(drug) {
   try {
       prices = yield this.http.get(url).headers({})
       if (prices.length){ //API returns a status of 200 even on failure ;-(
-        console.log("Found NADAC with NDC")
+        console.log("Found NADAC with NDC", drug._id)
       } else {
         console.log("A matching price could not be found with NDC, trying with Description", drug._id)
         throw err
