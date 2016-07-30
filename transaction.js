@@ -224,13 +224,13 @@ exports.verified = {
 
     if ( ! inv) { //Only delete inventory if it actually exists
       this.status  = 409
-      this.message = 'Cannot find a transaction with history.transaction = '+doc._id+'.  Has this transaction been deleted already?'
+      this.message = `Cannot unverify this transaction because no subsequent transaction with history containing ${doc._id} could be found`
       return
     }
 
     if (inv.shipment._id != this.user.account._id) {
       this.status  = 409
-      this.message = 'The inventory for this transaction has already been assigned to another shipment'
+      this.message = `Cannot unverify this transaction because the subsequent transaction ${inv._id} has already been assigned to another shipment`
       return
     }
 
