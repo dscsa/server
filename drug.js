@@ -192,7 +192,7 @@ function *getNadac(drug) {
     let prices = yield this.http.get(url).headers({})
     if (prices.length) //API returns a status of 200 even on failure ;-(
       return +(+prices.pop().nadac_per_unit).toFixed(4)
-    console.log("A matching nadac price could not be found", prices)
+    console.log("A matching nadac price could not be found", drug._id, prices)
     throw(err)
   } catch (err) {
     try{
@@ -201,7 +201,7 @@ function *getNadac(drug) {
               ((generic.strength[0] == '.') ? ('0'.concat(generic.strength)) : generic.strength).replace(' ', '').substring(0,generic.strength.indexOf('m'))).join('%25')}%25' AND as_of_date>"${date}"`
           let prices = yield this.http.get(url).headers({})
           if (prices.length){ //API returns a status of 200 even on failure ;-(
-              console.log("Updating NADAC pricing with ndc_description")
+              console.log("Updating NADAC pricing with ndc_description", drug._id)
               return  +(+prices.pop().nadac_per_unit).toFixed(4)
             }
     } catch (err) {
@@ -226,15 +226,15 @@ function *getGoodrx(drug) {
   try {
     let url = makeUrl(fullName, strength)
     price = yield this.http.get(url).headers({})
-    console.log('GoodRx price updated by full name strategy', url, price)
+    console.log('GoodRx price updated by full name strategy', drug._id)
   } catch(err) {
     try {
       let url = makeUrl(err.errors[0].candidates[0], strength)
       price = yield this.http.get(url).headers({})
-      console.log('GoodRx price updated by alternate suggestions', url, err.errors[0].candidates[0])
-    } catch(err) {
+      console.log('GoodRx price updated by alternate suggestions', drug._id)
+    } catch(err2) {
       //409 error means qs not properly encoded, 400 means missing drug
-      console.log("Drug's goodrx price could not be updated", drug._id, drug.generics, JSON.stringify(err.errors, null, " "))
+      console.log("Drug's goodrx price could not be updated", drug._id, drug.generics, makeUrl(fullName, strength), makeUrl(err.errors[0].candidates[0], strength))
     }
   }
 
@@ -250,6 +250,7 @@ function *updateTransactions(drug) {
   for (let transaction of transactions) {
     transaction.drug.generics = drug.generics
     transaction.drug.form     = drug.form
+    transaction.drug.brand    = drug.brand
 
     if ( ! transaction.drug.price)
       transaction.drug.price = drug.price
