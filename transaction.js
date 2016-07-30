@@ -205,7 +205,12 @@ exports.verified = {
       lot:doc.lot && {
         to:null,
         from:doc.lot.to || doc.lot.from
-      }
+      },
+      rx:doc.rx && {
+        to:null,
+        from:doc.rx.to || doc.rx.from
+      },
+      location:doc.location
     })
 
     yield this.http.put('transaction/'+this.http.id, true).body(inv)
