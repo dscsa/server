@@ -145,6 +145,7 @@ exports.post = function* () {
   yield drugs.updatePrice.call(this, drug)
 
   transaction.drug.price    = drug.price
+  transaction.drug.brand    = drug.brand
   transaction.drug.generics = drug.generics
   transaction.drug.form     = drug.form
 
