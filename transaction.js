@@ -108,6 +108,8 @@ exports.view = {
 }
 
 exports.changes = function* () {
+  //match timeout in dscsa-pouch
+  this.req.setTimeout(20000)
   yield this.http(exports.filter.authorized(this.path), true)
 }
 

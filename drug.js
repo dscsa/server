@@ -67,6 +67,7 @@ exports.view = {
 }
 
 exports.changes = function* () {
+  this.req.setTimeout(20000)
   yield this.http(exports.filter.authorized(this.path), true)
 }
 
