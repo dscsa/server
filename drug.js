@@ -246,6 +246,10 @@ function *getGoodrx(drug) {
     console.log('GoodRx price updated by full name strategy', url, price)
   } catch(err) {
     try {
+      if( ! err.errors[0].candidates){ //then there's no fair price drug so this is undefined
+          console.log("GoodRx responded that there is no fair price drug")
+          return null
+      }
       let url = makeUrl(err.errors[0].candidates[0], strength)
       price = yield this.http.get(url).headers({})
       console.log('GoodRx price updated by alternate suggestions', url, err.errors[0].candidates[0])
