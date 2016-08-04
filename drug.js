@@ -137,23 +137,24 @@ exports.put = function* () {
 exports.bulk_docs = function* () {
 
   let body = yield this.http.body
-
   //match timeout in dscsa-pouch
   this.req.setTimeout(body.docs.length * 1000)
 
-  if (body.new_edits) //Pouch uses this for local docs.
+  if (body.new_edits) //Pouch uses new_edits == true for local docs.
     return yield this.http(null, true).body(body)
 
   for (let drug of body.docs) defaults(drug)
 
   this.body = yield this.http().body(body)
-
   let chain = Promise.resolve()
 
-  for (let i in this.body) {
+  for (let i in body.docs) {
     let drug  = body.docs[i]
     let _rev  = drug._rev
-    drug._rev = this.body[i].rev
+
+    if (this.body[i]) //if new_edits == true for replication this.body will be an empty array. http://wiki.apache.org/couchdb/HTTP_Bulk_Document_API#Posting_Existing_Revisions
+      drug._rev = this.body[i].rev
+
     //Don't wait for these updates since they could take a while.  Existing drugs needs their denormalized data updated. New drugs need current prices set.
     //If done in parrallel for a large number of transactions updates CouchDB will crash with ENFILE. https://issues.apache.org/jira/browse/COUCHDB-180.
     //Instead we create a promise chain the executes serially.  May be able to be improved with _bulk_docs
@@ -268,12 +269,15 @@ function *getGoodrx(drug) {
 
 //Get all transactins using this drug so we can update denormalized database
 function *updateTransactions(drug) {
-
   //TODO don't do this if drug.form and drug.generics were not changed
   let transactions = yield this.http.get(transaction.view.drugs(drug._id))
 
   for (let transaction of transactions) {
-    if((transaction.drug.generics == drug.generics) && (transaction.drug.form == drug.form) && (transaction.drug.brand == drug.brand)) continue
+    if(
+      (JSON.stringify(transaction.drug.generics) == JSON.stringify(drug.generics))
+      && (transaction.drug.form == drug.form)
+      && (transaction.drug.brand == drug.brand)
+    ) continue
 
     transaction.drug.generics = drug.generics
     transaction.drug.form     = drug.form

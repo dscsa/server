@@ -21,11 +21,12 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('history.transaction._id').notNull.regex(id)
   ensure('history.qty').notNull.isNumber
   ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/).notChanged
-  ensure('drug.generics').notNull.isArray.length(1, 10).notChanged
+  ensure('drug.generics').notNull.isArray.length(1, 10)
   ensure('drug.generics.name').notNull.isString.length(1, 50)
   ensure('drug.generics.strength').notNull.isString.length(1, 10)
-  ensure('drug.form').notNull.isString.length(1, 20).notChanged
-  ensure('drug.pkg').isString.length(1, 2).notChanged
+  ensure('drug.brand').isString.length(0, 20)
+  ensure('drug.form').notNull.isString.length(1, 20)
+  ensure('drug.pkg').isString.length(0, 2).notChanged
   ensure('drug.price.updatedAt').notNull.isDate
 
   //Optional
