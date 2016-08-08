@@ -5,9 +5,6 @@ let secret = require('../../keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 let transaction   = require('./transaction')
 
-
-
-
 exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   // if ( ! userCtx.roles[0])
@@ -31,7 +28,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   //Optional
   ensure('brand').isString.length(0, 20)
-  ensure('labeler').isString.length(0, 20)
+  ensure('labeler').isString.length(0, 40)
   ensure('price.goodrx').isNumber
   ensure('price.nadac').isNumber
 
