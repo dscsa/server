@@ -172,8 +172,7 @@ exports.delete = function* () {
   if ( ! inv[0]) //Only delete inventory if id is not in subsequent transaction
     return yield this.http(null, true)
 
-  this.status  = 409
-  this.message = `Cannot delete this transaction because transaction ${inv[0]._id} has _id ${doc._id} in its history`
+  this.throw(409, `Cannot delete this transaction because transaction ${inv[0]._id} has _id ${doc._id} in its history`)
 }
 
 exports.verified = {
@@ -182,11 +181,8 @@ exports.verified = {
     let inv = yield this.http.get(exports.view.history(doc._id))
 
     //TODO We should make sure verifiedAt is saved as true for this transaction
-    if (inv[0]) {
-      this.status  = 409
-      this.message = `Cannot verify this transaction because transaction ${inv[0]._id} with _id ${doc._id} already has this transaction in its history`
-      return
-    }
+    if (inv[0])
+      this.throw(409, `Cannot verify this transaction because transaction ${inv[0]._id} with _id ${doc._id} already has this transaction in its history`)
 
     doc = yield patch.call(this, doc._id, {verifiedAt:new Date().toJSON()})
 
@@ -231,17 +227,11 @@ exports.verified = {
     let inv = yield this.http.get(exports.view.history(doc._id))
     inv = inv[0]
 
-    if ( ! inv) { //Only delete inventory if it actually exists
-      this.status  = 409
-      this.message = `Cannot unverify this transaction because no subsequent transaction with history containing ${doc._id} could be found`
-      return
-    }
+    if ( ! inv) //Only delete inventory if it actually exists
+      this.throw(409, `Cannot unverify this transaction because no subsequent transaction with history containing ${doc._id} could be found`)
 
-    if (inv.shipment._id != this.user.account._id) {
-      this.status  = 409
-      this.message = `Cannot unverify this transaction because the subsequent transaction ${inv._id} has already been assigned to another shipment`
-      return
-    }
+    if (inv.shipment._id != this.user.account._id)
+      this.throw(409, `Cannot unverify this transaction because the subsequent transaction ${inv._id} has already been assigned to another shipment`)
 
     yield patch.call(this, doc._id, {verifiedAt:null}) //Un-verify transaction
     yield this.http.delete('transaction/'+inv._id+'?rev='+inv._rev, true).body(inv)
