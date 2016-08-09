@@ -213,6 +213,7 @@ exports.verified = {
       location:doc.location
     })
 
+    yield this.http.put('transaction/'+this.http.id).body(inv)
     this.body = doc
     //TODO rollback transaction verification if this creation fails
   },
