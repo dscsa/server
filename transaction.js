@@ -184,7 +184,7 @@ exports.verified = {
     if (inv[0])
       this.throw(409, `Cannot verify this transaction because transaction ${inv[0]._id} with _id ${doc._id} already has this transaction in its history`)
 
-    doc = yield patch.call(this, doc._id, {verifiedAt:new Date().toJSON()})
+    doc = yield patch.call(this, doc._id, {verifiedAt:new Date().toJSON()}) //Verify transaction and send back new _rev so user can continue to make edits
 
     //Create the new inventory item
     inv = defaults.call(this, {
@@ -213,8 +213,8 @@ exports.verified = {
       location:doc.location
     })
 
-    yield this.http.put('transaction/'+this.http.id, true).body(inv)
-    //TODO rollback verified if the adding the new item is not successful
+    this.body = doc
+    //TODO rollback transaction verification if this creation fails
   },
 
   //This is a bit complex here are the steps:
@@ -233,8 +233,8 @@ exports.verified = {
     if (inv.shipment._id != this.user.account._id)
       this.throw(409, `Cannot unverify this transaction because the subsequent transaction ${inv._id} has already been assigned to another shipment`)
 
-    yield patch.call(this, doc._id, {verifiedAt:null}) //Un-verify transaction
-    yield this.http.delete('transaction/'+inv._id+'?rev='+inv._rev, true).body(inv)
+    yield this.http.delete('transaction/'+inv._id+'?rev='+inv._rev).body(inv)
+    this.body = yield patch.call(this, doc._id, {verifiedAt:null}) //Un-verify transaction and send back new _rev so user can continue to make edits
   }
 }
 
