@@ -140,8 +140,10 @@ exports.get = function* () {
   if (this.query.history)
     return this.body = yield history(this, selector._id)
 
-  if (selector.createdAt && selector['shipment._id'].$ne)
+  if (selector.createdAt && selector['shipment._id'].$ne) {
+    this.req.setTimeout(10000)
     return yield this.http.get(exports.view.record(selector.createdAt.$gte, selector.createdAt.$lte), true)
+  }
 
   if (selector['shipment._id'])
     return yield this.http.get(exports.view.shipment(selector['shipment._id']), true)
