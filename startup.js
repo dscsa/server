@@ -147,7 +147,12 @@ function *addDesignDocs (name) {
   //with the url used to call the export so the original module can call it properly
   for (let view in db.view) {
     views[view]   = {map:toString(db.view[view])}
-    db.view[view] = key => `${name}/_design/auth/_list/all/${view}?include_docs=true&key="${key}"`
+    db.view[view] = (startKey, endKey) => {
+      if ( ! endKey)
+        return `${name}/_design/auth/_list/all/${view}?include_docs=true&key="${startKey}"`
+
+      return `${name}/_design/auth/_list/all/${view}?include_docs=true&startkey="${startKey}"&endkey="${endKey}"`
+    }
   }
 
   //See note on "too much magic" above

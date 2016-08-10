@@ -71,8 +71,14 @@ exports.filter = {
     if ( ! doc.shipment) return doc._deleted //true for _deleted false for _design
 
     var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
+
     var accounts = doc.shipment._id.split('.')
     return accounts[0] == account || accounts[1] == account
+  },
+
+  inventory(doc, req) {
+    //called from PUT or CouchDB, true for _deleted false for _design
+    return doc.shipment ? doc.shipment._id == req.userCtx.roles[0] : doc._deleted
   }
 }
 
@@ -105,23 +111,42 @@ exports.view = {
   //used by drug endpoint to update transactions on drug name/form updates
   drugs(doc) {
     emit(doc.drug._id)
+  },
+
+  shipment(doc) {
+    emit(doc.shipment._id)
+  },
+
+  record(doc) {
+    if (doc.shipment._id.split('.').length == 1) return
+
+    //TODO How to incorporate Complete/Verified/Destroyed, multiple map functions?  compound key e.g., [createAt, typeof verified] with grouping?
+    emit(doc.createdAt)
   }
 }
 
+//Only sync inventory for now since transactions is just too big to sync locally
+//Eventually maybe we have an optional request parameter to sync all transactions
 exports.changes = function* () {
   //match timeout in dscsa-pouch
   this.req.setTimeout(20000)
-  yield this.http(exports.filter.authorized(this.path), true)
+  yield this.http(exports.filter.inventory(this.path), true)
 }
 
 exports.get = function* () {
 
   let selector = JSON.parse(this.query.selector)
-
-  if ( ! selector._id) return //TODO other search types
-
+  console.log('transactions.get selector', selector)
   if (this.query.history)
     return this.body = yield history(this, selector._id)
+
+  if (selector.createdAt && selector['shipment._id'].$ne)
+    return yield this.http.get(exports.view.record(selector.createdAt.$gte, selector.createdAt.$lte), true)
+
+  if (selector['shipment._id'])
+    return yield this.http.get(exports.view.shipment(selector['shipment._id']), true)
+
+  if ( ! selector._id) return //TODO other search types
 
   yield this.http.get(exports.show.authorized(selector._id), true)
 
