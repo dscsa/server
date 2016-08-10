@@ -183,7 +183,8 @@ exports.post = function* () {
 }
 
 exports.put = function* () {
-  yield this.http(null, true)
+  let transaction = yield this.http.body
+  yield this.http('transaction/'+transaction._id, true).body(transaction)
 }
 
 exports.bulk_docs = function* () {
