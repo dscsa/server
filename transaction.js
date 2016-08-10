@@ -195,10 +195,10 @@ exports.delete = function* () {
   let doc = yield this.http.body
   let inv = yield this.http.get(exports.view.history(doc._id))
 
-  if ( ! inv[0]) //Only delete inventory if id is not in subsequent transaction
-    return yield this.http(null, true)
+  if (inv[0]) //Only delete inventory if id is not in subsequent transaction
+    this.throw(409, `Cannot delete this transaction because transaction ${inv[0]._id} has _id ${doc._id} in its history`)
 
-  this.throw(409, `Cannot delete this transaction because transaction ${inv[0]._id} has _id ${doc._id} in its history`)
+  yield this.http('transaction/'+doc._id+'?rev='+doc._rev, true).body(doc)
 }
 
 exports.verified = {
