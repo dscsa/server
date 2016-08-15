@@ -224,6 +224,7 @@ function *getNadac(drug) {
 
       } catch (err) {
         console.log("Error, Nadac could not be updated", drug._id, drug.generics, JSON.stringify(err, null, " "), url)
+        return
       }
   }
   return +(+prices.pop().nadac_per_unit).toFixed(4) //In either case where price is found, will return here
@@ -248,9 +249,9 @@ function *getGoodrx(drug) {
     console.log('GoodRx price updated by full name strategy', drug._id)
   } catch(err) {
     try {
-      if( ! err.errors[0].candidates){ //then there's no fair price drug so this is undefined
+      if( ! err.errors || ! err.errors[0].candidates){ //then there's no fair price drug so this is undefined
           console.log("GoodRx responded that there is no fair price drug")
-          return null
+          return
       }
       let url = makeUrl(err.errors[0].candidates[0], strength)
       price = yield this.http.get(url).headers({})
@@ -258,6 +259,7 @@ function *getGoodrx(drug) {
     } catch(err2) {
       //409 error means qs not properly encoded, 400 means missing drug
       console.log("Drug's goodrx price could not be updated", drug._id, drug.generics, makeUrl(fullName, strength), makeUrl(err.errors[0].candidates[0], strength))
+      return
     }
   }
 
