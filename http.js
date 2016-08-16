@@ -169,7 +169,6 @@ function init(defaults, ctx) {
         } catch (err) {
           err.stack   = stack
           console.log('Invalid JSON', stream)
-          throw err
         }
       }) //default to {} this is what other body parsers do in strict mode.  Not sure what we want to do here.
     })
