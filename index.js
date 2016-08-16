@@ -81,6 +81,7 @@ app.use(function* (next) {
   this.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
   this.set('access-control-allow-credentials', true)
   this.set('access-control-max-age', 1728000)
+  this.set('access-control-expose-headers', 'Connection, content-length, date, etag, location, server, x-endpoint')
   this.method == 'OPTIONS' ? this.status = 204 : yield next
 })
 
