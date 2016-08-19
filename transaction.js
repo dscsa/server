@@ -23,7 +23,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/).notChanged
   ensure('drug.generics').notNull.isArray.length(1, 10)
   ensure('drug.generics.name').notNull.isString.length(1, 50)
-  ensure('drug.generics.strength').notNull.isString.length(1, 20)
+  ensure('drug.generics.strength').isString.length(1, 20)
   ensure('drug.brand').isString.length(0, 20)
   ensure('drug.form').notNull.isString.length(1, 20)
   ensure('drug.pkg').isString.length(0, 2).notChanged
