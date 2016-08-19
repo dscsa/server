@@ -21,7 +21,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('price.updatedAt').isDate
   ensure('generics').notNull.isArray.length(1, 10)
   ensure('generics.name').notNull.isString.length(1, 50)
-  ensure('generics.strength').isString.length(1, 20)
+  ensure('generics.strength').isString.length(0, 20)
   ensure('form').notNull.isString.length(1, 20)
   ensure('upc').assert(upc)
   ensure('ndc9').assert(ndc9)
