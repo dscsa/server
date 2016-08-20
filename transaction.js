@@ -136,7 +136,7 @@ exports.changes = function* () {
 exports.get = function* () {
 
   let selector = JSON.parse(this.query.selector)
-  console.log('transactions.get selector', selector)
+
   if (this.query.history)
     return this.body = yield history(this, selector._id)
 
