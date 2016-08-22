@@ -20,7 +20,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('history').notNull.isArray
   ensure('history.transaction._id').notNull.regex(id)
   ensure('history.qty').notNull.isNumber
-  ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/).notChanged
+  ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
   ensure('drug.generics').notNull.isArray.length(1, 10)
   ensure('drug.generics.name').notNull.isString.length(1, 50)
   ensure('drug.generics.strength').isString.length(0, 20)
