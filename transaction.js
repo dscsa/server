@@ -21,6 +21,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('history.transaction._id').notNull.regex(id)
   ensure('history.qty').notNull.isNumber
   ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
+  ensure('drug.generic').notNull.isString
   ensure('drug.generics').notNull.isArray.length(1, 10)
   ensure('drug.generics.name').notNull.isString.length(1, 50)
   ensure('drug.generics.strength').isString.length(0, 20)
@@ -113,15 +114,22 @@ exports.view = {
     emit(doc.drug._id)
   },
 
+  //For inventory search.
+  generic(doc) {
+    if (doc.shipment._id.split('.').length == 1)//inventory only
+      emit(doc.drug.generic || (doc.drug.generics.map(function(generic) {
+        return generic.name+" "+generic.strength
+      }).join(', ')+' '+doc.drug.form).replace(/ Capsule| Tablet/, ''))
+  },
+
   shipment(doc) {
     emit(doc.shipment._id)
   },
 
+  //TODO How to incorporate Complete/Verified/Destroyed, multiple map functions?  compound key e.g., [createAt, typeof verified] with grouping?
   record(doc) {
-    if (doc.shipment._id.split('.').length == 1) return
-
-    //TODO How to incorporate Complete/Verified/Destroyed, multiple map functions?  compound key e.g., [createAt, typeof verified] with grouping?
-    emit(doc.createdAt)
+    if (doc.shipment._id.split('.').length != 1)
+      emit(doc.createdAt)
   }
 }
 
@@ -142,19 +150,30 @@ exports.get = function* () {
 
   if (selector.createdAt && selector['shipment._id'].$ne) {
     this.req.setTimeout(10000)
-    return yield this.http.get(exports.view.record(selector.createdAt.$gte, selector.createdAt.$lte), true)
+    this.body = yield this.http.get(exports.view.record(selector.createdAt.$gte, selector.createdAt.$lte))
+    for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
+    return
   }
 
-  if (selector['shipment._id'])
-    return yield this.http.get(exports.view.shipment(selector['shipment._id']), true)
+  if (selector.generic && selector['shipment._id']) {
+    this.body = yield this.http.get(exports.view.generic(selector.generic))
+    for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
+    return
+  }
 
-  if ( ! selector._id) return //TODO other search types
+  if (selector['shipment._id']) {
+    this.body = yield this.http.get(exports.view.shipment(selector['shipment._id']))
+    for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
+    return
+  }
 
-  yield this.http.get(exports.show.authorized(selector._id), true)
+  if (selector._id) {
+    yield this.http.get(exports.show.authorized(selector._id), true)
 
-  //show function cannot handle _deleted docs with open_revs, so handle manually here
-  if (this.status == 204 && this.query.open_revs)
-    yield this.http.get(this.path+'/'+selector._id, true)
+    //show function cannot handle _deleted docs with open_revs, so handle manually here
+    if (this.status == 204 && this.query.open_revs)
+      yield this.http.get(this.path+'/'+selector._id, true)
+  }
 }
 
 exports.bulk_get = function* (id) {
@@ -174,6 +193,7 @@ exports.post = function* () {
 
   transaction.drug.price    = drug.price
   transaction.drug.brand    = drug.brand
+  transaction.drug.generic  = drug.generic
   transaction.drug.generics = drug.generics
   transaction.drug.form     = drug.form
 
@@ -184,11 +204,13 @@ exports.post = function* () {
   this.body = transaction
 }
 
+//TODO enforce drug consistency on every save?
 exports.put = function* () {
   let transaction = yield this.http.body
   yield this.http('transaction/'+transaction._id, true).body(transaction)
 }
 
+//TODO enforce drug consistency on every save?
 exports.bulk_docs = function* () {
   yield this.http(null, true)
 }

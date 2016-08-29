@@ -19,6 +19,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('_id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('price.updatedAt').isDate
+  ensure('generic').notNull.isString
   ensure('generics').notNull.isArray.length(1, 10)
   ensure('generics.name').notNull.isString.length(1, 50)
   ensure('generics.strength').isString.length(0, 20)
@@ -74,12 +75,17 @@ exports.get = function*() {
 
     if ( ! selector._id) return //TODO other search types
 
-    this.body = yield this.http(exports.show.authorized(selector._id))
+    this.body = yield this.http.get(exports.show.authorized(selector._id))
 
     //show function cannot handle _deleted docs with open_revs, so handle manually here
     //don't do pricing update even if there is an open_revs since its pouchdb not a user
+    if (this.query.open_revs && this.status == 204)
+      return yield this.http.get(this.path+'/'+selector._id, true)
+
     if (this.query.open_revs)
-      return this.status == 204 ? yield this.http.get(this.path+'/'+selector._id, true) : null
+      return this.body[0].ok.generic = exports.generic(this.body[0].ok) //Not all docs have a generic name yet
+
+    this.body.generic = exports.generic(this.body)
 
     yield exports.updatePrice.call(this, this.body)
 
@@ -91,6 +97,8 @@ exports.get = function*() {
 
 //Exporting non-standard method, but is used by transaction.js
 exports.updatePrice = function* (drug) {
+  drug.generic = drug.generic || exports.generic(drug)
+
   if ( ! drug.price || new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)
     return //! drug.price handles the open_revs [{ok:drug}] scenario.
 
@@ -126,6 +134,7 @@ exports.post = function* () {
 
 exports.put = function* () {
   let drug = yield this.http.body
+  defaults(drug)
   let save = yield this.http.put().body(drug)
 
   yield updateTransactions.call(this, drug)
@@ -169,8 +178,14 @@ exports.delete = function* (id) {
   yield this.http(null, true)
 }
 
+exports.generic = function (drug) {
+  if ( ! drug.generics) console.log('drug.generic error', drug)
+  return (drug.generics.map(generic => generic.name+" "+generic.strength).join(', ')+' '+drug.form).replace(/ Capsule| Tablet/, '')
+}
+
 function defaults(body) {
   body.createdAt  = body.createdAt || new Date().toJSON()
+  body.generic    = exports.generic(body)
 
   let labelerCode = ('00000'+body._id.split('-')[0]).slice(-5)
   let productCode = ('0000'+body._id.split('-')[1]).slice(-4)
@@ -281,6 +296,7 @@ function *updateTransactions(drug) {
     transaction.drug.generics = drug.generics
     transaction.drug.form     = drug.form
     transaction.drug.brand    = drug.brand
+    transaction.drug.generic  = drugs.generic(drug)
 
     if ( ! transaction.drug.price)
       transaction.drug.price = drug.price

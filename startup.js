@@ -143,8 +143,8 @@ function *addDesignDocs (name) {
   } catch (err) {
 
   }
-  //This may be too much magic for best practice but its really elegant.  Replace the export function
-  //with the url used to call the export so the original module can call it properly
+  //This may be too much magic for best practice but its really elegant.  Replace the export function with
+  //the url used to call the export so the original module can call a couchdb function just like a normal one.
   for (let view in db.view) {
     views[view]   = {map:toString(db.view[view])}
     db.view[view] = (startKey, endKey) => {
