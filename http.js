@@ -70,7 +70,10 @@ function init(defaults, ctx) {
           config.headers = all[0]
           config.body    = all[1]
 
-          config.headers && delete config.headers['content-length']
+          if (config.headers) {
+            delete config.headers['content-length']
+            config.headers.accept = 'application/json'  //TODO is there a better way to not get multipart messages from couchdb
+          }
 
           var req = http.request(config)
 
