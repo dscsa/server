@@ -304,12 +304,9 @@ r('/transaction', {strict:true})
   .put(transaction.put)
   .del(transaction.delete)                   //TODO replace this with a show function. Allow user to get, modify, & delete docs
 
-r('/transaction/history')
-  .get(transaction.history)          //Resursively retrieve transaction's history
-
-r('/transaction/verified')
-  .post(transaction.verified.post)  //New transaction created in inventory, available for further transactions
-  .del(transaction.verified.delete) //New transaction removed from inventory, cannot be done if item has further transactions
+// r('/transaction/verified')
+//   .post(transaction.verified.post)  //New transaction created in inventory, available for further transactions
+//   .del(transaction.verified.delete) //New transaction removed from inventory, cannot be done if item has further transactions
 
 
 //all(/on?deep.field=this&this.must.be.true.to.trigger=true)
