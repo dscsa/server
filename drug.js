@@ -229,7 +229,7 @@ function *getNadac(drug) {
           concatenatedRes += raw.replace(/[^0-9.]/g, '')  //takes only the numerical strength
           concatenatedRes += "%"
         }
-        return concatenatedRes.slice(0,-1) //ignore last %
+        return concatenatedRes.slice(0,-1)
       }
 
       try{
