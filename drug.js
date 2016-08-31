@@ -221,10 +221,15 @@ function *getNadac(drug) {
 
       //This helper function returns a string that concatenates the strengths with % to serve as a wildcard
       //If there is a .x strenght, then a 0 must be appended in order to have 0.x for search to work.
-      //Uses a slice() to take only the numbers of strength, disregarding unit of measure.
+      //Uses a RegEx to take only the numbers of strength, disregarding unit of measure.
       function formatStrengths(){
-        return drug.generics.map(generic =>
-            ((generic.strength[0] == '.') ? ('0'.concat(generic.strength)) : generic.strength).slice(0,generic.strength.indexOf('m'))).join('%')
+        let concatenatedRes = "" //does the same as mapping, but broken up to allow for a bit more control
+        for(var i = 0; i < drug.generics.length; i++){
+          let raw = ((drug.generics[i].strength[0] == '.') ? ('0'.concat(drug.generics[i].strength)) : drug.generics[i].strength)
+          concatenatedRes += raw.replace(/[^0-9.]/g, '')  //takes only the numerical strength
+          concatenatedRes += "%"
+        }
+        return concatenatedRes.slice(0,-1)
       }
 
       try{
