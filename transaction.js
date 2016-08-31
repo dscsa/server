@@ -43,12 +43,13 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   //TODO next.transaction || next.dispensed must exist (and eventually have _id)
   function next(val) {
-    if (next.length && ! newDoc.verifiedAt)
+    if (val.length && ! newDoc.verifiedAt)
       return 'cannot contain any values unless transaction.verifiedAt is set'
 
-    var qty = newDoc.next.reduce(sum, 0)
-    if (qty >= newDoc.qty.to || newDoc.qty.from)
-      return 'sum of next quantities, '+qty+', cannot be larger than newDoc.qty.to || newDoc.qty.from, '+(newDoc.qty.to || newDoc.qty.from)
+    var nextQty = val.reduce(sum, 0)
+    var currQty = newDoc.qty.to || newDoc.qty.from
+    if (nextQty > currQty)
+      return 'sum of next quantities, '+nextQty+', cannot be larger than newDoc.qty.to || newDoc.qty.from, '+currQty
   }
 
   function shipmentId(val) {
