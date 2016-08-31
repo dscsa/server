@@ -296,7 +296,7 @@ function *updateTransactions(drug) {
     transaction.drug.generics = drug.generics
     transaction.drug.form     = drug.form
     transaction.drug.brand    = drug.brand
-    transaction.drug.generic  = drugs.generic(drug)
+    transaction.drug.generic  = drug.generic
 
     if ( ! transaction.drug.price)
       transaction.drug.price = drug.price
