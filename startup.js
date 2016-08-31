@@ -148,6 +148,9 @@ function *addDesignDocs (name) {
   for (let view in db.view) {
     views[view]   = {map:toString(db.view[view])}
     db.view[view] = (startKey, endKey) => {
+      if ( ! startKey)
+        return `${name}/_design/auth/_list/all/${view}?include_docs=true`
+
       if ( ! endKey)
         return `${name}/_design/auth/_list/all/${view}?include_docs=true&key="${startKey}"`
 
