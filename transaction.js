@@ -17,15 +17,8 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('shipment._id').assert(shipmentId)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('verifiedAt').isDate
-  ensure('next').notNull.isArray
+  ensure('next').notNull.isArray.assert(next)
   ensure('next.qty').notNull.isNumber
-  ensure('next.transaction._id').regex(id)
-
-  //TODO next.transaction || next.dispensed must exist (and eventually have _id)
-  //TODO next qtys cannot add up to more than trans.qty.to || trans.qty.from
-  //TODO cannot have a next unless verified
-  //TODO cannot have verified removed if next
-
   ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
   ensure('drug.generic').notNull.isString
   ensure('drug.generics').notNull.isArray.length(1, 10)
@@ -43,6 +36,20 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('exp.to').isDate
   ensure('drug.price.goodrx').isNumber
   ensure('drug.price.nadac').isNumber
+
+  function sum(sum, next) {
+    return sum + next.qty
+  }
+
+  //TODO next.transaction || next.dispensed must exist (and eventually have _id)
+  function next(val) {
+    if (next.length && ! newDoc.verifiedAt)
+      return 'cannot contain any values unless transaction.verifiedAt is set'
+
+    var qty = newDoc.next.reduce(sum, 0)
+    if (qty >= newDoc.qty.to || newDoc.qty.from)
+      return 'sum of next quantities, '+qty+', cannot be larger than newDoc.qty.to || newDoc.qty.from, '+(newDoc.qty.to || newDoc.qty.from)
+  }
 
   function shipmentId(val) {
 
@@ -162,7 +169,7 @@ exports.get = function* () {
     return
   }
 
-  if (selector.generic && selector.inventory) {
+  if (selector.inventory) {
     this.body = yield this.http.get(exports.view.inventoryGeneric(selector.generic))
     for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
     return
