@@ -126,6 +126,7 @@ exports.post = function* () {
   defaults(body)
 
   yield exports.updatePrice.call(this, body)
+  yield this.http.put('drug/'+drug._id).body(body)
 
   //Return the drug with updated pricing and the new _rev
   this.body   = yield this.http.get('drug/'+body._id)
