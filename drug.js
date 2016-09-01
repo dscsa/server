@@ -247,7 +247,19 @@ function *getNadac(drug) {
         return
       }
   }
-  return +(+prices.pop().nadac_per_unit).toFixed(4) //In either case where price is found, will return here
+
+  let response = prices.pop()
+
+  if(response.pricing_unit == "ML"){
+    let denom = response.ndc_description.match(/\/([0-9.]+)[^\/]*$/) //looks for the denominator in strength to determine per unit cost, not per ml
+    if(denom){  //responds null if there is no denominator value ins trength
+      let total = parseFloat(denom[1]) * parseFloat(response.nadac_per_unit)
+      console.log("Converted from price/ml to price/unit of: ", total)
+      return total
+    }
+  }
+
+  return +(+response.nadac_per_unit).toFixed(4) //In other case where price is found, will return here
 }
 
 exports.goodrx = getGoodrx
@@ -265,6 +277,7 @@ function *getGoodrx(drug) {
   let price = {data:{}}
   try {
     let url = makeUrl(fullName, strength)
+    console.log(url)
     price = yield this.http.get(url).headers({})
     console.log('GoodRx price updated by full name strategy', drug._id)
   } catch(err) {
@@ -274,6 +287,7 @@ function *getGoodrx(drug) {
           return
       }
       let url = makeUrl(err.errors[0].candidates[0], strength)
+      console.log(url)
       price = yield this.http.get(url).headers({})
       console.log('GoodRx price updated by alternate suggestions', drug._id)
     } catch(err2) {
