@@ -120,20 +120,20 @@ exports.bulk_get = function* (id) {
 
 //Drug product NDC is a good natural key
 exports.post = function* () {
-  let body = yield this.http.body
+  let drug = yield this.http.body
 
-  if (typeof body != 'object' || Array.isArray(body))
   if (typeof drug != 'object' || Array.isArray(drug))
     this.throw(422, 'drug must be an object')
 
-  defaults(body)
+  defaults(drug)
+
   let save = yield exports.updatePrice.call(this, drug)
 
   if ( ! save)
     yield this.http.put('drug/'+drug._id).body(drug)
 
   //Return the drug with updated pricing and the new _rev
-  this.body   = yield this.http.get('drug/'+body._id)
+  this.body   = yield this.http.get('drug/'+drug._id)
   this.status = 201
 }
 
