@@ -1,11 +1,9 @@
 "use strict"
+let couchdb = require('./couchdb')
 
-exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, newDoc, oldDoc, userCtx) {
 
-  if (newDoc._id.slice(0, 7) == '_local/') return
-  if (newDoc._deleted) return
-  var id = /^[a-z0-9]{7}$/
-  ensure.prefix = 'account'
+  ensure = ensure('account', newDoc, oldDoc)
 
   //Required
   ensure('_id').notNull.assert(_id)
@@ -21,10 +19,12 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   //Optional
   ensure('ordered').isObject
 
+  var id = /^[a-z0-9]{7}$/
   function _id(val) {
-    return ( ! newDoc._rev && id.test(val)) || userCtx.roles[0] == val || userCtx.roles[0] == '_admin' || 'can only be modified by one of its users'
+    if ( ! id.test(val) || (newDoc._rev && userCtx.roles[0] != val && userCtx.roles[0] != '_admin'))
+      return 'can only be modified by one of its users'
   }
-}
+})
 
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
 //them with a function that takes a key and returns the couchdb url needed to call them.

@@ -1,27 +1,27 @@
 "use strict"
 let secret = require('../../keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
+let couchdb = require('./couchdb')
 
-exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
-
-  if (newDoc._id.slice(0, 7) == '_local/') return
-  if (newDoc._deleted) return
+exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, newDoc, oldDoc, userCtx) {
 
   var id = /^[a-z0-9]{7}$/
+  ensure = ensure('user', newDoc, oldDoc)
 
-  ensure.prefix = 'user'
-
-  ensure('type').notChanged
-  ensure('account._id').notChanged
-  ensure('roles').notChanged
-  ensure('password').notChanged
-
+  //Required
+  ensure('_id').notNull.assert(_id)
   ensure('email').notNull.regex(/[\w._]{2,}@\w{3,}\.(com|org|net|gov)/)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('name.first').notNull.isString
   ensure('name.last').notNull.isString
   ensure('phone').notNull.regex(/\d{3}\.\d{3}\.\d{4}/)
-}
+
+  //Optional
+  ensure('type').notChanged
+  ensure('account._id').notChanged
+  ensure('roles').notChanged
+  ensure('password').notChanged
+})
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
 //them with a function that takes a key and returns the couchdb url needed to call them.
 exports.filter = {

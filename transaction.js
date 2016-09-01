@@ -1,24 +1,21 @@
 "use strict"
 let drugs = require('./drug')
+let couchdb = require('./couchdb')
 
-exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, newDoc, oldDoc, userCtx) {
 
   // if ( ! userCtx.roles[0])
   //   throw({unauthorized:'You must be logged in to create or modify a transaction'})
-
-  if (newDoc._id.slice(0, 7) == '_local/') return
-  if (newDoc._deleted) return
-
   var id = /^[a-z0-9]{7}$/
-  ensure.prefix = 'transaction'
+  ensure = ensure('transaction', newDoc, oldDoc)
 
   //Required
-  ensure('_id').notNull.regex(id)
+  ensure('_id').notNull.assert(_id)
   ensure('shipment._id').assert(shipmentId)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('verifiedAt').isDate
   ensure('next').notNull.isArray.assert(next)
-  ensure('next.qty').notNull.isNumber
+  ensure('next.qty').isNumber
   ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
   ensure('drug.generic').notNull.isString
   ensure('drug.generics').notNull.isArray.length(1, 10)
@@ -72,7 +69,7 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
     return 'must be in the format "account.from._id" or "account.from._id"."account.to._id"."_id"'
   }
-}
+})
 
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
 //them with a function that takes a key and returns the couchdb url needed to call them.
