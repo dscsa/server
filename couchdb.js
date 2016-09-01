@@ -24,7 +24,7 @@ exports.inject = function() {
   for (var fn of arguments) {
     fn = fn.toString()
     fn = fn.startsWith('function') ? fn : 'function '+fn
-    $inject.push(fn.replace('(', 'fnName('))
+    $inject.push(fn)
   }
 
   //some stupid spidermonkey expression doesn't evaluate to function unless surrounded by ()
