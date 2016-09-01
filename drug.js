@@ -252,9 +252,9 @@ function *getNadac(drug) {
 
   //Need to handle case where price is given per ml to ensure database integrity
   if(response.pricing_unit == "ML"){ //a component of the NADAC response that described unit of price ("each" or "ml")
-    let denom = response.ndc_description.match(/\/([0-9.]+)[^\/]*$/) //looks for the denominator in strength to determine per unit cost, not per ml
-    if(denom){  //responds null if there is no denominator value in strength
-      let total = (parseFloat(denom[1]) * parseFloat(response.nadac_per_unit)).toFixed(4)
+    let numberOfML = response.ndc_description.match(/\/([0-9.]+)[^\/]*$/) //looks for the denominator in strength to determine per unit cost, not per ml
+    if(numberOfML){  //responds null if there is no denominator value in strength
+      let total = (parseFloat(numberOfML[1]) * parseFloat(response.nadac_per_unit)).toFixed(4) //essentialy number of ml times price per ml
       console.log("Converted from price/ml to price/unit of: ", total)
       return total
     }
