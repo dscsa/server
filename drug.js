@@ -16,7 +16,7 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, generic, function(e
   ensure('_id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('price.updatedAt').isDate
-  ensure('generic').notNull.isString.assert(generic)
+  ensure('generic').notNull.assert(matchesGeneric)
   ensure('generics').notNull.isArray.length(1, 10)
   ensure('generics.name').notNull.isString.regex(/([A-Z][0-9a-z]*\s?)+\b/)
   ensure('generics.strength').isString.regex(/^[0-9][0-9a-z/.]+$/)
@@ -29,6 +29,10 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, generic, function(e
   ensure('labeler').isString.length(0, 40)
   ensure('price.goodrx').isNumber
   ensure('price.nadac').isNumber
+
+  function matchesGeneric(val) {
+    return val == generic(newDoc.drug) || 'drug.generic does not match drug.generics and drug.form'
+  }
 
   function upc(val) {
     return val == newDoc._id.replace('-', '') || 'must be same as _id without the "-" and no 0s for padding'
@@ -177,8 +181,11 @@ exports.delete = function* (id) {
 
 exports.generic = generic
 function generic(drug) {
-  if ( ! drug.generics) console.log('drug.generic error', drug)
-  return (drug.generics.map(generic => generic.name+" "+generic.strength).join(', ')+' '+drug.form).replace(/ Capsule| Tablet/, '')
+  function concat(generic) {
+    return generic.name+" "+generic.strength
+  }
+
+  return (drug.generics.map(concat).join(', ')+' '+drug.form).replace(/ Capsule| Tablet/, '')
 }
 
 function defaults(body) {

@@ -10,14 +10,14 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, ne
   ensure = ensure('transaction', newDoc, oldDoc)
 
   //Required
-  ensure('_id').notNull.assert(_id)
+  ensure('_id').notNull.assert(id)
   ensure('shipment._id').assert(shipmentId)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('verifiedAt').isDate
   ensure('next').notNull.isArray.assert(next)
   ensure('next.qty').isNumber
   ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
-  ensure('drug.generic').notNull.isString
+  ensure('drug.generic').notNull.assert(matchesGeneric)
   ensure('drug.generics').notNull.isArray.length(1, 10)
   ensure('drug.generics.name').notNull.isString.length(1, 50)
   ensure('drug.generics.strength').isString.length(0, 20)
@@ -33,6 +33,10 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, ne
   ensure('exp.to').isDate
   ensure('drug.price.goodrx').isNumber
   ensure('drug.price.nadac').isNumber
+
+  function matchesGeneric(val) {
+    return val == generic(newDoc.drug) || 'drug.generic does not match drug.generics and drug.form'
+  }
 
   function sum(sum, next) {
     return sum + next.qty
