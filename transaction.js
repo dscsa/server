@@ -23,10 +23,10 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, drugs.generic, func
   ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
   ensure('drug.generic').notNull.assert(matchesGeneric)
   ensure('drug.generics').notNull.isArray.length(1, 10)
-  ensure('drug.generics.name').notNull.isString.length(1, 50)
-  ensure('drug.generics.strength').isString.length(0, 20)
+  ensure('drug.generics.name').notNull.isString.regex(/([A-Z][0-9a-z]*\s?)+\b/)
+  ensure('drug.generics.strength').isString.regex(/^[0-9][0-9a-z/.]+$/)
   ensure('drug.brand').isString.length(0, 20)
-  ensure('drug.form').notNull.isString.length(1, 20)
+  ensure('drug.form').notNull.isString.regex(/([A-Z][a-z]+\s?)+\b/)
   ensure('drug.pkg').isString.length(0, 2).notChanged
   ensure('drug.price.updatedAt').notNull.isDate
 
