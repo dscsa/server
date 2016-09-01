@@ -142,6 +142,28 @@ exports.view = {
       doc.verifiedAt && emit(doc.drug.generic || (doc.drug.generics.map(name).join(', ')+' '+doc.drug.form).replace(/ Capsule| Tablet/, ''))
   },
 
+  //For inventory "box" search.
+  inventoryLocation(doc) {
+
+    function sum(sum, next) {
+      return sum + next.qty
+    }
+
+    if ((doc.next || []).reduce(sum, 0) < doc.qty.to || doc.qty.from)//inventory only
+      doc.verifiedAt && emit(doc.location)
+  },
+
+  //For inventory expiration search.
+  inventoryExp(doc) {
+
+    function sum(sum, next) {
+      return sum + next.qty
+    }
+
+    if ((doc.next || []).reduce(sum, 0) < doc.qty.to || doc.qty.from)//inventory only
+      doc.verifiedAt && emit(doc.exp.to || doc.exp.from)
+  },
+
   shipment(doc) {
     emit(doc.shipment._id)
   },
@@ -175,8 +197,20 @@ exports.get = function* () {
     return
   }
 
-  if (selector.inventory) {
+  if (selector.inventory && selector.generic) {
     this.body = yield this.http.get(exports.view.inventoryGeneric(selector.generic))
+    for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
+    return
+  }
+
+  if (selector.inventory && selector.exp) {
+    this.body = yield this.http.get(exports.view.inventoryExp(selector.exp, true))
+    for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
+    return
+  }
+
+  if (selector.inventory && selector.location) {
+    this.body = yield this.http.get(exports.view.inventoryLocation(selector.location, true))
     for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
     return
   }
