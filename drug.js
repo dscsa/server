@@ -30,7 +30,7 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, generic, function(e
   ensure('price.nadac').isNumber
 
   function matchesGeneric(val) {
-    return val == generic(newDoc.drug) || 'drug.generic does not match drug.generics and drug.form'
+    return val == generic(newDoc) || 'drug.generic does not match drug.generics and drug.form'
   }
 
   function upc(val) {
