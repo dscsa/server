@@ -54,6 +54,9 @@ exports.list = function(db, ddoc, list, view) {
     if ( ! endKey)
       return `${url}&key="${startKey}"`
 
+    if (endKey === true)
+      endKey = startKey+'\\uffff'
+
     return `${url}&startkey="${startKey}"&endkey="${endKey}"`
   }
 }
