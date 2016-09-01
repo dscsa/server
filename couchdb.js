@@ -10,10 +10,10 @@ function injector() {
   //Extract the actual function AND remove it from args array
   var fn = args.splice(args.length - arguments.length - 1, 1)[0]
 
-  for (var i in args) {
-    log('arg '+i)
-    log( typeof args[i] == 'function' ? args[i].toString() : args[i])
-  }
+  // for (var i in args) {
+  //   log('arg '+i)
+  //   log( typeof args[i] == 'function' ? args[i].toString() : args[i])
+  // }
 
   return fn.apply(this, args)
 }
