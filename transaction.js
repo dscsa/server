@@ -224,10 +224,11 @@ exports.post = function* () {
   this.body = transaction
 }
 
-//TODO enforce drug consistency on every save?
 exports.put = function* () {
-  let transaction = yield this.http.body
-  yield this.http('transaction/'+transaction._id, true).body(transaction)
+  this.body = yield this.http.body
+  defaults(this.body)
+  let save = yield this.http('transaction/'+this.body._id).body(this.body)
+  this.body._rev = save.rev
 }
 
 //TODO enforce drug consistency on every save?

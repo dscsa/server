@@ -134,11 +134,11 @@ exports.post = function* () {
 }
 
 exports.put = function* () {
-  let drug = yield this.http.body
-  defaults(drug)
-  let save = yield this.http.put().body(drug)
-
-  yield updateTransactions.call(this, drug)
+  this.body = yield this.http.body
+  defaults(this.body )
+  let save = yield this.http('drug/'+this.body._id).body(this.body)
+  this.body._rev = save.rev
+  yield updateTransactions.call(this, this.body)
 }
 
 exports.bulk_docs = function* () {
@@ -314,7 +314,6 @@ function *updateTransactions(drug) {
 
     //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
     this.http.put('transaction/'+transaction._id).headers({authorization}).body(transaction)
-    .then(res => console.log(res))
     .catch(err => console.log(err))
   }
 }
