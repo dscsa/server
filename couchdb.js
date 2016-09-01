@@ -63,7 +63,7 @@ exports.filter = function(db, ddoc, filter) {
 }
 
 exports.show = function(db, ddoc, show) {
-  return id => `${name}/_design/${ddoc}/_show/${show}/${id}`
+  return id => `${db}/_design/${ddoc}/_show/${show}/${id}`
 }
 
 exports.ensure = function(prefix, newDoc, oldDoc) {
