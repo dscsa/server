@@ -9,7 +9,7 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, ne
   ensure = ensure('user', newDoc, oldDoc)
 
   //Required
-  ensure('_id').notNull.assert(_id)
+  ensure('_id').notNull.assert(id)
   ensure('email').notNull.regex(/[\w._]{2,}@\w{3,}\.(com|org|net|gov)/)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('name.first').notNull.isString
