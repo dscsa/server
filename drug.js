@@ -4,7 +4,6 @@ let crypto  = require('crypto')
 let couchdb = require('./couchdb')
 let secret  = require('../../keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
-let transaction   = require('./transaction')
 
 exports.validate_doc_update = couchdb.inject(couchdb.ensure, generic, function(ensure, generic, newDoc, oldDoc, userCtx) {
 
@@ -292,6 +291,7 @@ function *getGoodrx(drug) {
 }
 
 //Get all transactins using this drug so we can update denormalized database
+let transaction = require('./transaction') //this creates a circular reference with drugs so cannot be included at top with other requires
 function *updateTransactions(drug) {
   //TODO don't do this if drug.form and drug.generics were not changed
   let transactions = yield this.http.get(transaction.view.drugs(drug._id))

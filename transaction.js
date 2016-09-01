@@ -1,11 +1,15 @@
 "use strict"
-let drugs = require('./drug')
+let drugs   = require('./drug')
 let couchdb = require('./couchdb')
 
-exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, newDoc, oldDoc, userCtx) {
+exports.validate_doc_update = couchdb.inject(couchdb.ensure, drugs.generic, function(ensure, generic, newDoc, oldDoc, userCtx) {
 
   // if ( ! userCtx.roles[0])
   //   throw({unauthorized:'You must be logged in to create or modify a transaction'})
+
+  log('generic')
+  log( typeof generic == 'function' ? generic.toString() : generic)
+
   var id = /^[a-z0-9]{7}$/
   ensure = ensure('transaction', newDoc, oldDoc)
 
