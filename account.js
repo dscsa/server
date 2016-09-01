@@ -3,6 +3,7 @@ let couchdb = require('./couchdb')
 
 exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, newDoc, oldDoc, userCtx) {
 
+  var id = /^[a-z0-9]{7}$/
   ensure = ensure('account', newDoc, oldDoc)
 
   //Required
@@ -19,7 +20,6 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, ne
   //Optional
   ensure('ordered').isObject
 
-  var id = /^[a-z0-9]{7}$/
   function _id(val) {
     if ( ! id.test(val) || (newDoc._rev && userCtx.roles[0] != val && userCtx.roles[0] != '_admin'))
       return 'can only be modified by one of its users'
