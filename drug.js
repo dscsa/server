@@ -110,6 +110,8 @@ exports.updatePrice = function* (drug) {
   drug.price.updatedAt = new Date().toJSON()
 
   yield this.http.put('drug/'+drug._id).body(drug)
+
+  return true //let others now that the drug was updated
 }
 
 exports.bulk_get = function* (id) {
@@ -121,12 +123,14 @@ exports.post = function* () {
   let body = yield this.http.body
 
   if (typeof body != 'object' || Array.isArray(body))
+  if (typeof drug != 'object' || Array.isArray(drug))
     this.throw(422, 'drug must be an object')
 
   defaults(body)
+  let save = yield exports.updatePrice.call(this, drug)
 
-  yield exports.updatePrice.call(this, body)
-  yield this.http.put('drug/'+drug._id).body(body)
+  if ( ! save)
+    yield this.http.put('drug/'+drug._id).body(drug)
 
   //Return the drug with updated pricing and the new _rev
   this.body   = yield this.http.get('drug/'+body._id)
