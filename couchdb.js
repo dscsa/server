@@ -72,10 +72,6 @@ exports.show = function(db, ddoc, show) {
 exports.ensure = function(prefix, newDoc, oldDoc) {
   return function(path) {
 
-    //Do not validate local or deleted documents
-    if (newDoc._id.slice(0, 7) == '_local/' || newDoc._deleted)
-      return api
-
     function extract(doc) {
       var vals = [doc]
       var keys = path.split('.')
@@ -104,7 +100,12 @@ exports.ensure = function(prefix, newDoc, oldDoc) {
       return vals
     }
 
-    var values = extract(newDoc)
+    function isNull(val) {
+      return val == null || val === ''
+    }
+
+    //Do not validate local or deleted documents
+    var values = newDoc._id.slice(0, 7) == '_local/' || newDoc._deleted ? [] : extract(newDoc)
 
     var api = {
       assert:function(callback) {
@@ -118,56 +119,56 @@ exports.ensure = function(prefix, newDoc, oldDoc) {
       },
       regex:function(regex) {
         return api.assert(function(val) {
-          return val == null || regex.test(val) || 'must match regex '+regex
+          return isNull(val) || regex.test(val) || 'must match regex '+regex
         })
       },
       length:function(min, max) {
         return api.assert(function(val) {
           if (max === undefined) max = min
-          return val == null || (val.length >= min && val.length <= max) || "must have a length between "+min+" and "+max
+          return isNull(val) || (val.length >= min && val.length <= max) || "must have a length between "+min+" and "+max
         })
       }
     }
 
     api.__defineGetter__('notNull', function() {
       return api.assert(function(val) {
-        return val != null || 'cannot be null or undefined'
+        return ! isNull(val) || 'cannot be null or undefined'
       })
     })
 
     api.__defineGetter__('isNumber', function() {
       return api.assert(function(val) {
-        return val == null || typeof val == 'number' || 'must be a number'
+        return isNull(val) || typeof val == 'number' || 'must be a number'
       })
     })
 
     api.__defineGetter__('isString', function() {
       return api.assert(function(val) {
-        return val == null || typeof val == 'string' || 'must be a string'
+        return isNull(val) || typeof val == 'string' || 'must be a string'
       })
     })
 
     api.__defineGetter__('isObject', function() {
       return api.assert(function(val) {
-        return typeof val == 'object' && ! isArray(val) || 'must be an object'
+        return isNull(val) || typeof val == 'object' && ! isArray(val) || 'must be an object'
       })
     })
 
     api.__defineGetter__('isArray', function() {
       return api.assert(function(val) {
-        return val == null || isArray(val) || 'must be an array'
+        return isNull(val) || isArray(val) || 'must be an array'
       })
     })
 
     api.__defineGetter__('isDate', function() {
       return api.assert(function(val) {
-        return val == null || val == new Date(val).toJSON() || 'must be a valid date formatted as a JSON string'
+        return isNull(val) || val == new Date(val).toJSON() || 'must be a valid date formatted as a JSON string'
       })
     })
 
     api.__defineGetter__('notChanged', function() {
 
-      if ( ! oldDoc) return api
+      if (! oldDoc) return api
 
       var oldVals = extract(oldDoc)
 
