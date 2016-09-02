@@ -6,10 +6,6 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, drugs.generic, func
 
   // if ( ! userCtx.roles[0])
   //   throw({unauthorized:'You must be logged in to create or modify a transaction'})
-
-  log('generic')
-  log( typeof generic == 'function' ? generic.toString() : generic)
-
   var id = /^[a-z0-9]{7}$/
   ensure = ensure('transaction', newDoc, oldDoc)
 
