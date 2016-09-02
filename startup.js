@@ -34,7 +34,7 @@ function *addDesignDocs (name) {
     db.show[showName] = couchdb.show(name, 'auth', showName)
   }
 
-  let design = yield http.get(name+'/_design/auth').headers({authorization}).catch(_ => console.log('Confirm that CouchDB is running'))
+  let design = yield http.get(name+'/_design/auth').headers({authorization}).catch(err => console.log('Confirm that CouchDB is running '+err))
 
   yield http.put(name+'/_design/auth').headers({authorization}).body({
     _rev:design._rev,
