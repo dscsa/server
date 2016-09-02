@@ -125,6 +125,7 @@ exports.view = {
   },
 
   //For inventory search.
+  //TODO get rid of this generic function
   inventoryGeneric(doc) {
     function name(generic) {
       return generic.name+" "+generic.strength
@@ -135,7 +136,7 @@ exports.view = {
     }
 
     if ((doc.next || []).reduce(sum, 0) < doc.qty.to || doc.qty.from)//inventory only
-      doc.verifiedAt && emit(doc.drug.generic || (doc.drug.generics.map(name).join(', ')+' '+doc.drug.form).replace(/ Capsule| Tablet/, ''))
+      doc.verifiedAt && emit(doc.drug.generic || (doc.drug.generics.map(name).join(', ')+' '+doc.drug.form).replace(/ Capsule| Tablet/, '').replace(/  /g, ' '))
   },
 
   //For inventory "box" search.

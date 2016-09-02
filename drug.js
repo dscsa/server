@@ -189,7 +189,7 @@ function generic(drug) {
     return generic.name+" "+generic.strength
   }
 
-  return (drug.generics.map(concat).join(', ')+' '+drug.form).replace(/ Capsule| Tablet/, '')
+  return (drug.generics.map(concat).join(', ')+' '+drug.form).replace(/ Capsule| Tablet/, '').replace(/  /g, ' ')
 }
 
 function defaults(body) {
