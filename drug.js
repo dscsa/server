@@ -105,11 +105,17 @@ exports.updatePrice = function* (drug) {
   //TODO destructuring
   let prices = yield [getNadac.call(this, drug), getGoodrx.call(this, drug)]
 
+  console.log('Updated prices for', drug._id, 'are nadac', prices[0], 'and goodrx', prices[1])
   drug.price.nadac  = prices[0] || drug.price.nadac
   drug.price.goodrx = prices[1] || drug.price.goodrx
   drug.price.updatedAt = new Date().toJSON()
 
-  yield this.http.put('drug/'+drug._id).body(drug)
+  try {
+    var res = yield this.http.put('drug/'+drug._id).body(drug)
+  }
+  catch (err) {
+    console.log('Error updating drug price!', err, 'drug/'+drug._id, this.status, this.message, res, drug)
+  }
 
   return true //let others now that the drug was updated
 }
@@ -139,7 +145,7 @@ exports.post = function* () {
 
 exports.put = function* () {
   this.body = yield this.http.body
-  defaults(this.body )
+  defaults(this.body)
   let save = yield this.http('drug/'+this.body._id).body(this.body)
   this.body._rev = save.rev
   yield updateTransactions.call(this, this.body)
@@ -150,7 +156,6 @@ exports.bulk_docs = function* () {
   let body = yield this.http.body
   //match timeout in dscsa-pouch
   this.req.setTimeout(body.docs.length * 1000)
-  console.log('drugs.bulk_docs timeout', body.docs.length * 1000)
 
   if (body.new_edits) //Pouch uses new_edits == true for local docs.
     return yield this.http(null, true).body(body)
@@ -158,14 +163,17 @@ exports.bulk_docs = function* () {
   for (let drug of body.docs) defaults(drug)
 
   this.body = yield this.http().body(body)
+
   let chain = Promise.resolve()
 
   for (let i in body.docs) {
     let drug  = body.docs[i]
     let _rev  = drug._rev
 
-    if (this.body[i]) //if new_edits == true for replication this.body will be an empty array. http://wiki.apache.org/couchdb/HTTP_Bulk_Document_API#Posting_Existing_Revisions
+    if (this.body[i] && this.body[i].rev) //if new_edits == true for replication this.body will be an empty array. http://wiki.apache.org/couchdb/HTTP_Bulk_Document_API#Posting_Existing_Revisions
       drug._rev = this.body[i].rev
+    else
+      console.log('no _rev', i, body.docs[i], this.body[i])
 
     //Don't wait for these updates since they could take a while.  Existing drugs needs their denormalized data updated. New drugs need current prices set.
     //If done in parrallel for a large number of transactions updates CouchDB will crash with ENFILE. https://issues.apache.org/jira/browse/COUCHDB-180.
@@ -210,51 +218,30 @@ function defaults(body) {
 function *getNadac(drug) {
   //Datbase not always up to date so can't always do last week.  On 2016-06-18 last as_of_date was 2016-05-11.
   let date = new Date(new Date().getFullYear(), 0, 1).toJSON().slice(0, -1)
-  let url  = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=starts_with(ndc,"${drug.ndc9}") AND as_of_date>"${date}"`
+  let url  = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date>"${date}"`
   let prices = ""
 
   try {
-      prices = yield this.http.get(url).headers({})
-      if (prices.length){ //API returns a status of 200 even on failure ;-(
-        console.log("Found NADAC with NDC", drug._id)
-      } else {
-        console.log("A matching price could not be found with NDC, trying with Description", drug._id)
-        throw err
-      }
+    prices = yield this.http.get(`${url} AND starts_with(ndc,"${drug.ndc9}")`).headers({})
+    if ( ! prices.length) //API returns a status of 200 even on failure ;-(
+      throw 'No NADAC price found for an ndc starting with '+drug.ndc9
   } catch (err) {
-      //This helper function will return a string with all generic names trimed to first 3 chars to work with NADAC (arbitrary #)
-      //search, and then concatenated with a % sign to serve as a wildcard.
-      function formatGenericNames(){
-        return drug.generics.map(generic =>
-          generic.name.toUpperCase().slice(0,3)).join('%')
-      }
 
-      //This helper function returns a string that concatenates the strengths with % to serve as a wildcard
-      //If there is a .x strenght, then a 0 must be appended in order to have 0.x for search to work.
-      //Uses a RegEx to take only the numbers of strength, disregarding unit of measure.
-      function formatStrengths(){
-        let concatenatedRes = "" //does the same as mapping, but broken up to allow for a bit more control
-        for(var i = 0; i < drug.generics.length; i++){
-          let raw = ((drug.generics[i].strength[0] == '.') ? ('0'.concat(drug.generics[i].strength)) : drug.generics[i].strength)
-          concatenatedRes += raw.replace(/[^0-9.]/g, '')  //takes only the numerical strength
-          concatenatedRes += "%"
-        }
-        return concatenatedRes.slice(0,-1)
+      for (generic of drug.generics) {
+        let strength = generic.strength.replace(/[^0-9.]/g, '%')
+        let name = drug.generics.length > 1 ? '%' : ''
+        name += generic.name.toUpperCase().slice(0,4)
+        url += ` AND ndc_description like "${name}%${strength}%"`.replace(/%+/g, '%25') //In order to make sure Chrome recognizes as % symbol, necessary to represent wildcard in api
       }
 
       try{
-        url = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=ndc_description like '%${formatGenericNames()}%${formatStrengths()}%' AND as_of_date>"${date}"`
-        url = url.replace(/%/g, '%25')    //In order to make sure Chrome recognizes as % symbol, necessary to represent wildcard in api
-        console.log(url)
         prices = yield this.http.get(url).headers({})
 
-        if( ! prices.length) return   //When the price is not found but no error is thrown
-
-        console.log("Successfully updating NADAC pricing with ndc_description", drug._id)
+        if( ! prices.length)  //When the price is not found but no error is thrown
+          throw err+' or by name '+url
 
       } catch (err) {
-        console.log("Error, Nadac could not be updated", drug._id, drug.generics, JSON.stringify(err, null, " "), url)
-        return
+        return console.log(err, this.status, this.message, prices, drug._id, drug.generic)
       }
   }
 
@@ -264,9 +251,9 @@ function *getNadac(drug) {
   if(response.pricing_unit == "ML"){ //a component of the NADAC response that described unit of price ("each" or "ml")
     let numberOfML = response.ndc_description.match(/\/([0-9.]+)[^\/]*$/) //looks for the denominator in strength to determine per unit cost, not per ml
     if(numberOfML){  //responds null if there is no denominator value in strength
-      let total = (parseFloat(numberOfML[1]) * parseFloat(response.nadac_per_unit)).toFixed(4) //essentialy number of ml times price per ml
+      let total = +numberOfML[1] * +response.nadac_per_unit //essentialy number of ml times price per ml
       console.log("Converted from price/ml to price/unit of: ", total)
-      return total
+      return +total.toFixed(4)
     }
   }
 
@@ -286,27 +273,28 @@ function *getGoodrx(drug) {
   let fullName = drug.brand || drug.generics.map(generic => generic.name).join('-') //.split(' ')[0]
   let strength = drug.generics.map(generic => generic.strength.replace(' ', '')).join('-')
   let price = {data:{}}
+  let candidateUrl, fullNameUrl = makeUrl(fullName, strength)
+  let message = ''
   try {
-    let url = makeUrl(fullName, strength)
-    price = yield this.http.get(url).headers({})
-    console.log('GoodRx price updated by full name strategy', drug._id)
+    price = yield this.http.get(fullNameUrl).headers({})
   } catch(err) {
     try {
-      if( ! err.errors || ! err.errors[0].candidates){ //then there's no fair price drug so this is undefined
-          console.log("GoodRx responded that there is no fair price drug")
-          return
-      }
-      let url = makeUrl(err.errors[0].candidates[0], strength)
-      price = yield this.http.get(url).headers({})
-      console.log('GoodRx price updated by alternate suggestions', drug._id)
+      if( ! err.errors || ! err.errors[0].candidates) //then there's no fair price drug so this is undefined
+        return console.log("GoodRx responded that there is no fair price drug")
+
+      candidateUrl = makeUrl(err.errors[0].candidates[0], strength)
+      price = yield this.http.get(candidateUrl).headers({})
+      console.log("GoodRx substituting a candidate", err.errors[0].candidates[0], 'for', drug._id, drug.generic)
     } catch(err2) {
       //409 error means qs not properly encoded, 400 means missing drug
-      console.log("Drug's goodrx price could not be updated", drug._id, drug.generics, makeUrl(fullName, strength), makeUrl(err.errors[0].candidates[0], strength))
-      return
+      return console.log("GoodRx price could not be updated", this.status, this.message, price, drug._id, drug.generics, fullNameUrl, candidateUrl)
     }
   }
 
-  return price.data.quantity ? +(price.data.price/price.data.quantity).toFixed(4) : null
+  if ( ! price.data.quantity)
+    return console.log('GoodRx did not return a quantity', price) || null
+
+  return +(price.data.price/price.data.quantity).toFixed(4)
 }
 
 //Get all transactins using this drug so we can update denormalized database
