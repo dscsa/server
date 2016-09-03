@@ -203,7 +203,7 @@ function generic(drug) {
 
 function defaults(body) {
   body.createdAt  = body.createdAt || new Date().toJSON()
-  body.generics   = body.generics.sort((a, b) => a.name - b.name)
+  body.generics   = body.generics.sort((a, b) => a.name.localeCompare(b.name))
   body.generic    = exports.generic(body)
 
   let labelerCode = ('00000'+body._id.split('-')[0]).slice(-5)
