@@ -59,7 +59,6 @@ function init(defaults, ctx) {
 
       body(body) {
         config.body = body
-        delete config.headers['content-length'] //TODO only do this if body actually changed
         return this
       },
 
@@ -67,10 +66,14 @@ function init(defaults, ctx) {
         return Promise.all([config.headers, config.body])
         .then(all => {
 
-          config.headers = all[0]
+
+          config.headers = JSON.parse(JSON.stringify(all[0]))
           config.body    = all[1]
 
-          if (config.headers) {
+
+          //Make sure not a reference to response headers otherwise background tasks like
+          //drugs.updatePrice will throw an headers already sent error once the response it set
+          if (config.headers && ! ctx.headerSent) {
             delete config.headers['content-length']
             config.headers.accept = 'application/json'  //TODO is there a better way to not get multipart messages from couchdb
           }
