@@ -3,6 +3,7 @@ let couchdb = require('./couchdb')
 
 exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, newDoc, oldDoc, userCtx) {
 
+  var id = /^[a-z0-9]{7}$/
   ensure = ensure('shipment', newDoc, oldDoc)
 
   //Required
@@ -17,7 +18,6 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, ne
   ensure('receivedAt').isDate
   ensure('verifiedAt').isDate
 
-  var id = /^[a-z0-9]{7}$/
   function _id(val) {
 
     val = val.split('.')
