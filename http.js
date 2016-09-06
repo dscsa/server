@@ -75,6 +75,7 @@ function init(defaults, ctx) {
           //drugs.updatePrice will throw an headers already sent error once the response it set
           if (config.headers && ! ctx.headerSent) {
             delete config.headers['content-length']
+            config.headers['content-type'] = 'application/json' //seemed to be needed for _session login
             config.headers.accept = 'application/json'  //TODO is there a better way to not get multipart messages from couchdb
           }
 
