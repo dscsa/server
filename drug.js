@@ -197,7 +197,7 @@ function generic(drug) {
   function concat(generic) {
     return generic.name+" "+generic.strength
   }
-
+  if ( ! drug.generics) console.log('no drug.generics', drug)
   return (drug.generics.map(concat).join(', ')+' '+drug.form).replace(/ Capsule| Tablet/, '').replace(/ ( |,)/g, "$1")
 }
 
