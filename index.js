@@ -73,6 +73,7 @@ function* all_docs(db) {
 
 app.use(function* (next) {
   //Sugar
+  this.path = decodeURIComponent(this.path)
   this.user = JSON.parse(this.cookies.get('AuthUser') || 'null')
 
   //Rather setting up CouchDB for CORS, it's easier & more secure to do here
