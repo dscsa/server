@@ -1,10 +1,14 @@
 "use strict"
 let couchdb = require('./couchdb')
 
-exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, newDoc, oldDoc, userCtx) {
+exports.shared = {
+  ensure:couchdb.ensure,
+}
+
+exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   var id = /^[a-z0-9]{7}$/
-  ensure = ensure('shipment', newDoc, oldDoc)
+  var ensure = require('ensure')('shipment', newDoc, oldDoc)
 
   //Required
   ensure('_id').isString.assert(_id)
@@ -33,7 +37,7 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, function(ensure, ne
 
     return 'must be in the format <account.from._id>.<account.to._id>.<_id>'
   }
-})
+}
 
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
 //them with a function that takes a key and returns the couchdb url needed to call them.

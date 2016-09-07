@@ -1,38 +1,18 @@
 "use strict"
 
-function injector() {
-  var args = [].slice.call(arguments)
+exports.string = function(fn) {
+  fn = fn.toString()
+  fn = fn.startsWith('function') ? fn : 'function '+fn
 
-
-  args.unshift($inject)
-
-
-  //Extract the actual function AND remove it from args array
-  var fn = args.splice(args.length - arguments.length - 1, 1)[0]
-
-  // for (var i in args) {
-  //   log('arg '+i)
-  //   log( typeof args[i] == 'function' ? args[i].toString() : args[i])
-  // }
-
-  return fn.apply(this, args)
-}
-
-exports.inject = function() {
-
-  var $inject = []
-  for (var fn of arguments) {
-    fn = fn.toString()
-    fn = fn.startsWith('function') ? fn : 'function '+fn
-    $inject.push(fn)
-  }
-
-  //some stupid spidermonkey expression doesn't evaluate to function unless surrounded by ()
-  return '('+injector.toString().replace('$inject', $inject)+')'
+  //Regarding views/lib placement: http://couchdb-13.readthedocs.io/en/latest/1.1/commonjs/
+  fn = fn.replace(/require\(("|')/g, 'require($1views/lib/')
+  
+  //stupid spidermonkey doesn't evaluate function unless surrounded by ()
+  return '('+fn+')'
 }
 
 exports.lists = {
-  all:exports.inject(function(head, req) {
+  all:function(head, req) {
     send('[')
     var row = getRow()
     if (row) {
@@ -41,7 +21,7 @@ exports.lists = {
         send(','+toJSON(row.doc))
     }
     send(']')
-  })
+  }
 }
 
 exports.list = function(db, ddoc, list, view) {

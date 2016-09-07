@@ -2,12 +2,26 @@
 let drugs   = require('./drug')
 let couchdb = require('./couchdb')
 
-exports.validate_doc_update = couchdb.inject(couchdb.ensure, drugs.generic, function(ensure, generic, newDoc, oldDoc, userCtx) {
+exports.shared = {
+  ensure:couchdb.ensure,
+  generic:drugs.generic,
+  sumNext(doc) {
+    function sum(sum, next) {
+      return sum + next.qty
+    }
+
+    return doc.next.reduce(sum, 0)
+  }
+}
+
+exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   // if ( ! userCtx.roles[0])
   //   throw({unauthorized:'You must be logged in to create or modify a transaction'})
   var id = /^[a-z0-9]{7}$/
-  ensure = ensure('transaction', newDoc, oldDoc)
+  var ensure  = require('ensure')('transaction', newDoc, oldDoc)
+  var generic = require('generic')
+  var sumNext = require('sumNext')
 
   //Required
   ensure('_id').notNull.assert(id)
@@ -38,16 +52,12 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, drugs.generic, func
     return val == generic(newDoc.drug) || 'drug.generic does not match drug.generics and drug.form'
   }
 
-  function sum(sum, next) {
-    return sum + next.qty
-  }
-
   //TODO next.transaction || next.dispensed must exist (and eventually have _id)
   function next(val) {
     if (val.length && ! newDoc.verifiedAt)
       return 'cannot contain any values unless transaction.verifiedAt is set'
 
-    var nextQty = val.reduce(sum, 0)
+    var nextQty = sumNext(newDoc)
     var currQty = newDoc.qty.to || newDoc.qty.from
     if (nextQty > currQty)
       return 'sum of next quantities, '+nextQty+', cannot be larger than newDoc.qty.to || newDoc.qty.from, '+currQty
@@ -73,7 +83,7 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, drugs.generic, func
 
     return 'must be in the format "account.from._id" or "account.from._id"."account.to._id"."_id"'
   }
-})
+}
 
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
 //them with a function that takes a key and returns the couchdb url needed to call them.
@@ -127,37 +137,25 @@ exports.view = {
   //For inventory search.
   //TODO get rid of this generic function
   inventoryGeneric(doc) {
-    function name(generic) {
-      return generic.name+" "+generic.strength
-    }
-
-    function sum(sum, next) {
-      return sum + next.qty
-    }
-
-    if ((doc.next || []).reduce(sum, 0) < doc.qty.to || doc.qty.from)//inventory only
+    log(doc._id)
+    var sumNext = require('sumNext')
+    log(sumNext(doc)+' < '+(doc.qty.to || doc.qty.from))
+    log(doc.verifiedAt)
+    if (sumNext(doc) < doc.qty.to || doc.qty.from)//inventory only
       doc.verifiedAt && emit(doc.drug.generic)
   },
 
   //For inventory "box" search.
   inventoryLocation(doc) {
-
-    function sum(sum, next) {
-      return sum + next.qty
-    }
-
-    if ((doc.next || []).reduce(sum, 0) < doc.qty.to || doc.qty.from)//inventory only
+    var sumNext = require('sumNext')
+    if (sumNext(doc) < doc.qty.to || doc.qty.from)//inventory only
       doc.verifiedAt && emit(doc.location)
   },
 
   //For inventory expiration search.
   inventoryExp(doc) {
-
-    function sum(sum, next) {
-      return sum + next.qty
-    }
-
-    if ((doc.next || []).reduce(sum, 0) < doc.qty.to || doc.qty.from)//inventory only
+    var sumNext = require('sumNext')
+    if (sumNext(doc) < doc.qty.to || doc.qty.from)//inventory only
       doc.verifiedAt && emit(doc.exp.to || doc.exp.from)
   },
 

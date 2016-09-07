@@ -1,15 +1,21 @@
 "use strict"
 let co      = require('../co')
 let crypto  = require('crypto')
-let couchdb = require('./couchdb')
 let secret  = require('../../keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
+let couchdb = require('./couchdb')
 
-exports.validate_doc_update = couchdb.inject(couchdb.ensure, generic, function(ensure, generic, newDoc, oldDoc, userCtx) {
+exports.shared = {
+  ensure:couchdb.ensure,
+  generic:generic
+}
+
+exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
 
   // if ( ! userCtx.roles[0])
   //   throw({unauthorized:'You must be logged in to create or modify a drug'})
-  ensure = ensure('drug', newDoc, oldDoc)
+  var ensure  = require('ensure')('drug', newDoc, oldDoc)
+  var generic = require('generic')
 
   //Required
   ensure('_id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
@@ -40,7 +46,7 @@ exports.validate_doc_update = couchdb.inject(couchdb.ensure, generic, function(e
   function ndc9(val) {
     return val == ('00000'+newDoc._id.split('-')[0]).slice(-5)+('0000'+newDoc._id.split('-')[1]).slice(-4) || 'must be same as _id with 5 digit labeler code and 4 digit product code, no "-"'
   }
-})
+}
 
 //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
 //them with a function that takes a key and returns the couchdb url needed to call them.
@@ -115,6 +121,7 @@ exports.updatePrice = function* (drug) {
   }
   catch (err) {
     console.log('Error updating drug price!', err, 'drug/'+drug._id, this.status, this.message, res, drug)
+    return false
   }
 
   return true //let others now that the drug was updated
