@@ -6,13 +6,16 @@ let extname     = require('path').extname
 let app         = require('koa')()
 let route       = require('koa-route')
 let http        = require('./http')
-let drug        = require('./drug')
-let account     = require('./account')
-let user        = require('./user')
-let shipment    = require('./shipment')
-let transaction = require('./transaction')
 let project     = require('../client/aurelia_project/aurelia')
 let assets      = project.build.targets[0].output
+
+let resources = {
+  drug          : require('./drug'),
+  account       : require('./account'),
+  user          : require('./user'),
+  shipment      : require('./shipment'),
+  transaction   :require('./transaction'),
+}
 
 function r(url, options) {
 
@@ -49,7 +52,7 @@ function r(url, options) {
 }
 
 /*
-//Resource Documentation Guide:
+//resources Documentation Guide:
 //End Point
 //Request Headers
 //Success Response Headers
@@ -63,12 +66,62 @@ function r(url, options) {
 
 app.use(http({hostname:'localhost', port: 5984, middleware:'http'}))
 
+//TODO remove this hack once no longer needed
+r('/goodrx/:ndc9/:name')
+  .get(function*(ndc9, generics) {
+    console.log(generics, JSON.parse(generics))
+    this.body = yield resources.drug.goodrx.call(this, {ndc9, generics:JSON.parse(generics)})
+  })
+
 function* proxy() {
   yield this.http(this.path, true)
 }
 
+//This can be a get or a post with specific keys in body.  If
+//keys in body we cannot specify start/end keys in querystring
 function* all_docs(db) {
-  yield this.http(db+'/_design/auth/_view/authorized', true)
+  let url = `/${db}/_design/auth/_view/id`
+
+  if (this.method == 'GET')
+    url += `?startkey=["${this.user.account._id}"]&endkey=["${this.user.account._id}", "\uffff"]`
+
+  yield this.http(url, true)
+}
+
+function* changes(db) {
+  this.req.setTimeout(20000) //match timeout in dscsa-pouch
+  let url = resources[db].filter.authorized(this.path)
+  yield this.http(url, true)
+}
+
+function* bulk_docs(db) {
+  yield resources[db].bulk_docs.call(this)
+}
+
+function* bulk_get(id) {
+  this.status = 400
+}
+
+function* get(db) {
+  yield resources[db].get.call(this)
+}
+
+function* post(db) {
+  yield resources[db].post.call(this)
+}
+
+function* put(db) {
+  yield resources[db].put.call(this)
+}
+
+function* del(db) {
+  yield resources[db].delete.call(this)
+}
+
+function* getAsset(file) {
+  this.type = extname(this.path)
+  let path = project.paths['/'+assets+'/'+file]
+  this.body = fs.createReadStream(__dirname + (path ? this.path.replace(assets+'/'+file, path.slice(3)) : '/../client'+this.path))
 }
 
 app.use(function* (next) {
@@ -109,13 +162,13 @@ app.use(function *(next) {
   }
 })
 
-// CRUD Enpoints (common accross resources)
+// CRUD Enpoints (common accross resourcess)
 // GET    users?selector={"email":"adam@sirum.org"} || users?selector={"_id":"abcdef"} || selector={"name.first":"adam"}
 // POST   users
 // PUT    users {_id:abcdef, _rev:abcdef}
 // DELETE users {_id:abcdef, _rev:abcdef}
 
-//Custom endpoints (specific to this resource)
+//Custom endpoints (specific to this resources)
 // POST   users/session        {email:adam@sirum.org, password}
 // POST   users/email          {email:adam@sirum.org, subject, message, attachment}
 
@@ -126,35 +179,39 @@ app.use(function *(next) {
 // POST   users/_revs_diff
 // POST   users/_changes
 
-//Client
-//this.db.users.get({email:adam@sirum.org})
-//this.db.users.post({})
-//this.db.users.put({})
-//this.db.users.delete({})
-//this.db.users.session.post({})
-//this.db.users.email.post({})
+app.use(function *(next) {
+  let role = this.user.account._id
 
-r('/goodrx/:ndc9/:name')
-  .get(function*(ndc9, generics) {
-    console.log(generics, JSON.parse(generics))
-    this.body = yield drug.goodrx.call(this, {ndc9, generics:JSON.parse(generics)})
-  })
+  function get(list, proxy) {
+    return function *(start, end) {
+      if (end === true) end = start+'\uffff'
+      yield this.http.get(list(start && [role, start], end && [role, end]), proxy)
+    }
+  }
 
-//Undocumented routes needed on all databases for PouchDB replication
+  for (resource in resources) {
+    this[resource] = resources[resource]
+    this[resource].list = {}
+    for (let view in resources.drug.view) {
+      let list = couchdb.list(resource, 'auth', 'all', view)
+      this[resource].list[view]         = get(list, false)
+      this[resource].list[view+'Proxy'] = get(list, true)
+    }
+  }
+})
+
+//Serve the application and assets
+r('/'+assets+'/:file', {end:false})
+  .get(getAsset)
+
+//CouchDB/PouchDB Replication API
 r('/')
   .get(function*() {
     if(this.headers.origin || this.headers.referer) //Not sure why pouchdb checks this.  Shows welcome UUID & Version
       return yield proxy.call(this)
 
-    this.type = 'html'
-    this.body = fs.createReadStream(__dirname + '/../client/'+project.paths.root+'/'+project.paths['/']+'/index.html')
-  })
-
-r('/'+assets+'/:file', {end:false})
-  .get(function*(file) {
-    this.type = extname(this.path)
-    let path = project.paths['/'+assets+'/'+file]
-    this.body = fs.createReadStream(__dirname + (path ? this.path.replace(assets+'/'+file, path.slice(3)) : '/../client'+this.path))
+    this.path = '/'+assets+'/index.html'
+    yield assets.call(this)
   })
 
 r('/:db/', {strict:true}) //Shows DB info including update_seq#
@@ -170,58 +227,15 @@ r('/:db/_revs_diff')      //Not sure why PouchDB needs this
 r('/:db/_local/:doc')
   .get(proxy)
   .put(proxy)
-//post('/:db/_bulk_docs', proxy)          //Allow PouchDB to make bulk edits
-//get('/users/_design/:doc', users.proxy) //TODO can I avoid sharing design docs with browser?
-//get('/:db/_design/:doc', proxy)        //TODO can I avoid sharing design docs with browser?
 
+r('/:db/_bulk_docs')    //Update denormalized transactions when drug is updated
+  .post(bulk_docs)
 
+r('/:db/_changes')      //Lets PouchDB watch db using longpolling
+  .get(changes)
 
-//Drugs Resource Endpoint
-r('/drug/_bulk_docs')    //Update denormalized transactions when drug is updated
-  .post(drug.bulk_docs)
-
-r('/drug/_changes')      //Lets PouchDB watch db using longpolling
-  .get(drug.changes)
-
-r('/drug/_bulk_get')     //Allow PouchDB to make bulk edits
-  .post(drug.bulk_get)
-
-//Account Resource Endpoint
-r('/account/_bulk_docs')
-  .post(account.bulk_docs)
-
-r('/account/_changes')
-  .get(account.changes)              //Lets PouchDB watch db using longpolling
-
-r('/account/_bulk_get')
-  .post(account.bulk_get)            //Allow PouchDB to make bulk edits
-
-r('/user/_bulk_docs')
-  .post(user.bulk_docs)
-
-r('/user/_changes')
-  .get(user.changes)    //Lets PouchDB watch db using longpolling
-
-r('/user/_bulk_get')
-  .post(user.bulk_get)            //Allow PouchDB to make bulk edits
-
-r('/shipment/_bulk_docs')
-  .post(shipment.bulk_docs)
-
-r('/shipment/_changes')
-  .get(shipment.changes)       //Lets PouchDB watch db using longpolling
-
-r('/shipment/_bulk_get')
-  .post(shipment.bulk_get)     //Allow PouchDB to make bulk edits
-
-r('/transaction/_bulk_docs')
-  .post(transaction.bulk_docs)
-
-r('/transaction/_changes')
-  .get(transaction.changes)    //Lets PouchDB watch db using longpolling
-
-r('/transaction/_bulk_get')
-  .post(transaction.bulk_get)            //Allow PouchDB to make bulk edits
+r('/:db/_bulk_get')     //Allow PouchDB to make bulk edits
+  .post(bulk_get)
 
 //TODO remove once bulk_get is implemented so that replication no longer needs get method
 app.use(function* (next) {
@@ -242,72 +256,45 @@ app.use(function* (next) {
   yield next
 })
 
-r('/drug', {strict:true})
-  .get(drug.get)
-  .post(drug.post)
-  .put(drug.put)
-  .del(drug.delete)
-
-r('/account', {strict:true})
-  .get(account.get)
-  .post(account.post)              //List all docs in resource. Strict means no trailing slash
-  .put(account.put)
-  .del(account.delete)             //Allow user to get, modify, & delete docs
+//User API Endpoints
+r('/:db', {strict:true})
+  .get(get)
+  .post(post)
+  .put(put)
+  .del(del)
 
 r('/account/email')
-  .post(account.email)                 //Allow user to get, modify, & delete docs
+  .post(resources.account.email)                 //Allow user to get, modify, & delete docs
 
 r('/account/authorized')     //Allow user to get, modify, & delete docs
-  .get(account.authorized.get)
-  .post(account.authorized.post)
-  .del(account.authorized.delete)
-
-//User Resource Endpoint
-r('/user', {strict:true})
-  .get(user.get)        //TODO only show logged in account's users
-  .post(user.post)       //TODO only create user for logged in account
-  .put(user.put)
-  .del(user.delete)      //TODO only get, modify, & delete user for logged in account
+  .get(resources.account.authorized.get)
+  .post(resources.account.authorized.post)
+  .del(resources.account.authorized.delete)
 
 r('/user/email')
-  .post(user.email)           //TODO only get, modify, & delete user for logged in account
+  .post(resources.user.email)           //TODO only get, modify, & delete user for logged in account
 
 r('/user/session')
-  .post(user.session.post)  //Login
-  .del(user.session.delete) //Logout
-
-
-//Shipment Resource Endpoint
-r('/shipment', {strict:true})
-  .get(shipment.get)          //List all docs in resource. TODO "find" functionality in querystring
-  .post(shipment.post)
-  .put(shipment.put)
-  .del(shipment.delete)
+  .post(resources.user.session.post)  //Login
+  .del(resources.user.session.delete) //Logout
 
 r('/shipment/shipped')
-  .post(shipment.shipped)         // TODO add shipped_at date and change status to shipped
+  .post(resources.shipment.shipped)         // TODO add shipped_at date and change status to shipped
 
 r('/shipment/received')
-  .post(shipment.received)       // TODO add recieved_at date and change status to received
+  .post(resources.shipment.received)       // TODO add recieved_at date and change status to received
 
 r('/shipment/pickup')
-  .post(shipment.pickup.post)      // add pickup_at date. Allow webhook filtering based on query string ?description=tracker.updated&result.status=delivered.
-  .del(shipment.pickup.delete)     // delete pickup_at date
+  .post(resources.shipment.pickup.post)      // add pickup_at date. Allow webhook filtering based on query string ?description=tracker.updated&result.status=delivered.
+  .del(resources.shipment.pickup.delete)     // delete pickup_at date
 
 r('/shipment/manifest')
-  .get(shipment.manifest.get)    // pdf options?  if not exists then create, rather than an explicit POST method
-  .del(shipment.manifest.delete) // delete an old manifest
-
-//Transaction Resource Endpoint
-r('/transaction', {strict:true})
-  .get(transaction.get)          //List all docs in resource. Strict means no trailing slash
-  .post(transaction.post)                        //Create new record in DB with short uuid
-  .put(transaction.put)
-  .del(transaction.delete)                   //TODO replace this with a show function. Allow user to get, modify, & delete docs
+  .get(resources.shipment.manifest.get)    // pdf options?  if not exists then create, rather than an explicit POST method
+  .del(resources.shipment.manifest.delete) // delete an old manifest
 
 // r('/transaction/verified')
-//   .post(transaction.verified.post)  //New transaction created in inventory, available for further transactions
-//   .del(transaction.verified.delete) //New transaction removed from inventory, cannot be done if item has further transactions
+//   .post(resources.transaction.verified.post)  //New transaction created in inventory, available for further transactions
+//   .del(resources.transaction.verified.delete) //New transaction removed from inventory, cannot be done if item has further transactions
 
 
 //all(/on?deep.field=this&this.must.be.true.to.trigger=true)

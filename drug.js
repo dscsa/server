@@ -3,41 +3,49 @@ let co      = require('../co')
 let crypto  = require('crypto')
 let secret  = require('../../keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
-let couchdb = require('./couchdb')
 
-exports.shared = {
-  ensure:couchdb.ensure,
-  generic:generic
+exports.libs = {
+  generic:generic,
+  validDrug(prefix, newDrug, oldDrug, userCtx) {
+
+    var ensure = require('ensure')(prefix, [newDrug, oldDrug, userCtx])
+
+    ensure('_id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
+    ensure('generic').notNull.assert(validGeneric)
+    ensure('generics').notNull.isArray.length(1, 10)
+    ensure('generics.name').notNull.isString.regex(/([A-Z][0-9a-z]*\s?)+\b/)
+    ensure('generics.strength').isString.regex(/^[0-9][0-9a-z/.]+$/)
+    ensure('brand').isString.length(0, 20)
+    ensure('form').notNull.isString.regex(/([A-Z][a-z]+\s?)+\b/)
+    ensure('pkg').isString.length(0, 2).notChanged
+    ensure('price.updatedAt').notNull.isDate
+    ensure('price.goodrx').isNumber
+    ensure('price.nadac').isNumber
+
+    function validGeneric(val) {
+      return val == require('generic')(newDrug) || prefix+'.generic does not match '+prefix+'.generics and/or '+prefix+'.form'
+    }
+  }
 }
 
-exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+exports.getRoles = function(doc, reduce) {
+  //Authorize _deleted docs but not _design docs
+  if (doc._deleted || doc._id.slice(0, 7) == '_design')
+    return doc._deleted
 
-  // if ( ! userCtx.roles[0])
-  //   throw({unauthorized:'You must be logged in to create or modify a drug'})
-  var ensure  = require('ensure')('drug', newDoc, oldDoc)
-  var generic = require('generic')
+  //Everyone can access drugs
+  return reduce()
+}
 
-  //Required
-  ensure('_id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
+exports.validate = function(newDoc, oldDoc, userCtx) {
+
+  var ensure = require('ensure')('drug', arguments)
+
+  require('validDrug')('drug', newDoc, oldDoc, userCtx)
   ensure('createdAt').notNull.isDate.notChanged
-  ensure('price.updatedAt').isDate
-  ensure('generic').notNull.assert(matchesGeneric)
-  ensure('generics').notNull.isArray.length(1, 10)
-  ensure('generics.name').notNull.isString.regex(/([A-Z][0-9a-z]*\s?)+\b/)
-  ensure('generics.strength').isString.regex(/^[0-9][0-9a-z/.]+$/)
-  ensure('form').notNull.isString.regex(/([A-Z][a-z]+\s?)+\b/)
   ensure('upc').assert(upc)
   ensure('ndc9').assert(ndc9)
-
-  //Optional
-  ensure('brand').isString.length(0, 20)
   ensure('labeler').isString.length(0, 40)
-  ensure('price.goodrx').isNumber
-  ensure('price.nadac').isNumber
-
-  function matchesGeneric(val) {
-    return val == generic(newDoc) || 'drug.generic does not match drug.generics and drug.form'
-  }
 
   function upc(val) {
     return val == newDoc._id.replace('-', '') || 'must be same as _id without the "-" and no 0s for padding'
@@ -48,57 +56,27 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   }
 }
 
-//Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
-//them with a function that takes a key and returns the couchdb url needed to call them.
-exports.filter = {
-  authorized(doc, req) {
-    if(doc._id.slice(0, 7) == '_design') return
-    return true //Everyone can see all drugs except design documents
+var view = exports.view = {
+  id(doc) { //Right now this should emit everything but getRoles could change
+    require('getRoles')(doc, function(res, role) {
+      emit([role, doc._id], {rev:doc._rev})
+    })
   }
-}
-
-exports.show = {
-  authorized(doc, req) {
-    if ( ! doc) return {code:204}
-    return toJSON(req.query.open_revs ? [{ok:doc}]: doc) //Everyone can get/put/del all drugs
-  }
-}
-
-exports.view = {
-  authorized(doc) {
-    emit(doc._id, {rev:doc._rev})
-  }
-}
-
-exports.changes = function* () {
-  this.req.setTimeout(20000)
-  yield this.http(exports.filter.authorized(this.path), true)
 }
 
 //Retrieve drug and update its price if it is out of date
 exports.get = function*() {
-    let selector = JSON.parse(this.query.selector)
+  let url, selector = JSON.parse(this.query.selector)
 
-    if ( ! selector._id) return //TODO other search types
+  //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
+  if (selector._id)
+    url = this.query.open_revs ? 'drug/'+selector._id : view.id([this.user.account._id, selector._id])
 
-    this.body = yield this.http.get(exports.show.authorized(selector._id))
+  if (url)
+    this.body = yield this.http.get(url)
 
-    //show function cannot handle _deleted docs with open_revs, so handle manually here
-    //don't do pricing update even if there is an open_revs since its pouchdb not a user
-    if (this.query.open_revs && this.status == 204)
-      return yield this.http.get(this.path+'/'+selector._id, true)
-
-    if (this.query.open_revs)
-      return this.body[0].ok.generic = exports.generic(this.body[0].ok) //Not all docs have a generic name yet
-
-    this.body.generic = exports.generic(this.body)
-
+  if ( ! this.query.open_revs) //this has body in {"ok":doc} formate
     yield exports.updatePrice.call(this, this.body)
-
-    //need a "then" trigger to send request but we don't need to yield to it
-    this.http.put('drug/'+selector._id).body(this.body).catch(res => {
-      console.log('drug price could not be updated', drug, res)
-    })
 }
 
 //Exporting non-standard method, but is used by transaction.js
@@ -125,10 +103,6 @@ exports.updatePrice = function* (drug) {
   }
 
   return true //let others now that the drug was updated
-}
-
-exports.bulk_get = function* (id) {
-  this.status = 400
 }
 
 //Drug product NDC is a good natural key

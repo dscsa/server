@@ -1,4 +1,15 @@
 "use strict"
+// 
+// let http = require('./http')({hostname:'localhost', port: 5984, middleware:false})
+//
+// // Give it a getRole, views, libs, defaults, validate
+// //also add isRole, emitRole, filter,
+// //return middleware view/list functions,
+//
+// couchdb('transaction').roles(userRoles, docRoles).views(views).libs(libs).validate(validate).then(list => {
+//   //Creates Database, Design Document with Filter/Views/Libs,
+//   //returns view/list functions and proxys
+// })
 
 exports.string = function(fn) {
   fn = fn.toString()
@@ -6,7 +17,7 @@ exports.string = function(fn) {
 
   //Regarding views/lib placement: http://couchdb-13.readthedocs.io/en/latest/1.1/commonjs/
   fn = fn.replace(/require\(("|')/g, 'require($1views/lib/')
-  
+
   //stupid spidermonkey doesn't evaluate function unless surrounded by ()
   return '('+fn+')'
 }
@@ -24,6 +35,13 @@ exports.lists = {
   }
 }
 
+exports.isRole = function(doc, userCtx) {
+  getRoles = require('getRoles')
+  return getRoles(doc, function(res, role) {
+    return res || role === true || role == userCtx.roles[0] || '_admin' == userCtx.roles[0]
+  })
+}
+
 exports.list = function(db, ddoc, list, view) {
   return (startKey, endKey) => {
     let url = `${db}/_design/${ddoc}/_list/${list}/${view}?include_docs=true`
@@ -31,13 +49,14 @@ exports.list = function(db, ddoc, list, view) {
     if ( ! startKey)
       return url
 
+    startKey = JSON.stringify(startKey)
+
     if ( ! endKey)
-      return `${url}&key="${startKey}"`
+      return `${url}&key=${startKey}`
 
-    if (endKey === true)
-      endKey = startKey+'\\uffff'
+    endKey = JSON.stringify(endKey)
 
-    return `${url}&startkey="${startKey}"&endkey="${endKey}"`
+    return `${url}&startkey=${startKey}&endkey=${endKey}`
   }
 }
 
@@ -45,11 +64,12 @@ exports.filter = function(db, ddoc, filter) {
    return _ => `${db}/_changes?filter=${ddoc}/${filter}`
 }
 
-exports.show = function(db, ddoc, show) {
-  return id => `${db}/_design/${ddoc}/_show/${show}/${id}`
-}
+exports.ensure = function(prefix, args) {
 
-exports.ensure = function(prefix, newDoc, oldDoc) {
+  var newDoc  = args[0]
+  var oldDoc  = args[1]
+  var userCtx = args[2]
+
   return function(path) {
 
     function extract(doc) {
@@ -90,7 +110,7 @@ exports.ensure = function(prefix, newDoc, oldDoc) {
     var api = {
       assert:function(callback) {
         for (var i in values) {
-          var msg = callback(values[i], i)
+          var msg = callback(values[i], newDoc, userCtx)
           if (typeof msg == 'string') {
             throw({forbidden:prefix+'.'+path+' == '+toJSON(values[i])+', but '+msg})
           }
@@ -151,11 +171,13 @@ exports.ensure = function(prefix, newDoc, oldDoc) {
       if (! oldDoc) return api
 
       var oldVals = extract(oldDoc)
+      var newVals = []
 
-      return api.assert(function(val, i) {
-        var old = toJSON(oldVals[i])
-        return toJSON(val) == old || 'cannot be changed from '+old
+      api.assert(function(newVal) {
+        newVals.push(newVal)
       })
+
+      return toJSON(newVals) == toJSON(oldVals) || 'cannot be changed from '+oldVals
     })
 
 

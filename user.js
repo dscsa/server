@@ -1,19 +1,25 @@
 "use strict"
 let secret = require('../../keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
-let couchdb = require('./couchdb')
 
-exports.shared = {
-  ensure:couchdb.ensure,
+exports.libs = {}
+
+exports.getRoles = function(doc, reduce) {
+  //Authorize _deleted docs but not _design docs
+  if (doc._deleted || doc._id.slice(0, 7) == '_design')
+    return doc._deleted
+
+  //Only users can access their account
+  return reduce(null, doc.account._id)
 }
 
-exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+exports.validate = function(newDoc, oldDoc, userCtx) {
 
   var id = /^[a-z0-9]{7}$/
-  var ensure = require('ensure')('user', newDoc, oldDoc)
+  var ensure = require('ensure')('user', arguments)
 
   //Required
-  ensure('_id').notNull.assert(id)
+  ensure('_id').notNull.regex(id)
   ensure('email').notNull.regex(/[\w._]{2,}@\w{3,}\.(com|org|net|gov)/)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('name.first').notNull.isString
@@ -26,60 +32,28 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('roles').notChanged
   ensure('password').notChanged
 }
-//Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
-//them with a function that takes a key and returns the couchdb url needed to call them.
-exports.filter = {
-  authorized(doc, req) {
-    if ( ! doc.account) return doc._deleted //true for _deleted false for _design
 
-    return doc.account._id == req.userCtx.roles[0] //Only see users within your account
-  }
-}
-
-exports.show = {
-  authorized(doc, req) {
-    if ( ! doc) return {code:204}
-
-    if (doc.account._id == req.userCtx.roles[0]  )
-      return toJSON(req.query.open_revs ? [{ok:doc}]: doc)
-
-    return {code:401}
-  }
-}
-
-exports.view = {
-  authorized(doc) {
-    emit(doc.account._id, {rev:doc._rev})
-  },
+var view = exports.view = {
   email(doc) { //for session login
     emit(doc.email)
+  },
+  id(doc) { //Right now this should emit everything but getRoles could change
+    require('getRoles')(doc, function(res, role) {
+      emit([role, doc._id], {rev:doc._rev})
+    })
   }
-}
-
-exports.changes = function* (db) {
-  this.req.setTimeout(20000)
-  yield this.http(exports.filter.authorized(this.path), true)
 }
 
 //TODO switch this to using email once bulk_get is working
 exports.get = function* () {
+  let url, selector = JSON.parse(this.query.selector)
 
-  let selector = JSON.parse(this.query.selector)
+  //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
+  if (selector._id)
+    url = this.query.open_revs ? 'user/'+selector._id : view.id([this.user.account._id, selector._id])
 
-  if (selector.email)
-    return yield this.http(exports.view.email(selector.email), true)
-
-  if ( ! selector._id) return //TODO other search types
-
-  yield this.http(exports.show.authorized(selector._id), true)
-
-  //show function cannot handle _deleted docs with open_revs, so handle manually here
-  if (this.status == 204 && this.query.open_revs)
-    yield this.http.get(this.path+'/'+selector._id, true)
-}
-
-exports.bulk_get = function* () {
-  this.status = 400
+  if (url)
+    yield this.http.get(url, true)
 }
 
 //CouchDB requires an _id based on the user's name
@@ -134,7 +108,7 @@ exports.email = function* () {
 exports.session = {
   *post() {
     let login = yield this.http.body
-    let user  = yield this.http.get(exports.view.email(login.email))
+    let user  = yield this.http.get(view.email(login.email))
     user = user[0] //assume just one user per email for now
 
     if ( ! user)

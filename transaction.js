@@ -1,44 +1,51 @@
 "use strict"
-let drugs   = require('./drug')
-let couchdb = require('./couchdb')
+let drugs    = require('./drug')
+let shipment = require('./shipment')
 
-exports.shared = {
-  ensure:couchdb.ensure,
+exports.libs = {
   generic:drugs.generic,
-  sumNext(doc) {
+  validDrug:drugs.libs.validDrug,
+  validShipmentId:shipment.libs.validShipmentId,
+  qtyRemaining(doc) {
     function sum(sum, next) {
       return sum + next.qty
     }
 
-    return doc.next.reduce(sum, 0)
+    return doc.qty.to || doc.qty.from - doc.next.reduce(sum, 0)
+  },
+  getRolesIfInventory(doc, reduce) {
+    var qtyRemaining = require('qtyRemaining')
+    var getRoles  = require('getRoles')
+    if (qtyRemaining(doc) > 0)//inventory only
+      doc.verifiedAt && getRoles(doc, reduce)
   }
 }
 
-exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+exports.getRoles = function(doc, reduce) {
+  //Authorize _deleted docs but not _design docs
+  if (doc._deleted || doc._id.slice(0, 7) == '_design')
+    return doc._deleted
 
-  // if ( ! userCtx.roles[0])
-  //   throw({unauthorized:'You must be logged in to create or modify a transaction'})
+  //Determine whether user is authorized to see the doc
+  return doc.shipment._id.split('.').slice(0, 2).reduce(reduce)
+}
+
+exports.validate = function(newDoc, oldDoc, userCtx) {
+
   var id = /^[a-z0-9]{7}$/
-  var ensure  = require('ensure')('transaction', newDoc, oldDoc)
-  var generic = require('generic')
-  var sumNext = require('sumNext')
+  var ensure          = require('ensure')('transaction', arguments)
+  var qtyRemaining    = require('qtyRemaining')
+  var validShipmentId = require('validShipmentId')
+
+  require('validDrug')('transaction.drug', newDoc.drug, oldDoc && oldDoc.drug, userCtx)
 
   //Required
   ensure('_id').notNull.assert(id)
-  ensure('shipment._id').assert(shipmentId)
+  ensure('shipment._id').isString.assert(validShipmentId)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('verifiedAt').isDate
   ensure('next').notNull.isArray.assert(next)
   ensure('next.qty').isNumber
-  ensure('drug._id').notNull.regex(/^\d{4}-\d{4}|\d{5}-\d{3}|\d{5}-\d{4}$/)
-  ensure('drug.generic').notNull.assert(matchesGeneric)
-  ensure('drug.generics').notNull.isArray.length(1, 10)
-  ensure('drug.generics.name').notNull.isString.regex(/([A-Z][0-9a-z]*\s?)+\b/)
-  ensure('drug.generics.strength').isString.regex(/^[0-9][0-9a-z/.]+$/)
-  ensure('drug.brand').isString.length(0, 20)
-  ensure('drug.form').notNull.isString.regex(/([A-Z][a-z]+\s?)+\b/)
-  ensure('drug.pkg').isString.length(0, 2).notChanged
-  ensure('drug.price.updatedAt').notNull.isDate
 
   //Optional
   ensure('qty.from').isNumber
@@ -48,82 +55,17 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('drug.price.goodrx').isNumber
   ensure('drug.price.nadac').isNumber
 
-  function matchesGeneric(val) {
-    return val == generic(newDoc.drug) || 'drug.generic does not match drug.generics and drug.form'
-  }
-
   //TODO next.transaction || next.dispensed must exist (and eventually have _id)
   function next(val) {
     if (val.length && ! newDoc.verifiedAt)
       return 'cannot contain any values unless transaction.verifiedAt is set'
 
-    var nextQty = sumNext(newDoc)
-    var currQty = newDoc.qty.to || newDoc.qty.from
-    if (nextQty > currQty)
-      return 'sum of next quantities, '+nextQty+', cannot be larger than newDoc.qty.to || newDoc.qty.from, '+currQty
-  }
-
-  function shipmentId(val) {
-
-    if (typeof val != 'string')
-      return 'is required to be a valid _id'
-
-    val = val.split('.')
-
-    if (val[0] == val[1])
-      return 'cannot have account.from._id == account.to._id'
-
-    if (val.length == 3 && id.test(val[2])) {
-      if (val[0]   == userCtx.roles[0] && id.test(val[1])) return
-      if (val[1]   == userCtx.roles[0] && id.test(val[0])) return
-      if ("_admin" == userCtx.roles[0] && id.test(val[0]) && id.test(val[1])) return
-    }
-
-    if(val.length == 1 && (val[0] == userCtx.roles[0] || '_admin' == userCtx.roles[0])) return
-
-    return 'must be in the format "account.from._id" or "account.from._id"."account.to._id"."_id"'
-  }
-}
-
-//Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
-//them with a function that takes a key and returns the couchdb url needed to call them.
-exports.filter = {
-  authorized(doc, req) {
-    if ( ! doc.shipment) return doc._deleted //true for _deleted false for _design
-
-    var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
-
-    var accounts = doc.shipment._id.split('.')
-    return accounts[0] == account || accounts[1] == account
-  },
-
-  inventory(doc, req) {
-    //called from PUT or CouchDB, true for _deleted false for _design
-    return doc.shipment ? doc.shipment._id == req.userCtx.roles[0] : doc._deleted
-  }
-}
-
-exports.show = {
-  authorized(doc, req) {
-    if ( ! doc) return {code:204}
-
-    var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
-    var accounts = doc.shipment._id.split('.')
-
-    if (accounts[0] == account || accounts[1] == account)
-      return toJSON(req.query.open_revs ? [{ok:doc}]: doc)
-
-    return {code:401}
+    if (qtyRemaining(newDoc) < 0)
+      return 'sum of quantities in "next" cannot be larger than newDoc.qty.to || newDoc.qty.from'
   }
 }
 
 exports.view = {
-  authorized(doc) {
-    var accounts = doc.shipment._id.split('.')
-    emit(accounts[0], {rev:doc._rev})
-    emit(accounts[1], {rev:doc._rev})
-  },
-
   history(doc) {
     for (var i in doc.next)
       doc.next[i].transaction && emit(doc.next[i].transaction._id)
@@ -134,99 +76,75 @@ exports.view = {
     emit(doc.drug._id)
   },
 
-  //For inventory search.
-  //TODO get rid of this generic function
-  inventoryGeneric(doc) {
-    log(doc._id)
-    var sumNext = require('sumNext')
-    log(sumNext(doc)+' < '+(doc.qty.to || doc.qty.from))
-    log(doc.verifiedAt)
-    if (sumNext(doc) < doc.qty.to || doc.qty.from)//inventory only
-      doc.verifiedAt && emit(doc.drug.generic)
-  },
-
-  //For inventory "box" search.
-  inventoryLocation(doc) {
-    var sumNext = require('sumNext')
-    if (sumNext(doc) < doc.qty.to || doc.qty.from)//inventory only
-      doc.verifiedAt && emit(doc.location)
-  },
-
-  //For inventory expiration search.
-  inventoryExp(doc) {
-    var sumNext = require('sumNext')
-    if (sumNext(doc) < doc.qty.to || doc.qty.from)//inventory only
-      doc.verifiedAt && emit(doc.exp.to || doc.exp.from)
+  id(doc) {
+    require('getRoles')(doc, function(res, role) {
+      emit([role, doc._id], {rev:doc._rev})
+    })
   },
 
   shipment(doc) {
-    emit(doc.shipment._id)
+    require('getRoles')(doc, function(res, role) {
+      emit([role, doc.shipment._id])
+    })
   },
 
   //TODO How to incorporate Complete/Verified/Destroyed, multiple map functions?  compound key e.g., [createAt, typeof verified] with grouping?
   record(doc) {
-    if (doc.shipment._id.split('.').length != 1)
-      emit(doc.createdAt)
-  }
-}
+    if (doc.shipment._id.split('.').length == 3)
+      require('getRoles')(doc, function(res, role) {
+        emit([role, doc.createdAt])
+      })
+  },
 
-//Only sync inventory for now since transactions is just too big to sync locally
-//Eventually maybe we have an optional request parameter to sync all transactions
-exports.changes = function* () {
-  //match timeout in dscsa-pouch
-  this.req.setTimeout(20000)
-  yield this.http(exports.filter.inventory(this.path), true)
+  //For inventory search.
+  inventoryGeneric(doc) {
+    require('getRolesIfInventory')(doc, function(res, role) {
+      emit([role, doc.drug.generic])
+    })
+  },
+
+  inventoryLocation(doc) {
+    require('getRolesIfInventory')(doc, function(res, role) {
+      emit([role, doc.location])
+    })
+  },
+
+  inventoryExp(doc) {
+    require('getRolesIfInventory')(doc, function(res, role) {
+      emit([role, doc.exp.to || doc.exp.from])
+    })
+  }
 }
 
 exports.get = function* () {
 
-  let selector = JSON.parse(this.query.selector)
+  let url, s = JSON.parse(this.query.selector)
 
-  if (this.query.history)
-    return this.body = yield history(this, selector._id)
+  if (this.query.history && s._id)
+    return this.body = yield history(this, sel._id)
 
-  if (selector.createdAt) {
+  if (s.createdAt && s.createdAt.$gte && s.createdAt.$lte) {
     this.req.setTimeout(10000)
-    this.body = yield this.http.get(exports.view.record(selector.createdAt.$gte, selector.createdAt.$lte))
-    for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
-    return
+    return yield this.transaction.list.recordProxy(s.createdAt.$gte, s.createdAt.$lte)
   }
 
-  if (selector.inventory && selector.generic) {
-    this.body = yield this.http.get(exports.view.inventoryGeneric(selector.generic))
-    for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
-    return
-  }
+  if (s.inventory && s.generic)
+    return yield this.transaction.list.inventoryGenericProxy(s.generic)
 
-  if (selector.inventory && selector.exp) {
-    this.body = yield this.http.get(exports.view.inventoryExp(selector.exp, true))
-    for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
-    return
-  }
+  if (s.inventory && s.exp)
+    return yield this.transaction.list.inventoryExpProxy(s.exp, true)
 
-  if (selector.inventory && selector.location) {
-    this.body = yield this.http.get(exports.view.inventoryLocation(selector.location, true))
-    for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
-    return
-  }
+  if (s.inventory && s.location)
+    return yield this.transaction.list.inventoryExpProxy(s.location, true)
 
-  if (selector['shipment._id']) {
-    this.body = yield this.http.get(exports.view.shipment(selector['shipment._id']))
-    for (let row of this.body) row.drug.generic = drugs.generic(row.drug)
-    return
-  }
+  if (s['shipment._id'])
+    return yield this.transaction.list.shipmentProxy(s['shipment._id'])
 
-  if (selector._id) {
-    yield this.http.get(exports.show.authorized(selector._id), true)
-
-    //show function cannot handle _deleted docs with open_revs, so handle manually here
-    if (this.status == 204 && this.query.open_revs)
-      yield this.http.get(this.path+'/'+selector._id, true)
-  }
-}
-
-exports.bulk_get = function* (id) {
-  this.status = 400
+  //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
+  if (s._id)
+    return yield this.query.open_revs
+      ? this.http.proxy.get('transaction/'+s._id)
+      : this.transaction.list.id(s._id)
 }
 
 exports.post = function* () {
@@ -237,14 +155,15 @@ exports.post = function* () {
 
   //Making sure these are accurate and upto date is too
   //costly to do on every save so just do it on creation
-  let drug = yield this.http.get(drugs.show.authorized(transaction.drug._id))
-  yield drugs.updatePrice.call(this, drug)
+  let url   = drugs.view.id([this.user.account._id, transaction.drug._id])
+  let drugs = yield this.http.get(url)
+  yield drugs.updatePrice.call(this, drugs[0])
 
-  transaction.drug.price    = drug.price
-  transaction.drug.brand    = drug.brand
-  transaction.drug.generic  = drug.generic
-  transaction.drug.generics = drug.generics
-  transaction.drug.form     = drug.form
+  transaction.drug.price    = drugs[0].price
+  transaction.drug.brand    = drugs[0].brand
+  transaction.drug.generic  = drugs[0].generic
+  transaction.drug.generics = drugs[0].generics
+  transaction.drug.form     = drugs[0].form
 
   let save = yield this.http.put('transaction/'+this.http.id).body(transaction)
 
@@ -267,18 +186,94 @@ exports.bulk_docs = function* () {
 
 exports.delete = function* () {
   let doc = yield this.http.body
-  let inv = yield this.http.get(exports.view.history(doc._id))
 
-  if (inv[0]) //Only delete inventory if id is not in subsequent transaction
-    this.throw(409, `Cannot delete this transaction because transaction ${inv[0]._id} has _id ${doc._id} in its history`)
+  if (next.length)
+    this.throw(409, `Cannot delete this transaction because it has subsequent transactions in "next" property`)
+
+  //TODO delete all elements in transaction.nexts that have this transaction listed
+  //Need to think through whether these items would get put back into inventory or what
 
   yield this.http('transaction/'+doc._id+'?rev='+doc._rev, true).body(doc)
 }
 
+function defaults(body) {
+  //TODO ensure that there is a qty
+  body.next      = body.next || []
+  body.createdAt = body.createdAt || new Date().toJSON()
+
+  //TODO [TypeError: Cannot read property 'to' of undefined] is malformed request
+  //Empty string -> null, string -> number, number -> number (including 0)
+  body.qty.to     = body.qty.to != null && body.qty.to !== '' ? +body.qty.to : null     //don't turn null to 0 since it will get erased
+  body.qty.from   = body.qty.from != null && body.qty.from !== '' ? +body.qty.from : null //don't turn null to 0 since it will get erased
+  body.shipment   = body.shipment && body.shipment._id ? body.shipment : {_id:this.user.account._id}
+
+  return body
+}
+
+//TODO don't search for shipment if shipment._id doesn't have two periods (inventory)
+//TODO option to include full from/to account information
+function *history($this, id) {
+
+  let result = []
+
+  return yield history(id, result)
+
+  function *history (_id, list) {
+
+    let trans = yield $this.http.get('transaction/'+_id) //don't use show function because we might need to see transactions not directly authorized
+    let prevs = yield $this.http.get(view.history(_id))  //TODO is there a way to use "joins" http://docs.couchdb.org/en/stable/couchapp/views/joins.html to make this more elegant
+    let all   = [$this.http.get('shipment/'+trans.shipment._id)]
+    list.push(trans)
+
+    let indentedList = []
+
+    if (prevs.length > 1) {
+      trans.type = 'Repackaged'
+      list.push([indentedList])
+    } else {
+      trans.type = 'Transaction'
+    }
+
+    //Recursive call!
+    for (let prev of prevs)
+      all.push(history(prev._id, prevs.length == 1 ? list : indentedList))
+
+    //Search for transaction's ancestors and shipment in parallel
+    all = yield all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
+
+    //Now we just fill in full shipment and account info into the transaction
+    trans.shipment = all[0]
+    let account    = all[0].account
+
+    //TODO this call is serial. Can we do in parallel with next async call?
+    //TODO this is co specific won't work when upgrading to async/await which need Promise.all
+    let accounts = yield [
+      $this.http.get('account/'+account.from._id),
+      account.to && $this.http.get('account/'+account.to._id)
+    ]
+
+    account.from = accounts[0]
+    account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
+    return result
+  }
+}
+
+
+/* Makeshift PATCH */
+// function *patch(id, updates) {
+//
+//   let doc  = yield this.http.get(view.id(id))
+//   let save = yield this.http.put('transaction/'+id).body(Object.assign(doc, updates))
+//
+//   doc._rev = save.rev
+//   return doc
+// }
+
+
 // exports.verified = {
 //   *post() {
 //     let doc = yield this.http.body
-//     let inv = yield this.http.get(exports.view.history(doc._id))
+//     let inv = yield this.http.get(view.history(doc._id))
 //
 //     //TODO We should make sure verifiedAt is saved as true for this transaction
 //     if (inv[0])
@@ -321,7 +316,7 @@ exports.delete = function* () {
 //   //4. Update the original transaction with verified_at = null
 //   *delete() {
 //     let doc = yield this.http.body
-//     let inv = yield this.http.get(exports.view.history(doc._id))
+//     let inv = yield this.http.get(view.history(doc._id))
 //     inv = inv[0]
 //
 //     if ( ! inv) //Only delete inventory if it actually exists
@@ -334,75 +329,3 @@ exports.delete = function* () {
 //     this.body = yield patch.call(this, doc._id, {verifiedAt:null}) //Un-verify transaction and send back new _rev so user can continue to make edits
 //   }
 // }
-
-function defaults(body) {
-  //TODO ensure that there is a qty
-  body.next      = body.next || []
-  body.createdAt = body.createdAt || new Date().toJSON()
-
-  //TODO [TypeError: Cannot read property 'to' of undefined] is malformed request
-  //Empty string -> null, string -> number, number -> number (including 0)
-  body.qty.to     = body.qty.to != null && body.qty.to !== '' ? +body.qty.to : null     //don't turn null to 0 since it will get erased
-  body.qty.from   = body.qty.from != null && body.qty.from !== '' ? +body.qty.from : null //don't turn null to 0 since it will get erased
-  body.shipment   = body.shipment && body.shipment._id ? body.shipment : {_id:this.user.account._id}
-
-  return body
-}
-
-/* Makeshift PATCH */
-// function *patch(id, updates) {
-//
-//   let doc  = yield this.http.get(exports.show.authorized(id))
-//   let save = yield this.http.put('transaction/'+id).body(Object.assign(doc, updates))
-//
-//   doc._rev = save.rev
-//   return doc
-// }
-
-//TODO don't search for shipment if shipment._id doesn't have two periods (inventory)
-//TODO option to include full from/to account information
-function *history($this, id) {
-
-  let result = []
-
-  return yield history(id, result)
-
-  function *history (_id, list) {
-
-    let trans = yield $this.http.get('transaction/'+_id) //don't use show function because we might need to see transactions not directly authorized
-    let prevs = yield $this.http.get(exports.view.history(_id))
-    let all   = [$this.http.get('shipment/'+trans.shipment._id)]
-    list.push(trans)
-
-    let indentedList = []
-
-    if (prevs.length > 1) {
-      trans.type = 'Repackaged'
-      list.push([indentedList])
-    } else {
-      trans.type = 'Transaction'
-    }
-
-    //Recursive call!
-    for (let prev of prevs)
-      all.push(history(prev._id, prevs.length == 1 ? list : indentedList))
-
-    //Search for transaction's ancestors and shipment in parallel
-    all = yield all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
-
-    //Now we just fill in full shipment and account info into the transaction
-    trans.shipment = all[0]
-    let account    = all[0].account
-
-    //TODO this call is serial. Can we do in parallel with next async call?
-    //TODO this is co specific won't work when upgrading to async/await which need Promise.all
-    let accounts = yield [
-      $this.http.get('account/'+account.from._id),
-      account.to && $this.http.get('account/'+account.to._id)
-    ]
-
-    account.from = accounts[0]
-    account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
-    return result
-  }
-}

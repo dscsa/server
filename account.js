@@ -1,17 +1,23 @@
 "use strict"
-let couchdb = require('./couchdb')
 
-exports.shared = {
-  ensure:couchdb.ensure,
+exports.libs = {}
+
+exports.getRoles = function(doc, reduce) {
+  //Authorize _deleted docs but not _design docs
+  if (doc._deleted || doc._id.slice(0, 7) == '_design')
+    return doc._deleted
+
+  //Everyone can access accounts
+  return reduce()
 }
 
-exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+exports.validate = function(newDoc, oldDoc, userCtx) {
 
   var id = /^[a-z0-9]{7}$/
-  var ensure = require('ensure')('account', newDoc, oldDoc)
+  var ensure = require('ensure')('account', arguments)
 
   //Required
-  ensure('_id').notNull.assert(_id)
+  ensure('_id').notNull.assert(validId)
   ensure('name').notNull.isString
   ensure('license').notNull.isString
   ensure('street').notNull.isString
@@ -24,55 +30,28 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   //Optional
   ensure('ordered').isObject
 
-  function _id(val) {
-    if ( ! id.test(val) || (newDoc._rev && userCtx.roles[0] != val && userCtx.roles[0] != '_admin'))
-      return 'can only be modified by one of its users'
+  function validId(val) {
+    return require('isRole')(newDoc, userCtx) || 'can only be modified by one of its users'
   }
 }
 
-//Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
-//them with a function that takes a key and returns the couchdb url needed to call them.
-//TODO this currently allows for anyone to modify any account.  We need a different way to check viewing vs editing
-exports.filter = {
-  authorized(doc, req) {
-    if (doc._id.slice(0, 7) == '_design') return
-    return true //Everyone can see all accounts except design documents
+var view = exports.view = {
+  id(doc) { //Right now this should emit everything but getRoles could change
+    require('getRoles')(doc, function(res, role) {
+      emit([role, doc._id], {rev:doc._rev})
+    })
   }
-}
-
-exports.show = {
-  authorized(doc, req) {
-    if ( ! doc) return {code:204}
-
-    return toJSON(req.query.open_revs ? [{ok:doc}]: doc) //Everyone can get/put/del all accounts
-  }
-}
-
-exports.view = {
-  authorized(doc) {
-    emit(doc._id, {rev:doc._rev})
-  }
-}
-
-exports.changes = function* () {
-  this.req.setTimeout(20000)
-  yield this.http(exports.filter.authorized(this.path), true)
 }
 
 exports.get = function* () {
-  let selector = JSON.parse(this.query.selector)
+  let url, selector = JSON.parse(this.query.selector)
 
-  if ( ! selector._id) return //TODO other search types
+  //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
+  if (selector._id)
+    url = this.query.open_revs ? 'account/'+selector._id : view.id([this.user.account._id, selector._id])
 
-  yield this.http(exports.show.authorized(selector._id), true)
-
-  //show function cannot handle _deleted docs with open_revs, so handle manually here
-  if (this.status == 204 && this.query.open_revs)
-    yield this.http.get(this.path+'/'+selector._id, true)
-}
-
-exports.bulk_get = function* (i) {
-  this.status = 400
+  if (url)
+    yield this.http.get(url, true)
 }
 
 exports.post = function* () {
@@ -112,29 +91,31 @@ exports.authorized = {
   },
   *post() {
     //Authorize a sender
-    let body    = yield this.http.body
-    let account = yield this.http.get(exports.show.authorized(this.user.account._id))
+    let body     = yield this.http.body
+    let url      = view.id([this.user.account._id])
+    let accounts = yield this.http.get(url)
 
-    if (account.authorized.includes(body._id)) {
+    if (accounts[0].authorized.includes(body._id)) {
       this.status  = 409
       this.message = 'This account is already authorized'
     } else {
-      account.authorized.push(body._id)
-      yield this.http.put('account/'+this.user.account._id, true).body(account)
+      accounts[0].authorized.push(body._id)
+      yield this.http.put('account/'+this.user.account._id, true).body(accounts[0])
     }
   },
   *delete() {
     //Unauthorize a sender
-    let body    = yield this.http.body
-    let account = yield this.http.get(exports.show.authorized(this.user.account._id))
-    let index   = account.authorized.indexOf(body._id)
+    let body     = yield this.http.body
+    let url      = view.id([this.user.account._id])
+    let accounts = yield this.http.get(url)
+    let index    = accounts[0].authorized.indexOf(body._id)
 
     if (index == -1) {
       this.status  = 409
       this.message = 'This account is already not authorized'
     } else {
-      account.authorized.splice(index, 1)
-      yield this.http.put('account/'+this.user.account._id, true).body(account)
+      accounts[0].authorized.splice(index, 1)
+      yield this.http.put('account/'+this.user.account._id, true).body(accounts[0])
     }
   }
 }

@@ -15,11 +15,20 @@ function *addDesignDocs (name) {
 
   yield http.put(name).headers({authorization}).body(true).catch(_ => null) //Create the database
 
+  //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
+  //them with a function that takes a key and returns the couchdb url needed to call them.
+  //TODO An optional request parameter to sync all/partial e.g., transactions or just inventory?
+  db.filter = {
+    authorized(doc, req) {
+      return require('isRole')(doc, req.userCtx)
+    }
+  }
+
   //This may be too much magic for best practice but its really elegant.  Replace the export function with
   //the url used to call the export so the original module can call a couchdb function just like a normal one.
   for (let viewName in db.view) {
     views[viewName]   = {map:couchdb.string(db.view[viewName])}
-    db.view[viewName] = couchdb.list(name, 'auth', 'all', viewName)
+    db.view[viewName] = couchdb.view(name, 'auth', 'all', viewName)
   }
 
   //See note on "too much magic" above
@@ -41,8 +50,12 @@ function *addDesignDocs (name) {
 
   //See note on "too much magic" above
   //Regarding views/lib placement: http://couchdb-13.readthedocs.io/en/latest/1.1/commonjs/
-  for (let sharedName in db.shared) {
-    views.lib[sharedName] = 'module.exports = '+couchdb.string(db.shared[sharedName])
+  db.libs.isRole = couchdb.isRole
+  db.libs.ensure = couchdb.ensure
+  if (db.getRoles)
+    db.libs.getRoles = db.getRoles
+  for (let libName in db.libs) {
+    views.lib[libName] = 'module.exports = '+couchdb.string(db.libs[libName])
   }
 
   let design = yield http.get(name+'/_design/auth').headers({authorization}).catch(err => console.log(err.reason == 'missing' ? 'Initializing new CouchDB database' : err))
@@ -52,7 +65,7 @@ function *addDesignDocs (name) {
     views,
     filters,
     shows,
-    validate_doc_update:couchdb.string(db.validate_doc_update),
+    validate_doc_update:couchdb.string(db.validate),
     lists
   })
 }

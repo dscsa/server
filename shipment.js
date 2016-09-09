@@ -1,17 +1,38 @@
 "use strict"
-let couchdb = require('./couchdb')
 
-exports.shared = {
-  ensure:couchdb.ensure,
+exports.libs = {
+  validShipmentId(val, newDoc, userCtx) {
+    val = val.split('.')
+
+    if (val[0] == val[1])
+      return 'cannot have account.from._id == account.to._id'
+
+    if (require('isRole')(newDoc, userCtx)) {
+      if(val.length == 1) return
+      if(val.length == 3 && /^[a-z0-9]{7}$/.test(val[2])) return
+    }
+
+    return 'must be a string in the format "account.from._id" or "account.from._id"."account.to._id"."_id"'
+  }
 }
 
-exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
+exports.getRoles = function(doc, reduce) {
+  //Authorize _deleted docs but not _design docs
+  if (doc._deleted || doc._id.slice(0, 7) == '_design')
+    return doc._deleted
+
+  //Determine whether user is authorized to see the doc
+  return doc._id.split('.').slice(0, 2).reduce(reduce)
+}
+
+exports.validate = function(newDoc, oldDoc, userCtx) {
 
   var id = /^[a-z0-9]{7}$/
-  var ensure = require('ensure')('shipment', newDoc, oldDoc)
+  var ensure = require('ensure')('shipment', arguments)
+  var validShipmentId = require('validShipmentId')
 
   //Required
-  ensure('_id').isString.assert(_id)
+  ensure('_id').isString.assert(validShipmentId)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('account.from.name').notNull.isString
   ensure('account.to.name').notNull.isString
@@ -21,79 +42,25 @@ exports.validate_doc_update = function(newDoc, oldDoc, userCtx) {
   ensure('shippedAt').isDate
   ensure('receivedAt').isDate
   ensure('verifiedAt').isDate
-
-  function _id(val) {
-
-    val = val.split('.')
-
-    if (val[0] == val[1])
-      return 'cannot have account.from._id == account.to._id'
-
-    if (val.length == 3 && id.test(val[2])) { //Part of a shipment
-      if (val[0] == newDoc.account.from._id  && val[0] == userCtx.roles[0] && id.test(val[1])) return
-      if (val[1] == newDoc.account.to._id    && val[1] == userCtx.roles[0] && id.test(val[0])) return
-      if (id.test(val[0]) && id.test(val[1]) && "_admin" == userCtx.roles[0]) return
-    }
-
-    return 'must be in the format <account.from._id>.<account.to._id>.<_id>'
-  }
 }
 
-//Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
-//them with a function that takes a key and returns the couchdb url needed to call them.
-exports.filter = {
-  authorized(doc, req){
-
-    if (doc._id.slice(0, 7) == '_design') return
-
-    var account  = req.userCtx.roles[0]
-    var accounts = doc._id.split('.')
-
-    return accounts[0] == account || accounts[1] == account
+var view = exports.view = {
+  id(doc) {
+    require('getRoles')(doc, function(res, role) {
+      emit([role, doc._id], {rev:doc._rev})
+    })
   }
-}
-
-exports.show = {
-  authorized(doc, req) {
-    if ( ! doc) return {code:204}
-
-    var account  = req.userCtx.roles[0]   //called from PUT or CouchDB
-    var accounts = doc._id.split('.')
-
-    if (accounts[0] == account || accounts[1] == account)
-      return toJSON(req.query.open_revs ? [{ok:doc}]: doc)
-
-    return {code:401}
-  }
-}
-
-exports.view = {
-  authorized(doc) {
-    var accounts = doc._id.split('.')
-    emit(accounts[0], {rev:doc._rev})
-    emit(accounts[1], {rev:doc._rev})
-  }
-}
-
-exports.changes = function* (db) {
-  this.req.setTimeout(20000)
-  yield this.http(exports.filter.authorized(this.path), true)
 }
 
 exports.get = function* () {
-  let selector = JSON.parse(this.query.selector)
+  let url, selector = JSON.parse(this.query.selector)
 
-  if ( ! selector._id) return //TODO other search types
+  //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
+  if (selector._id)
+    url = this.query.open_revs ? 'shipment/'+selector._id : view.id([this.user.account._id, selector._id])
 
-  yield this.http(exports.show.authorized(selector._id), true)
-
-  //show function cannot handle _deleted docs with open_revs, so handle manually here
-  if (this.status == 204 && this.query.open_revs)
-    yield this.http.get(this.path+'/'+selector._id, true)
-}
-
-exports.bulk_get = function* (id) {
-  this.status = 400
+  if (url)
+    yield this.http.get(url, true)
 }
 
 exports.post = function* () { //TODO querystring with label=fedex creates label, maybe track=true/false eventually
