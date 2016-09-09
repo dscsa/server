@@ -143,45 +143,46 @@ exports.get = function* () {
   //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
   if (s._id)
     return yield this.query.open_revs
-      ? this.http.proxy.get('transaction/'+s._id)
+      ? this.http.get('transaction/'+s._id)
       : this.transaction.list.id(s._id)
 }
 
 exports.post = function* () {
 
-  let transaction = yield this.http.body
+  let doc = yield this.http.body
 
-  defaults.call(this, transaction)
+  defaults.call(this, doc)
 
   //Making sure these are accurate and upto date is too
   //costly to do on every save so just do it on creation
   let url   = drugs.view.id([this.user.account._id, transaction.drug._id])
-  let drugs = yield this.http.get(url)
+  let drugs = yield this.http.get(url).body
   yield drugs.updatePrice.call(this, drugs[0])
 
-  transaction.drug.price    = drugs[0].price
-  transaction.drug.brand    = drugs[0].brand
-  transaction.drug.generic  = drugs[0].generic
-  transaction.drug.generics = drugs[0].generics
-  transaction.drug.form     = drugs[0].form
+  doc.drug.price    = drugs[0].price
+  doc.drug.brand    = drugs[0].brand
+  doc.drug.generic  = drugs[0].generic
+  doc.drug.generics = drugs[0].generics
+  doc.drug.form     = drugs[0].form
 
-  let save = yield this.http.put('transaction/'+this.http.id).body(transaction)
+  let save = yield this.http.put('transaction/'+this.http.id, doc).body
 
-  transaction._id  = save.id
-  transaction._rev = save.rev
-  this.body = transaction
+  doc._id  = save.id
+  doc._rev = save.rev
+  this.body = doc
 }
 
 exports.put = function* () {
-  this.body = yield this.http.body
-  defaults(this.body)
-  let save = yield this.http('transaction/'+this.body._id).body(this.body)
-  this.body._rev = save.rev
+  let doc = yield this.http.body
+  defaults(doc)
+  let save = yield this.http('transaction/'+doc._id, doc).body
+  doc._rev = save.rev
+  this.body = doc
 }
 
 //TODO enforce drug consistency on every save?
 exports.bulk_docs = function* () {
-  yield this.http(null, true)
+  yield this.http()
 }
 
 exports.delete = function* () {
@@ -193,7 +194,7 @@ exports.delete = function* () {
   //TODO delete all elements in transaction.nexts that have this transaction listed
   //Need to think through whether these items would get put back into inventory or what
 
-  yield this.http('transaction/'+doc._id+'?rev='+doc._rev, true).body(doc)
+  yield this.http('transaction/'+doc._id+'?rev='+doc._rev, doc)
 }
 
 function defaults(body) {
@@ -220,9 +221,9 @@ function *history($this, id) {
 
   function *history (_id, list) {
 
-    let trans = yield $this.http.get('transaction/'+_id) //don't use show function because we might need to see transactions not directly authorized
-    let prevs = yield $this.http.get(view.history(_id))  //TODO is there a way to use "joins" http://docs.couchdb.org/en/stable/couchapp/views/joins.html to make this more elegant
-    let all   = [$this.http.get('shipment/'+trans.shipment._id)]
+    let trans = yield $this.http.get('transaction/'+_id).body //don't use show function because we might need to see transactions not directly authorized
+    let prevs = yield $this.http.get(view.history(_id)).body  //TODO is there a way to use "joins" http://docs.couchdb.org/en/stable/couchapp/views/joins.html to make this more elegant
+    let all   = [$this.http.get('shipment/'+trans.shipment._id).body]
     list.push(trans)
 
     let indentedList = []
@@ -248,8 +249,8 @@ function *history($this, id) {
     //TODO this call is serial. Can we do in parallel with next async call?
     //TODO this is co specific won't work when upgrading to async/await which need Promise.all
     let accounts = yield [
-      $this.http.get('account/'+account.from._id),
-      account.to && $this.http.get('account/'+account.to._id)
+      $this.http.get('account/'+account.from._id).body,
+      account.to && $this.http.get('account/'+account.to._id).body
     ]
 
     account.from = accounts[0]

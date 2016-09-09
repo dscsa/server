@@ -53,51 +53,54 @@ exports.get = function* () {
     url = this.query.open_revs ? 'user/'+selector._id : view.id([this.user.account._id, selector._id])
 
   if (url)
-    yield this.http.get(url, true)
+    yield this.http(url)
 }
 
 //CouchDB requires an _id based on the user's name
 exports.post = function* () {
-  let name = this.http.id
-  let user = yield this.http.body
-  let save = yield this.http.put('_users/org.couchdb.user:'+name).headers({authorization}).body({
+  let name  = this.http.id
+  let doc   = yield this.http.body
+
+  let _user = {
     name,
     type:'user',
-    roles:[user.account._id],
-    password:user.password
-  })
+    roles:[doc.account._id],
+    password:doc.password
+  }
 
-  user.createdAt = new Date().toJSON()
-  user.password  = undefined
+  yield this.http.put('_users/org.couchdb.user:'+name, _user).headers({authorization})
 
-  save = yield this.http.put('user/'+name).body(user)
+  doc.createdAt = new Date().toJSON()
+  doc.password  = undefined
 
-  user._id  = save.id
-  user._rev = save.rev
-  this.body = user
+  save = yield this.http.put('user/'+name, doc).body
+
+  doc._id  = save.id
+  doc._rev = save.rev
+  this.body = doc
 }
 
 //TODO switch this to using email once bulk_get is working
 //TODO use an id?  Rely on _id being embedded? Maybe make PUTs default behavior to be PATCH?
 exports.put = function* () {
-  yield this.http(this.path, true)
+  yield this.http()
 }
 
 exports.bulk_docs = function* () {
   let body = yield this.http.body
   for (let doc of body.docs)
     if (doc._deleted) {
-      let url  = '_users/org.couchdb.user:'+doc._id
-      let user = yield this.http.get(url).headers({authorization})
-      this.body = yield this.http.delete(url+'?rev='+user._rev).headers({authorization}).body(user) //set _rev in url since _rev within body still triggered 409 conflict
+      let url   = '_users/org.couchdb.user:'+doc._id
+      let user  = yield this.http.get(url).headers({authorization}).body
+      this.body = yield this.http.delete(url+'?rev='+user._rev).headers({authorization}).body //set _rev in url since _rev within body still triggered 409 conflict
     }
 
-  yield this.http(this.path, true).body(body)
+  yield this.http(null, body)
 }
 
 exports.delete = function* () {
-  yield this.http(this.path, true)
-  yield this.http(this.path.replace('user', '_users'), true).headers({authorization})
+  yield this.http()
+  yield this.http(this.path.replace('user', '_users')).headers({authorization})
 }
 
 exports.email = function* () {
@@ -108,20 +111,20 @@ exports.email = function* () {
 exports.session = {
   *post() {
     let login = yield this.http.body
-    let user  = yield this.http.get(view.email(login.email))
+    let user  = yield this.http.get(view.email(login.email)).body
     user = user[0] //assume just one user per email for now
 
     if ( ! user)
       this.throw(404, 'No user exists with the email '+login.email)
 
-    yield this.http('_session', true).headers(this.headers).body({name:user._id, password:login.password})
+    yield this.http('_session', {name:user._id, password:login.password}) //.headers(this.headers)
 
     this.body = {_id:user._id, account:{_id:user.account._id}}
     this.cookies.set('AuthUser', JSON.stringify(this.body), {httpOnly:false})
   },
 
   *delete() {
-    yield this.http('_session', true)
+    yield this.http('_session')
     this.cookies.set('AuthUser', '') //This has to be set after the proxy since proxy will overwrite our cookie
   }
 }

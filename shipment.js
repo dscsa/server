@@ -60,7 +60,7 @@ exports.get = function* () {
     url = this.query.open_revs ? 'shipment/'+selector._id : view.id([this.user.account._id, selector._id])
 
   if (url)
-    yield this.http.get(url, true)
+    yield this.http(url)
 }
 
 exports.post = function* () { //TODO querystring with label=fedex creates label, maybe track=true/false eventually
@@ -75,22 +75,22 @@ exports.post = function* () { //TODO querystring with label=fedex creates label,
   //Complicated id is not need for shipment, but is needed for transaction that references shipment
   //this way a list function ensure transactions are only provided to the correct from/to accounts
   let _id = `${this.body.account.from._id}.${this.body.account.to._id}.${this.http.id}`
-  let res = yield this.http.put('shipment/'+_id).body(this.body)
+  let res = yield this.http.put('shipment/'+_id, this.body).body
 
   this.body._id  = res.id
   this.body._rev = res.rev
 }
 
 exports.put = function* () {
-  yield this.http(null, true)
+  yield this.http()
 }
 
 exports.bulk_docs = function* () {
-  yield this.http(null, true)
+  yield this.http()
 }
 
 exports.delete = function* () {
-  yield this.http(null, true)
+  yield this.http()
 }
 
 exports.shipped = function* (id) {

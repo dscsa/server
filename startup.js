@@ -13,7 +13,7 @@ function *addDesignDocs (name) {
   let views = {lib:{}}, filters = {}, shows = {}, lists = {}
   let db = require('./'+name)
 
-  yield http.put(name).headers({authorization}).body(true).catch(_ => null) //Create the database
+  yield http.put(name).headers({authorization}).catch(_ => null) //Create the database
 
   //Note ./startup.js saves views,filters,and shows as toString into couchdb and then replaces
   //them with a function that takes a key and returns the couchdb url needed to call them.
@@ -58,16 +58,20 @@ function *addDesignDocs (name) {
     views.lib[libName] = 'module.exports = '+couchdb.string(db.libs[libName])
   }
 
-  let design = yield http.get(name+'/_design/auth').headers({authorization}).catch(err => console.log(err.reason == 'missing' ? 'Initializing new CouchDB database' : err))
+  function err(err) {
+    console.log(err.reason == 'missing' ? 'Initializing new CouchDB database' : err)
+  }
 
-  yield http.put(name+'/_design/auth').headers({authorization}).body({
+  let design = yield http.get(name+'/_design/auth').headers({authorization}).catch(err).body
+
+  yield http.put(name+'/_design/auth', {
     _rev:design && design._rev,
     views,
     filters,
     shows,
     validate_doc_update:couchdb.string(db.validate),
     lists
-  })
+  }).headers({authorization})
 }
 
 co(function*() {

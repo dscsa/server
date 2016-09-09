@@ -73,7 +73,7 @@ exports.get = function*() {
     url = this.query.open_revs ? 'drug/'+selector._id : view.id([this.user.account._id, selector._id])
 
   if (url)
-    this.body = yield this.http.get(url)
+    this.body = yield this.http.get(url).body
 
   if ( ! this.query.open_revs) //this has body in {"ok":doc} formate
     yield exports.updatePrice.call(this, this.body)
@@ -94,15 +94,10 @@ exports.updatePrice = function* (drug) {
   drug.price.goodrx = prices[1] || drug.price.goodrx
   drug.price.updatedAt = new Date().toJSON()
 
-  try {
-    var res = yield this.http.put('drug/'+drug._id).body(drug)
-  }
-  catch (err) {
-    console.log('Error updating drug price!', err, 'drug/'+drug._id, this.status, this.message, res, drug)
-    return false
-  }
-
-  return true //let others now that the drug was updated
+  yield this.http.put('drug/'+drug._id, drug).catch(err => {
+    console.log('Error updating drug price!', err, 'drug/'+drug._id, this.status, this.message, err, drug)
+    //let others now that the drug was updated by returning undefined if err/no update, and response if update
+  })
 }
 
 //Drug product NDC is a good natural key
@@ -117,19 +112,20 @@ exports.post = function* () {
   let save = yield exports.updatePrice.call(this, drug)
 
   if ( ! save)
-    yield this.http.put('drug/'+drug._id).body(drug)
+    yield this.http.put('drug/'+drug._id, drug)
 
   //Return the drug with updated pricing and the new _rev
-  this.body   = yield this.http.get('drug/'+drug._id)
+  this.body   = yield this.http.get('drug/'+drug._id).body
   this.status = 201
 }
 
 exports.put = function* () {
-  this.body = yield this.http.body
-  defaults(this.body)
-  let save = yield this.http('drug/'+this.body._id).body(this.body)
-  this.body._rev = save.rev
-  yield updateTransactions.call(this, this.body)
+  let doc = yield this.http.body
+  defaults(doc)
+  let save = yield this.http('drug/'+doc._id, doc).body
+  doc._rev = save.rev
+  yield updateTransactions.call(this, doc)
+  this.body = doc
 }
 
 exports.bulk_docs = function* () {
@@ -139,11 +135,11 @@ exports.bulk_docs = function* () {
   this.req.setTimeout(body.docs.length * 1000)
 
   if (body.new_edits) //Pouch uses new_edits == true for local docs.
-    return yield this.http(null, true).body(body)
+    return yield this.http(null, body)
 
   for (let drug of body.docs) defaults(drug)
 
-  this.body = yield this.http().body(body)
+  this.body = yield this.http(null, body).body
 
   let chain = Promise.resolve()
 
@@ -170,7 +166,7 @@ exports.bulk_docs = function* () {
 }
 
 exports.delete = function* (id) {
-  yield this.http(null, true)
+  yield this.http()
 }
 
 exports.generic = generic
@@ -204,7 +200,7 @@ function *getNadac(drug) {
   let prices = ""
 
   try {
-    prices = yield this.http.get(`${url} AND starts_with(ndc,"${drug.ndc9}")`).headers({})
+    prices = yield this.http.get(`${url} AND starts_with(ndc,"${drug.ndc9}")`).headers().body
     if ( ! prices.length) //API returns a status of 200 even on failure ;-(
       throw 'No NADAC price found for an ndc starting with '+drug.ndc9
   } catch (err) {
@@ -217,7 +213,7 @@ function *getNadac(drug) {
       }
 
       try{
-        prices = yield this.http.get(url).headers({})
+        prices = yield this.http.get(url).headers().body
 
         if( ! prices.length)  //When the price is not found but no error is thrown
           throw err+' or by name '+url
@@ -258,14 +254,14 @@ function *getGoodrx(drug) {
   let candidateUrl, fullNameUrl = makeUrl(fullName, strength)
   let message = ''
   try {
-    price = yield this.http.get(fullNameUrl).headers({})
+    price = yield this.http.get(fullNameUrl).headers().body
   } catch(err) {
     try {
       if( ! err.errors || ! err.errors[0].candidates) //then there's no fair price drug so this is undefined
         return console.log("GoodRx responded that there is no fair price drug")
 
       candidateUrl = makeUrl(err.errors[0].candidates[0], strength)
-      price = yield this.http.get(candidateUrl).headers({})
+      price = yield this.http.get(candidateUrl).headers().body
       console.log("GoodRx substituting a candidate", err.errors[0].candidates[0], 'for', drug._id, drug.generic)
     } catch(err2) {
       //409 error means qs not properly encoded, 400 means missing drug
@@ -283,7 +279,7 @@ function *getGoodrx(drug) {
 let transaction = require('./transaction') //this creates a circular reference with drugs so cannot be included at top with other requires
 function *updateTransactions(drug) {
   //TODO don't do this if drug.form and drug.generics were not changed
-  let transactions = yield this.http.get(transaction.view.drugs(drug._id))
+  let transactions = yield this.http.get(transaction.view.drugs(drug._id)).body
 
   for (let transaction of transactions) {
     if(
@@ -301,7 +297,8 @@ function *updateTransactions(drug) {
       transaction.drug.price = drug.price
 
     //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
-    this.http.put('transaction/'+transaction._id).headers({authorization}).body(transaction)
+    this.http.put('transaction/'+transaction._id, transaction)
+    .headers({authorization})
     .catch(err => console.log(err))
   }
 }

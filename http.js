@@ -47,19 +47,21 @@ function init(defaults, ctx) {
   }
 
   //Right now {parse:true} is only option, eventually we can suppose {forms, json, multipart}
-  function api(path, proxy) {
+  function api(path, body) {
 
-    let body, stack = new Error().stack, config = parseUrl(path)
+    let proxy = true, stack = new Error().stack, config = parseUrl(path)
 
-    return {
+    let methods = {
       headers(headers) {
-        config.headers = headers
+        config.headers = headers || {}
         return this
       },
 
-      body(body) {
-        config.body = body
-        return this
+      body:{
+        then(a,b) {
+          proxy = false
+          return methods.then(res => api.json(res)).then(a,b)
+        }
       },
 
       then(a, b) {
@@ -105,20 +107,18 @@ function init(defaults, ctx) {
 
           ctx.status = res.statusCode
 
-          let err = ctx.status < 200 || ctx.status >= 300
+          if (ctx.status < 200 || ctx.status >= 300)
+            throw api.json(res)
 
-          if (proxy === true && ! err) {
-            ctx.set && ! ctx.headerSent && ctx.set(res.headers)
-            return ctx.body = res
-          }
+          if (! proxy)
+            return res
 
-          return api.json(res).then(body => {
-            if (err) {
-              body.stack = stack
-              throw body
-            }
-            return body
-          })
+          ctx.set && ! ctx.headerSent && ctx.set(res.headers)
+          ctx.body = res
+        })
+        .catch(err => {
+            err.stack = stack
+            throw err
         })
         .then(a,b)
       },
@@ -127,30 +127,32 @@ function init(defaults, ctx) {
         return this.then(null, b)
       }
     }
+
+    return methods
   }
 
-  api.get = (path, proxy) => {
+  api.get = path => {
     path = parseUrl(path)
     path.method = 'get'
-    return api(path, proxy)
+    return api(path, body)
   }
 
-  api.post = (path, proxy) => {
+  api.post = (path, body) => {
     path = parseUrl(path)
     path.method = 'post'
-    return api(path, proxy)
+    return api(path, body)
   }
 
-  api.put = (path, proxy) => {
+  api.put = (path, body) => {
     path = parseUrl(path)
     path.method = 'put'
-    return api(path, proxy)
+    return api(path, body)
   }
 
-  api.delete = (path, proxy) => {
+  api.delete = (path, body) => {
     path = parseUrl(path)
     path.method = 'delete'
-    return api(path, proxy)
+    return api(path, body)
   }
 
   api.json = stream => {

@@ -74,7 +74,7 @@ r('/goodrx/:ndc9/:name')
   })
 
 function* proxy() {
-  yield this.http(this.path, true)
+  yield this.http()
 }
 
 //This can be a get or a post with specific keys in body.  If
@@ -85,13 +85,13 @@ function* all_docs(db) {
   if (this.method == 'GET')
     url += `?startkey=["${this.user.account._id}"]&endkey=["${this.user.account._id}", "\uffff"]`
 
-  yield this.http(url, true)
+  yield this.http(url)
 }
 
 function* changes(db) {
   this.req.setTimeout(20000) //match timeout in dscsa-pouch
   let url = resources[db].filter.authorized(this.path)
-  yield this.http(url, true)
+  yield this.http(url)
 }
 
 function* bulk_docs(db) {
@@ -185,7 +185,10 @@ app.use(function *(next) {
   function get(list, proxy) {
     return function *(start, end) {
       if (end === true) end = start+'\uffff'
-      yield this.http.get(list(start && [role, start], end && [role, end]), proxy)
+      start = start && [role, start]
+      end = end && [role, end]
+      let res = this.http.get(list(start, end))
+      yield proxy ? res.body : res
     }
   }
 

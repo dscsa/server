@@ -51,31 +51,32 @@ exports.get = function* () {
     url = this.query.open_revs ? 'account/'+selector._id : view.id([this.user.account._id, selector._id])
 
   if (url)
-    yield this.http.get(url, true)
+    yield this.http(url)
 }
 
 exports.post = function* () {
-  this.body            = yield this.http.body
-  this.body.createdAt  = new Date().toJSON()
-  this.body.authorized = this.body.authorized || []
-  this.body._rev       = undefined
+  let doc        = yield this.http.body
+  doc.createdAt  = new Date().toJSON()
+  doc.authorized = doc.authorized || []
+  doc._rev       = undefined
 
-  let save = yield this.http.put('account/'+this.http.id).body(this.body)
+  let save = yield this.http.put('account/'+this.http.id, doc).body
 
-  this.body._id  = save.id
-  this.body._rev = save.rev
+  doc._id  = save.id
+  doc._rev = save.rev
+  this.body = doc
 }
 
 exports.put = function* () {
-  yield this.http(null, true)
+  yield this.http()
 }
 
 exports.bulk_docs = function* () {
-  yield this.http(null, true)
+  yield this.http()
 }
 
 exports.delete = function* (id) {
-  yield this.http(null, true)
+  yield this.http()
 }
 
 //TODO need to update shipments account.from/to.name on change of account name
@@ -93,21 +94,21 @@ exports.authorized = {
     //Authorize a sender
     let body     = yield this.http.body
     let url      = view.id([this.user.account._id])
-    let accounts = yield this.http.get(url)
+    let accounts = yield this.http.get(url).body
 
     if (accounts[0].authorized.includes(body._id)) {
       this.status  = 409
       this.message = 'This account is already authorized'
     } else {
       accounts[0].authorized.push(body._id)
-      yield this.http.put('account/'+this.user.account._id, true).body(accounts[0])
+      yield this.http.put('account/'+this.user.account._id, accounts[0])
     }
   },
   *delete() {
     //Unauthorize a sender
     let body     = yield this.http.body
     let url      = view.id([this.user.account._id])
-    let accounts = yield this.http.get(url)
+    let accounts = yield this.http.get(url).body
     let index    = accounts[0].authorized.indexOf(body._id)
 
     if (index == -1) {
@@ -115,7 +116,7 @@ exports.authorized = {
       this.message = 'This account is already not authorized'
     } else {
       accounts[0].authorized.splice(index, 1)
-      yield this.http.put('account/'+this.user.account._id, true).body(accounts[0])
+      yield this.http.put('account/'+this.user.account._id, accounts[0])
     }
   }
 }
