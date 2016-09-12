@@ -1,17 +1,17 @@
 "use strict"
-// 
-// let http = require('./http')({hostname:'localhost', port: 5984, middleware:false})
-//
+
+let http = require('./http')({host:'localhost:5984', headers:{'content-type':'application/json', accept:'application/json'}, middleware:false})
+
 // // Give it a getRole, views, libs, defaults, validate
 // //also add isRole, emitRole, filter,
 // //return middleware view/list functions,
 //
-// couchdb('transaction').roles(userRoles, docRoles).views(views).libs(libs).validate(validate).then(list => {
+// .then(list => {
 //   //Creates Database, Design Document with Filter/Views/Libs,
 //   //returns view/list functions and proxys
 // })
 
-exports.string = function(fn) {
+function string(fn) {
   fn = fn.toString()
   fn = fn.startsWith('function') ? fn : 'function '+fn
 
@@ -19,53 +19,140 @@ exports.string = function(fn) {
   fn = fn.replace(/require\(("|')/g, 'require($1views/lib/')
 
   //stupid spidermonkey doesn't evaluate function unless surrounded by ()
-  return '('+fn+')'
+  return fn.replace(/function[^(]*/, 'function')
 }
 
-exports.lists = {
-  all:function(head, req) {
-    send('[')
-    var row = getRow()
-    if (row) {
-      send(toJSON(row.doc))
-      while(row = getRow())
-        send(','+toJSON(row.doc))
-    }
-    send(']')
-  }
-}
-
-exports.isRole = function(doc, userCtx) {
-  getRoles = require('getRoles')
-  return getRoles(doc, function(res, role) {
-    return res || role === true || role == userCtx.roles[0] || '_admin' == userCtx.roles[0]
+function isRole(doc, userCtx) {
+  var authorized
+  require('docRoles')(doc, function(role) {
+    authorized = authorized === true || role === undefined || role == userCtx.roles[0] || '_admin' == userCtx.roles[0]
   })
+  return authorized
 }
 
-exports.list = function(db, ddoc, list, view) {
-  return (startKey, endKey) => {
-    let url = `${db}/_design/${ddoc}/_list/${list}/${view}?include_docs=true`
-
-    if ( ! startKey)
-      return url
-
-    startKey = JSON.stringify(startKey)
-
-    if ( ! endKey)
-      return `${url}&key=${startKey}`
-
-    endKey = JSON.stringify(endKey)
-
-    return `${url}&startkey=${startKey}&endkey=${endKey}`
+function emitRole(doc, emit) {
+  return function(key, val) {
+    log('emitRole')
+    log(doc)
+    require('docRoles')(doc, function(role) {
+      log('emitRole '+role)
+      emit([role, key], val)
+    })
   }
 }
 
-exports.filter = function(db, ddoc, filter) {
-   return _ => `${db}/_changes?filter=${ddoc}/${filter}`
+function list(head, req) {
+  send('[')
+  var row = getRow()
+  if (row) {
+    send(toJSON(row.doc))
+    while(row = getRow())
+      send(','+toJSON(row.doc))
+  }
+  send(']')
 }
 
-exports.ensure = function(prefix, args) {
+function filter(doc, req) {
+  if (doc._deleted) return true
+  if (doc._id.slice(0, 8) == '_design/') return false
+  return require('isRole')(doc, req.userCtx)
+}
 
+function defaultDocRoles(doc, emit) {
+  doc._id.slice(0, 7) != '_design/' && emit()
+}
+
+function defaultUserRoles(doc, emit) {
+  emit()
+}
+
+function viewId(doc) {
+  emitRole(doc._id, {rev:doc._rev})
+}
+
+module.exports = function(db, authorization, config) {
+
+  let methods = {view:{},list:{}}, ddoc = {
+    lists:{roles:string(list)},
+    views:config.view || {}
+  }
+
+  if (config.validate)
+    ddoc.validate_doc_update = string(config.validate)
+
+  methods.changes = _ => {
+    return http.get(`${db}/_changes?${ ddoc.filters && '&filter=roles/roles' || ''}`)
+  }
+
+  ddoc.views.lib = config.lib || {}
+  ddoc.views.lib.ensure = ensure //TODO get rid of this hard dependency
+
+  if (config.userRoles && config.docRoles) {
+    ddoc.filters = {roles:string(filter)}
+  }
+
+  config.userRoles = config.userRoles || defaultUserRoles
+  ddoc.views.lib.docRoles = config.docRoles || defaultDocRoles
+  ddoc.views.lib.isRole   = isRole
+  ddoc.views.lib.emitRole = emitRole
+
+  ddoc.views.id = viewId
+
+  for (let i in ddoc.views) {
+    if (i == 'lib') continue
+    let inject  = "var emitRole = require('views/lib/emitRole')(doc, emit);"
+    let view    = string(ddoc.views[i])
+    let hasRole = ~ view.indexOf('emitRole(')
+    ddoc.views[i] = {map:view.replace('{', '{'+inject)}
+    methods.list[i] = method.bind({hasRole, view:i, path:'_list/roles'})
+    methods.view[i] = method.bind({hasRole, view:i, path:'_view'})
+  }
+
+  for (let i in ddoc.views.lib)
+    ddoc.views.lib[i] = 'module.exports = '+string(ddoc.views.lib[i])
+
+  http.put(db, {}).headers({authorization}).catch(_ => null) //Create the database, suppress error
+  .then(_   => http.get(db+'/_design/roles').headers({authorization}).body)
+  .then(old => ddoc._rev = old._rev)
+  .catch()
+  .then(_ => http.put(db+'/_design/roles', ddoc).headers({authorization}))
+
+  return function *(next) {
+    config.userRoles(this, role => config.role = role)
+    http.context(this)
+    this[db] = methods
+    yield next
+  }
+
+  function method(startKey, endKey) {
+
+    let url = `${db}/_design/roles/${this.path}/${this.view}?include_docs=true`
+
+    if (startKey) {
+      if (endKey === true)
+        endKey = startKey+'\uffff'
+        
+      if (this.hasRole)
+        startKey = [config.role, startKey]
+
+      startKey = JSON.stringify(startKey)
+    }
+
+    if (endKey) {
+
+      if (this.hasRole)
+        endKey = [config.role, endKey]
+
+      url += `&startkey=${startKey}&endkey=${JSON.stringify(endKey)}`
+    }
+    else if (startKey)
+      url += `&key=${startKey}`
+
+    return http.get(url)
+  }
+}
+
+function ensure(prefix, args) {
   var newDoc  = args[0]
   var oldDoc  = args[1]
   var userCtx = args[2]
