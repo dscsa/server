@@ -50,6 +50,7 @@ function getDefaults(userUrl = {}, defaultUrl = {}, ctxUrl = {}) {
 
 function getHeaders(userHeaders, defaultHeaders, ctxHeaders) {
   let headers = Object.assign({}, ctxHeaders, defaultHeaders, userHeaders)
+  if (headers['authorization']) delete headers['cookie'] //cookie takes precendence, but we need it not to for /_user calls
   delete headers['content-length']
   return headers
 }
@@ -181,7 +182,7 @@ function httpFactory(settings) {
   return http
 
   function request(config) {
-    //console.log('httpRequest', config.protocol, config.hostname, config.port, config.path)
+    //console.log('httpRequest', config.method, config.hostname, config.port, config.path, config.headers)
     var req = httpRequest(config)
 
     if(config.method == 'GET')
@@ -215,6 +216,8 @@ function httpFactory(settings) {
         throw asyncError(body, res.statusCode)
       })
 
+    //While not an error per-se, no proxy means we are relying on a result that based
+    //on the status codes most likely did not come.  Better to throw out of normal flow
     if ( ! this.proxy && (res.statusCode < 200 || res.statusCode >= 300))
       throw http.json(res)
 
