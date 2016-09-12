@@ -2,7 +2,7 @@
 let secret = require('../../keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 
-exports.libs = {}
+exports.lib = {}
 
 exports.getRoles = function(doc, reduce) {
   //Authorize _deleted docs but not _design docs
@@ -11,6 +11,16 @@ exports.getRoles = function(doc, reduce) {
 
   //Only users can access their account
   return reduce(null, doc.account._id)
+}
+
+//Must account for deleted, design, and regular
+exports.docRoles = function(doc, emit) {
+  //Determine whether user is authorized to see the doc
+  emit(doc._deleted || doc.account._id)
+}
+
+exports.userRoles = (ctx, emit) => {
+  ctx.session && emit(ctx.session.account._id)
 }
 
 exports.validate = function(newDoc, oldDoc, userCtx) {
@@ -36,24 +46,18 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
 var view = exports.view = {
   email(doc) { //for session login
     emit(doc.email)
-  },
-  id(doc) { //Right now this should emit everything but getRoles could change
-    require('getRoles')(doc, function(res, role) {
-      emit([role, doc._id], {rev:doc._rev})
-    })
   }
 }
 
 //TODO switch this to using email once bulk_get is working
 exports.get = function* () {
-  let url, selector = JSON.parse(this.query.selector)
+  let s = JSON.parse(this.query.selector)
 
   //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
-  if (selector._id)
-    url = this.query.open_revs ? 'user/'+selector._id : view.id([this.user.account._id, selector._id])
-
-  if (url)
-    yield this.http(url)
+  if (s._id)
+    return yield this.query.open_revs
+      ? this.http.get('user/'+s._id)
+      : this.user.list.id(s._id)
 }
 
 //CouchDB requires an _id based on the user's name
@@ -73,7 +77,7 @@ exports.post = function* () {
   doc.createdAt = new Date().toJSON()
   doc.password  = undefined
 
-  save = yield this.http.put('user/'+name, doc).body
+  let save = yield this.http.put('user/'+name, doc).body
 
   doc._id  = save.id
   doc._rev = save.rev
@@ -111,15 +115,13 @@ exports.email = function* () {
 exports.session = {
   *post() {
     let login = yield this.http.body
-    let user  = yield this.http.get(view.email(login.email)).body
-    user = user[0] //assume just one user per email for now
-
-    if ( ! user)
+    let users = yield this.user.list.email(login.email).body //assume just one user per email for now
+    if ( ! users[0])
       this.throw(404, 'No user exists with the email '+login.email)
 
-    yield this.http('_session', {name:user._id, password:login.password}) //.headers(this.headers)
+    yield this.http('_session', {name:users[0]._id, password:login.password}) //.headers(this.headers)
 
-    this.body = {_id:user._id, account:{_id:user.account._id}}
+    this.body = {_id:users[0]._id, account:{_id:users[0].account._id}}
     this.cookies.set('AuthUser', JSON.stringify(this.body), {httpOnly:false})
   },
 

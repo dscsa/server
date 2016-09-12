@@ -1,15 +1,6 @@
 "use strict"
 
-exports.libs = {}
-
-exports.getRoles = function(doc, reduce) {
-  //Authorize _deleted docs but not _design docs
-  if (doc._deleted || doc._id.slice(0, 7) == '_design')
-    return doc._deleted
-
-  //Everyone can access accounts
-  return reduce()
-}
+exports.lib = {}
 
 exports.validate = function(newDoc, oldDoc, userCtx) {
 
@@ -35,23 +26,14 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   }
 }
 
-var view = exports.view = {
-  id(doc) { //Right now this should emit everything but getRoles could change
-    require('getRoles')(doc, function(res, role) {
-      emit([role, doc._id], {rev:doc._rev})
-    })
-  }
-}
-
 exports.get = function* () {
-  let url, selector = JSON.parse(this.query.selector)
+  let s = JSON.parse(this.query.selector)
 
   //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
-  if (selector._id)
-    url = this.query.open_revs ? 'account/'+selector._id : view.id([this.user.account._id, selector._id])
-
-  if (url)
-    yield this.http(url)
+  if (s._id)
+    return yield this.query.open_revs
+      ? this.http.get('account/'+s._id)
+      : this.account.list.id(s._id)
 }
 
 exports.post = function* () {
@@ -93,22 +75,21 @@ exports.authorized = {
   *post() {
     //Authorize a sender
     let body     = yield this.http.body
-    let url      = view.id([this.user.account._id])
-    let accounts = yield this.http.get(url).body
-
+    let accounts = yield this.account.list.id(this.session.account._id).body
+    let allAccounts = yield this.account.list.id().body
+    console.log(this.session.account._id, accounts, allAccounts)
     if (accounts[0].authorized.includes(body._id)) {
       this.status  = 409
       this.message = 'This account is already authorized'
     } else {
       accounts[0].authorized.push(body._id)
-      yield this.http.put('account/'+this.user.account._id, accounts[0])
+      yield this.http.put('account/'+accounts[0]._id, accounts[0])
     }
   },
   *delete() {
     //Unauthorize a sender
     let body     = yield this.http.body
-    let url      = view.id([this.user.account._id])
-    let accounts = yield this.http.get(url).body
+    let accounts = yield this.account.list.id(this.session.account._id).body
     let index    = accounts[0].authorized.indexOf(body._id)
 
     if (index == -1) {
@@ -116,7 +97,7 @@ exports.authorized = {
       this.message = 'This account is already not authorized'
     } else {
       accounts[0].authorized.splice(index, 1)
-      yield this.http.put('account/'+this.user.account._id, accounts[0])
+      yield this.http.put('account/'+accounts[0]._id, accounts[0])
     }
   }
 }

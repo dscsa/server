@@ -1,6 +1,6 @@
 "use strict"
 
-exports.libs = {
+exports.lib = {
   validShipmentId(val, newDoc, userCtx) {
     val = val.split('.')
 
@@ -16,13 +16,14 @@ exports.libs = {
   }
 }
 
-exports.getRoles = function(doc, reduce) {
-  //Authorize _deleted docs but not _design docs
-  if (doc._deleted || doc._id.slice(0, 7) == '_design')
-    return doc._deleted
 
+exports.docRoles = function(doc, emit) {
   //Determine whether user is authorized to see the doc
-  return doc._id.split('.').slice(0, 2).reduce(reduce)
+  doc._deleted ? emit() : doc._id.split('.').slice(0, 2).forEach(emit)
+}
+
+exports.userRoles = (ctx, emit) => {
+  ctx.session && emit(ctx.session.account._id)
 }
 
 exports.validate = function(newDoc, oldDoc, userCtx) {
@@ -44,23 +45,14 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   ensure('verifiedAt').isDate
 }
 
-var view = exports.view = {
-  id(doc) {
-    require('getRoles')(doc, function(res, role) {
-      emit([role, doc._id], {rev:doc._rev})
-    })
-  }
-}
-
 exports.get = function* () {
-  let url, selector = JSON.parse(this.query.selector)
-
+  let s = JSON.parse(this.query.selector)
+  console.log('shipment get', this.query.open_revs)
   //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
-  if (selector._id)
-    url = this.query.open_revs ? 'shipment/'+selector._id : view.id([this.user.account._id, selector._id])
-
-  if (url)
-    yield this.http(url)
+  if (s._id)
+    return yield this.query.open_revs
+      ? this.http.get('shipment/'+s._id)
+      : this.shipment.list.id(s._id)
 }
 
 exports.post = function* () { //TODO querystring with label=fedex creates label, maybe track=true/false eventually
@@ -75,10 +67,10 @@ exports.post = function* () { //TODO querystring with label=fedex creates label,
   //Complicated id is not need for shipment, but is needed for transaction that references shipment
   //this way a list function ensure transactions are only provided to the correct from/to accounts
   let _id = `${this.body.account.from._id}.${this.body.account.to._id}.${this.http.id}`
-  let res = yield this.http.put('shipment/'+_id, this.body).body
+  let save = yield this.http.put('shipment/'+_id, this.body).body
 
-  this.body._id  = res.id
-  this.body._rev = res.rev
+  this.body._id  = save.id
+  this.body._rev = save.rev
 }
 
 exports.put = function* () {

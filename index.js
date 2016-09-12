@@ -1,20 +1,25 @@
 "use strict"
 
-require('./startup')
 let fs          = require('fs')
 let extname     = require('path').extname
 let app         = require('koa')()
 let route       = require('koa-route')
 let http        = require('./http')
+let couchdb     = require('./couchdb')
 let project     = require('../client/aurelia_project/aurelia')
+let secret      = require('../../keys/dev')
 let assets      = project.build.targets[0].output
+
+//TODO set _users db admin role to ['user']
+//TODO set this on the command line rather than in code
+let auth = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 
 let resources = {
   drug          : require('./drug'),
   account       : require('./account'),
   user          : require('./user'),
   shipment      : require('./shipment'),
-  transaction   :require('./transaction'),
+  transaction   : require('./transaction'),
 }
 
 function r(url, options) {
@@ -64,7 +69,14 @@ function r(url, options) {
 // -example
 */
 
-app.use(http({hostname:'localhost', port: 5984, middleware:'http'}))
+app.use(http({host:'localhost:5984', headers:{'content-type':'application/json', accept:'application/json'}, middleware:'http'}))
+app.use(function*(next) {
+  this.session = JSON.parse(this.cookies.get('AuthUser') || 'null')
+  yield next
+})
+
+for (let i in resources)
+  app.use(couchdb(i, auth, resources[i]))
 
 //TODO remove this hack once no longer needed
 r('/goodrx/:ndc9/:name')
@@ -80,18 +92,12 @@ function* proxy() {
 //This can be a get or a post with specific keys in body.  If
 //keys in body we cannot specify start/end keys in querystring
 function* all_docs(db) {
-  let url = `/${db}/_design/auth/_view/id`
-
-  if (this.method == 'GET')
-    url += `?startkey=["${this.user.account._id}"]&endkey=["${this.user.account._id}", "\uffff"]`
-
-  yield this.http(url)
+  yield this[db].view.id()
 }
 
 function* changes(db) {
   this.req.setTimeout(20000) //match timeout in dscsa-pouch
-  let url = resources[db].filter.authorized(this.path)
-  yield this.http(url)
+  yield this[db].changes()
 }
 
 function* bulk_docs(db) {
@@ -127,7 +133,6 @@ function* getAsset(file) {
 app.use(function* (next) {
   //Sugar
   this.path = decodeURIComponent(this.path)
-  this.user = JSON.parse(this.cookies.get('AuthUser') || 'null')
 
   //Rather setting up CouchDB for CORS, it's easier & more secure to do here
   this.set('access-control-allow-origin', this.headers.origin)
@@ -143,22 +148,25 @@ app.use(function *(next) {
   try {
     yield next
   } catch (err) {
-    this.body = err
+
+  this.status >= 400 ? this.status : 500
+
     //Handle three types of errors
-    //1 & 2) actual coding errors & this.throw() errors from my code.
-    //2) couchdb errors thrown by http.js
+    //1) actual coding errors, which will be instanceof Error
+    //2) this.throw() errors from my code which will be instanceof Error
+    //3) http statusCodes <200 && >=300 in which we want to stop normal flow and proxy response to user
+    this.body = err
     if (err instanceof Error) {
-      this.status = err.status || 500
-      this.body   = { //Mimic the a CouchDB error structure as closely as possible
+      this.status  = err.status || 500 //koa's this.throw sets err.status
+      this.message = err.name+': '+err.message
+      this.body = { //Mimic the a CouchDB error structure as closely as possible
         error:err.name,
-        reason:err.message
+        reason:err.message,
+        stack:err.stack.split("\n"),
+        request:this.req.body && JSON.parse(this.req.body),
+        status:this.status
       }
     }
-
-    this.body.request = this.req.body && JSON.parse(this.req.body)
-    this.body.stack   = err.stack.split("\n").slice(1) //don't repeat err.message on line 1 TODO:security
-    this.body.status  = this.status
-    this.message = this.body.error+': '+this.body.reason
   }
 })
 
@@ -178,30 +186,6 @@ app.use(function *(next) {
 // POST   users/_all_docs
 // POST   users/_revs_diff
 // POST   users/_changes
-
-app.use(function *(next) {
-  let role = this.user.account._id
-
-  function get(list, proxy) {
-    return function *(start, end) {
-      if (end === true) end = start+'\uffff'
-      start = start && [role, start]
-      end = end && [role, end]
-      let res = this.http.get(list(start, end))
-      yield proxy ? res.body : res
-    }
-  }
-
-  for (resource in resources) {
-    this[resource] = resources[resource]
-    this[resource].list = {}
-    for (let view in resources.drug.view) {
-      let list = couchdb.list(resource, 'auth', 'all', view)
-      this[resource].list[view]         = get(list, false)
-      this[resource].list[view+'Proxy'] = get(list, true)
-    }
-  }
-})
 
 //Serve the application and assets
 r('/'+assets+'/:file', {end:false})

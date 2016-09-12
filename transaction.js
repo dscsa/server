@@ -1,11 +1,11 @@
 "use strict"
-let drugs    = require('./drug')
+let drug     = require('./drug')
 let shipment = require('./shipment')
 
-exports.libs = {
-  generic:drugs.generic,
-  validDrug:drugs.libs.validDrug,
-  validShipmentId:shipment.libs.validShipmentId,
+exports.lib = {
+  generic:drug.generic,
+  validDrug:drug.lib.validDrug,
+  validShipmentId:shipment.lib.validShipmentId,
   qtyRemaining(doc) {
     function sum(sum, next) {
       return sum + next.qty
@@ -13,31 +13,31 @@ exports.libs = {
 
     return doc.qty.to || doc.qty.from - doc.next.reduce(sum, 0)
   },
-  getRolesIfInventory(doc, reduce) {
-    var qtyRemaining = require('qtyRemaining')
-    var getRoles  = require('getRoles')
-    if (qtyRemaining(doc) > 0)//inventory only
-      doc.verifiedAt && getRoles(doc, reduce)
+  isInventory(doc) {
+    return doc.verifiedAt && require('qtyRemaining')(doc) > 0 //inventory only
   }
 }
 
-exports.getRoles = function(doc, reduce) {
-  //Authorize _deleted docs but not _design docs
-  if (doc._deleted || doc._id.slice(0, 7) == '_design')
-    return doc._deleted
-
+exports.docRoles = function(doc, emit) {
   //Determine whether user is authorized to see the doc
-  return doc.shipment._id.split('.').slice(0, 2).reduce(reduce)
+  doc._deleted ? emit() : doc.shipment._id.split('.').slice(0, 2).forEach(emit)
+}
+
+exports.userRoles = (ctx, emit) => {
+  ctx.session && emit(ctx.session.account._id)
 }
 
 exports.validate = function(newDoc, oldDoc, userCtx) {
-
+  log('transaction.validate')
+  log(newDoc)
+  log(oldDoc)
   var id = /^[a-z0-9]{7}$/
   var ensure          = require('ensure')('transaction', arguments)
   var qtyRemaining    = require('qtyRemaining')
   var validShipmentId = require('validShipmentId')
 
-  require('validDrug')('transaction.drug', newDoc.drug, oldDoc && oldDoc.drug, userCtx)
+  if ( ! newDoc._deleted)
+    require('validDrug')('transaction.drug', newDoc.drug, oldDoc && oldDoc.drug, userCtx)
 
   //Required
   ensure('_id').notNull.assert(id)
@@ -68,51 +68,35 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
 exports.view = {
   history(doc) {
     for (var i in doc.next)
-      doc.next[i].transaction && emit(doc.next[i].transaction._id)
+      doc.next[i].transaction && emitAll(doc.next[i].transaction._id)
   },
 
   //used by drug endpoint to update transactions on drug name/form updates
   drugs(doc) {
-    emit(doc.drug._id)
-  },
-
-  id(doc) {
-    require('getRoles')(doc, function(res, role) {
-      emit([role, doc._id], {rev:doc._rev})
-    })
+    emitAll(doc.drug._id)
   },
 
   shipment(doc) {
-    require('getRoles')(doc, function(res, role) {
-      emit([role, doc.shipment._id])
-    })
+    emitRole(doc.shipment._id)
   },
 
   //TODO How to incorporate Complete/Verified/Destroyed, multiple map functions?  compound key e.g., [createAt, typeof verified] with grouping?
   record(doc) {
     if (doc.shipment._id.split('.').length == 3)
-      require('getRoles')(doc, function(res, role) {
-        emit([role, doc.createdAt])
-      })
+     emitRole(doc.createdAt)
   },
 
   //For inventory search.
   inventoryGeneric(doc) {
-    require('getRolesIfInventory')(doc, function(res, role) {
-      emit([role, doc.drug.generic])
-    })
+    require('isInventory')(doc) && emitRole(doc.drug.generic)
   },
 
   inventoryLocation(doc) {
-    require('getRolesIfInventory')(doc, function(res, role) {
-      emit([role, doc.location])
-    })
+    require('isInventory')(doc) && emitRole(doc.location)
   },
 
   inventoryExp(doc) {
-    require('getRolesIfInventory')(doc, function(res, role) {
-      emit([role, doc.exp.to || doc.exp.from])
-    })
+    require('isInventory')(doc) && emitRole(doc.exp.to || doc.exp.from)
   }
 }
 
@@ -121,24 +105,26 @@ exports.get = function* () {
   let url, s = JSON.parse(this.query.selector)
 
   if (this.query.history && s._id)
-    return this.body = yield history(this, sel._id)
+    return this.body = yield history(this, s._id)
 
   if (s.createdAt && s.createdAt.$gte && s.createdAt.$lte) {
     this.req.setTimeout(10000)
-    return yield this.transaction.list.recordProxy(s.createdAt.$gte, s.createdAt.$lte)
+    return yield this.transaction.list.record(s.createdAt.$gte, s.createdAt.$lte)
   }
 
   if (s.inventory && s.generic)
-    return yield this.transaction.list.inventoryGenericProxy(s.generic)
+    return yield this.transaction.list.inventoryGeneric(s.generic)
 
   if (s.inventory && s.exp)
-    return yield this.transaction.list.inventoryExpProxy(s.exp, true)
+    return yield this.transaction.list.inventoryExp(s.exp, true)
 
   if (s.inventory && s.location)
-    return yield this.transaction.list.inventoryExpProxy(s.location, true)
+    return yield this.transaction.list.inventoryExp(s.location, true)
 
-  if (s['shipment._id'])
-    return yield this.transaction.list.shipmentProxy(s['shipment._id'])
+  if (s['shipment._id']) {
+    //console.log('this.transaction', this.transaction)
+    return yield this.transaction.list.shipment(s['shipment._id'])
+  }
 
   //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
   if (s._id)
@@ -155,9 +141,10 @@ exports.post = function* () {
 
   //Making sure these are accurate and upto date is too
   //costly to do on every save so just do it on creation
-  let url   = drugs.view.id([this.user.account._id, transaction.drug._id])
-  let drugs = yield this.http.get(url).body
-  yield drugs.updatePrice.call(this, drugs[0])
+  console.log('trans post 1', doc)
+  let drugs = yield this.drug.list.id(doc.drug._id).body
+  console.log('trans post 2', drugs)
+  yield drug.updatePrice.call(this, drugs[0])
 
   doc.drug.price    = drugs[0].price
   doc.drug.brand    = drugs[0].brand
@@ -188,7 +175,7 @@ exports.bulk_docs = function* () {
 exports.delete = function* () {
   let doc = yield this.http.body
 
-  if (next.length)
+  if (doc.next.length)
     this.throw(409, `Cannot delete this transaction because it has subsequent transactions in "next" property`)
 
   //TODO delete all elements in transaction.nexts that have this transaction listed
@@ -206,7 +193,7 @@ function defaults(body) {
   //Empty string -> null, string -> number, number -> number (including 0)
   body.qty.to     = body.qty.to != null && body.qty.to !== '' ? +body.qty.to : null     //don't turn null to 0 since it will get erased
   body.qty.from   = body.qty.from != null && body.qty.from !== '' ? +body.qty.from : null //don't turn null to 0 since it will get erased
-  body.shipment   = body.shipment && body.shipment._id ? body.shipment : {_id:this.user.account._id}
+  body.shipment   = body.shipment && body.shipment._id ? body.shipment : {_id:this.session.account._id}
 
   return body
 }
@@ -222,7 +209,7 @@ function *history($this, id) {
   function *history (_id, list) {
 
     let trans = yield $this.http.get('transaction/'+_id).body //don't use show function because we might need to see transactions not directly authorized
-    let prevs = yield $this.http.get(view.history(_id)).body  //TODO is there a way to use "joins" http://docs.couchdb.org/en/stable/couchapp/views/joins.html to make this more elegant
+    let prevs = yield $this.transaction.list.history(_id).body  //TODO is there a way to use "joins" http://docs.couchdb.org/en/stable/couchapp/views/joins.html to make this more elegant
     let all   = [$this.http.get('shipment/'+trans.shipment._id).body]
     list.push(trans)
 
@@ -323,7 +310,7 @@ function *history($this, id) {
 //     if ( ! inv) //Only delete inventory if it actually exists
 //       this.throw(409, `Cannot unverify this transaction because no subsequent transaction with history containing ${doc._id} could be found`)
 //
-//     if (inv.shipment._id != this.user.account._id)
+//     if (inv.shipment._id != this.session.account._id)
 //       this.throw(409, `Cannot unverify this transaction because the subsequent transaction ${inv._id} has already been assigned to another shipment`)
 //
 //     yield this.http.delete('transaction/'+inv._id+'?rev='+inv._rev).body(inv)

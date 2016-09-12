@@ -4,7 +4,7 @@ let crypto  = require('crypto')
 let secret  = require('../../keys/dev')
 let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
 
-exports.libs = {
+exports.lib = {
   generic:generic,
   validDrug(prefix, newDrug, oldDrug, userCtx) {
 
@@ -28,15 +28,6 @@ exports.libs = {
   }
 }
 
-exports.getRoles = function(doc, reduce) {
-  //Authorize _deleted docs but not _design docs
-  if (doc._deleted || doc._id.slice(0, 7) == '_design')
-    return doc._deleted
-
-  //Everyone can access drugs
-  return reduce()
-}
-
 exports.validate = function(newDoc, oldDoc, userCtx) {
 
   var ensure = require('ensure')('drug', arguments)
@@ -56,24 +47,15 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   }
 }
 
-var view = exports.view = {
-  id(doc) { //Right now this should emit everything but getRoles could change
-    require('getRoles')(doc, function(res, role) {
-      emit([role, doc._id], {rev:doc._rev})
-    })
-  }
-}
-
 //Retrieve drug and update its price if it is out of date
 exports.get = function*() {
-  let url, selector = JSON.parse(this.query.selector)
+  let s = JSON.parse(this.query.selector)
 
   //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
-  if (selector._id)
-    url = this.query.open_revs ? 'drug/'+selector._id : view.id([this.user.account._id, selector._id])
-
-  if (url)
-    this.body = yield this.http.get(url).body
+  if (s._id)
+    this.body = yield this.query.open_revs
+      ? this.http.get('drug/'+s._id).body
+      : this.drug.list.id(s._id).body
 
   if ( ! this.query.open_revs) //this has body in {"ok":doc} formate
     yield exports.updatePrice.call(this, this.body)
@@ -139,7 +121,9 @@ exports.bulk_docs = function* () {
 
   for (let drug of body.docs) defaults(drug)
 
+  console.log('drug._bulk_docs', body.docs.length)
   this.body = yield this.http(null, body).body
+  console.log('drug._bulk_docs', this.body)
 
   let chain = Promise.resolve()
 
@@ -202,7 +186,7 @@ function *getNadac(drug) {
   try {
     prices = yield this.http.get(`${url} AND starts_with(ndc,"${drug.ndc9}")`).headers().body
     if ( ! prices.length) //API returns a status of 200 even on failure ;-(
-      throw 'No NADAC price found for an ndc starting with '+drug.ndc9
+      throw console.log('No NADAC price found for an ndc starting with '+drug.ndc9)
   } catch (err) {
 
       for (generic of drug.generics) {
@@ -216,26 +200,26 @@ function *getNadac(drug) {
         prices = yield this.http.get(url).headers().body
 
         if( ! prices.length)  //When the price is not found but no error is thrown
-          throw err+' or by name '+url
+          throw console.log('No NADAC price found for an ndc starting with '+err+' or by name '+url)
 
       } catch (err) {
-        return console.log(err, this.status, this.message, prices, drug._id, drug.generic)
+        return console.log(this.status, this.message, prices, drug._id, drug.generic)
       }
   }
 
-  let response = prices.pop()
+  let res = prices.pop()
 
   //Need to handle case where price is given per ml to ensure database integrity
-  if(response.pricing_unit == "ML"){ //a component of the NADAC response that described unit of price ("each" or "ml")
-    let numberOfML = response.ndc_description.match(/\/([0-9.]+)[^\/]*$/) //looks for the denominator in strength to determine per unit cost, not per ml
+  if(res.pricing_unit == "ML"){ //a component of the NADAC response that described unit of price ("each" or "ml")
+    let numberOfML = res.ndc_description.match(/\/([0-9.]+)[^\/]*$/) //looks for the denominator in strength to determine per unit cost, not per ml
     if(numberOfML){  //responds null if there is no denominator value in strength
-      let total = +numberOfML[1] * +response.nadac_per_unit //essentialy number of ml times price per ml
-      console.log("Converted from price/ml to price/unit of: ", total)
+      let total = +numberOfML[1] * +res.nadac_per_unit //essentialy number of ml times price per ml
+      console.trace("Converted from price/ml to price/unit of: ", total)
       return +total.toFixed(4)
     }
   }
 
-  return +(+response.nadac_per_unit).toFixed(4) //In other case where price is found, will return here
+  return +(+res.nadac_per_unit).toFixed(4) //In other case where price is found, will return here
 }
 
 exports.goodrx = getGoodrx
@@ -258,28 +242,27 @@ function *getGoodrx(drug) {
   } catch(err) {
     try {
       if( ! err.errors || ! err.errors[0].candidates) //then there's no fair price drug so this is undefined
-        return console.log("GoodRx responded that there is no fair price drug")
+        return console.trace('GoodRx responded that there is no fair price for', err, drug._id, drug.generic, fullNameUrl)
 
       candidateUrl = makeUrl(err.errors[0].candidates[0], strength)
       price = yield this.http.get(candidateUrl).headers().body
-      console.log("GoodRx substituting a candidate", err.errors[0].candidates[0], 'for', drug._id, drug.generic)
+      console.trace("GoodRx substituting a candidate", err.errors[0].candidates[0], 'for', drug._id, drug.generic)
     } catch(err2) {
       //409 error means qs not properly encoded, 400 means missing drug
-      return console.log("GoodRx price could not be updated", this.status, this.message, price, drug._id, drug.generics, fullNameUrl, candidateUrl)
+      return console.trace("GoodRx price could not be updated", this.status, this.message, price, drug._id, drug.generics, fullNameUrl, candidateUrl)
     }
   }
 
   if ( ! price.data.quantity)
-    return console.log('GoodRx did not return a quantity', price) || null
+    return console.trace('GoodRx did not return a quantity', price) || null
 
   return +(price.data.price/price.data.quantity).toFixed(4)
 }
 
 //Get all transactins using this drug so we can update denormalized database
-let transaction = require('./transaction') //this creates a circular reference with drugs so cannot be included at top with other requires
 function *updateTransactions(drug) {
   //TODO don't do this if drug.form and drug.generics were not changed
-  let transactions = yield this.http.get(transaction.view.drugs(drug._id)).body
+  let transactions = yield this.transaction.list.drugs(drug._id).body
 
   for (let transaction of transactions) {
     if(
