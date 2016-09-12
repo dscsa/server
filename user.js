@@ -16,7 +16,7 @@ exports.getRoles = function(doc, reduce) {
 //Must account for deleted, design, and regular
 exports.docRoles = function(doc, emit) {
   //Determine whether user is authorized to see the doc
-  emit(doc._deleted || doc.account._id)
+  emit(doc.account._id)
 }
 
 exports.userRoles = (ctx, emit) => {
@@ -62,8 +62,8 @@ exports.get = function* () {
 
 //CouchDB requires an _id based on the user's name
 exports.post = function* () {
-  let name  = this.http.id
-  let doc   = yield this.http.body
+  let name = this.http.id
+  let doc  = yield this.http.body
 
   let _user = {
     name,
@@ -72,7 +72,8 @@ exports.post = function* () {
     password:doc.password
   }
 
-  yield this.http.put('_users/org.couchdb.user:'+name, _user).headers({authorization})
+  //We don't need the body here but want to trigger an error if anything but 201 created
+  yield this.http.put('_users/org.couchdb.user:'+name, _user).headers({authorization}).body
 
   doc.createdAt = new Date().toJSON()
   doc.password  = undefined

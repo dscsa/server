@@ -19,7 +19,7 @@ exports.lib = {
 
 exports.docRoles = function(doc, emit) {
   //Determine whether user is authorized to see the doc
-  doc._deleted ? emit() : doc._id.split('.').slice(0, 2).forEach(emit)
+  doc._id.split('.').slice(0, 2).forEach(emit)
 }
 
 exports.userRoles = (ctx, emit) => {
