@@ -23,17 +23,23 @@ function string(fn) {
 }
 
 function isRole(doc, userCtx) {
+  if (doc._deleted) return userCtx.roles.length
+  if (doc._id.slice(0, 8) == '_design/') return false
+
+  log('isRole')
+  log(userCtx)
+  log(doc)
   var authorized
   require('docRoles')(doc, function(role) {
-    authorized = authorized === true || role === undefined || role == userCtx.roles[0] || '_admin' == userCtx.roles[0]
+    log('role '+role)
+    log('authorized '+authorized)
+    authorized = authorized === true || role === undefined || role == userCtx.roles[0] //|| '_admin' == userCtx.roles[0]
   })
   return authorized
 }
 
 function emitRole(doc, emit) {
   return function(key, val) {
-    log('emitRole')
-    log(doc)
     require('docRoles')(doc, function(role) {
       log('emitRole '+role)
       emit([role, key], val)
@@ -53,8 +59,6 @@ function list(head, req) {
 }
 
 function filter(doc, req) {
-  if (doc._deleted) return true
-  if (doc._id.slice(0, 8) == '_design/') return false
   return require('isRole')(doc, req.userCtx)
 }
 
@@ -81,7 +85,7 @@ module.exports = function(db, authorization, config) {
     ddoc.validate_doc_update = string(config.validate)
 
   methods.changes = _ => {
-    return http.get(`${db}/_changes?${ ddoc.filters && '&filter=roles/roles' || ''}`)
+    return http.get(`${db}/_changes${ ddoc.filters && '?filter=roles/roles' || ''}`)
   }
 
   ddoc.views.lib = config.lib || {}
@@ -114,7 +118,7 @@ module.exports = function(db, authorization, config) {
   http.put(db, {}).headers({authorization}).catch(_ => null) //Create the database, suppress error
   .then(_   => http.get(db+'/_design/roles').headers({authorization}).body)
   .then(old => ddoc._rev = old._rev)
-  .catch()
+  .catch(_ => null) //suppress error if this is a new ddoc
   .then(_ => http.put(db+'/_design/roles', ddoc).headers({authorization}))
 
   return function *(next) {
@@ -124,29 +128,22 @@ module.exports = function(db, authorization, config) {
     yield next
   }
 
-  function method(startKey, endKey) {
+  function method(startKey = '', endKey = '') {
 
     let url = `${db}/_design/roles/${this.path}/${this.view}?include_docs=true`
 
-    if (startKey) {
-      if (endKey === true)
-        endKey = startKey+'\uffff'
-        
-      if (this.hasRole)
-        startKey = [config.role, startKey]
+    if (endKey === true || ! endKey && this.hasRole)
+      endKey = startKey+'\uffff'
 
-      startKey = JSON.stringify(startKey)
-    }
-
-    if (endKey) {
-
-      if (this.hasRole)
+    if (this.hasRole) { //Even if no start/end key, we need to do authentication
+      startKey = [config.role, startKey]
         endKey = [config.role, endKey]
-
-      url += `&startkey=${startKey}&endkey=${JSON.stringify(endKey)}`
     }
-    else if (startKey)
-      url += `&key=${startKey}`
+
+    if (startKey) {
+      startKey = JSON.stringify(startKey)
+      url += endKey ? `&startkey=${startKey}&endkey=${JSON.stringify(endKey)}` : `&key=${startKey}`
+    }
 
     return http.get(url)
   }
