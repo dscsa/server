@@ -122,9 +122,12 @@ module.exports = function(db, authorization, config) {
     yield next
   }
 
-  function method(startKey = '', endKey = '') {
+  function method(startKey = '', endKey = '', opts) {
 
-    let url = `${db}/_design/roles/${this.path}/${this.view}?include_docs=true&limit=1000`
+    let url = `${db}/_design/roles/${this.path}/${this.view}?include_docs=true`
+
+    if (opts.limit)
+      url += `&limit=${opts.limit}`
 
     if (endKey === true || ! endKey && this.hasRole)
       endKey = startKey+'\uffff'

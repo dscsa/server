@@ -117,10 +117,10 @@ exports.get = function* () {
     return yield this.transaction.list.inventoryGeneric(s.generic)
 
   if (s.inventory && s.exp)
-    return yield this.transaction.list.inventoryExp(s.exp, true)
+    return yield this.transaction.list.inventoryExp(s.exp, true, {limit:this.query.limit})
 
   if (s.inventory && s.location)
-    return yield this.transaction.list.inventoryLocation(s.location, true)
+    return yield this.transaction.list.inventoryLocation(s.location, true, {limit:this.query.limit})
 
   if (s['shipment._id']) {
     //console.log('this.transaction', this.transaction)
