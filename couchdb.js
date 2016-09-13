@@ -124,7 +124,7 @@ module.exports = function(db, authorization, config) {
 
   function method(startKey = '', endKey = '') {
 
-    let url = `${db}/_design/roles/${this.path}/${this.view}?include_docs=true`
+    let url = `${db}/_design/roles/${this.path}/${this.view}?include_docs=true&limit=1000`
 
     if (endKey === true || ! endKey && this.hasRole)
       endKey = startKey+'\uffff'
