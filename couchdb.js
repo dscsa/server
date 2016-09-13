@@ -26,13 +26,8 @@ function isRole(doc, userCtx) {
   if (doc._deleted) return userCtx.roles.length
   if (doc._id.slice(0, 8) == '_design/') return false
 
-  log('isRole')
-  log(userCtx)
-  log(doc)
   var authorized
   require('docRoles')(doc, function(role) {
-    log('role '+role)
-    log('authorized '+authorized)
     authorized = authorized === true || role === undefined || role == userCtx.roles[0] //|| '_admin' == userCtx.roles[0]
   })
   return authorized
@@ -41,7 +36,6 @@ function isRole(doc, userCtx) {
 function emitRole(doc, emit) {
   return function(key, val) {
     require('docRoles')(doc, function(role) {
-      log('emitRole '+role)
       emit([role, key], val)
     })
   }

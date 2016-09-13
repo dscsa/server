@@ -77,7 +77,7 @@ exports.authorized = {
     let body     = yield this.http.body
     let accounts = yield this.account.list.id(this.session.account._id).body
     let allAccounts = yield this.account.list.id().body
-    console.log(this.session.account._id, accounts, allAccounts)
+
     if (accounts[0].authorized.includes(body._id)) {
       this.status  = 409
       this.message = 'This account is already authorized'
