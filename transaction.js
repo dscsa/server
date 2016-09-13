@@ -124,7 +124,7 @@ exports.get = function* () {
     return yield this.transaction.list.inventoryExp(s.exp, true)
 
   if (s.inventory && s.location)
-    return yield this.transaction.list.inventoryExp(s.location, true)
+    return yield this.transaction.list.inventoryLocation(s.location, true)
 
   if (s['shipment._id']) {
     //console.log('this.transaction', this.transaction)
@@ -146,9 +146,7 @@ exports.post = function* () {
 
   //Making sure these are accurate and upto date is too
   //costly to do on every save so just do it on creation
-  console.log('trans post 1', doc)
   let drugs = yield this.drug.list.id(doc.drug._id).body
-  console.log('trans post 2', drugs)
   yield drug.updatePrice.call(this, drugs[0])
 
   doc.drug.price    = drugs[0].price
