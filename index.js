@@ -198,7 +198,7 @@ r('/')
       return yield proxy.call(this)
 
     this.path = '/'+assets+'/index.html'
-    yield assets.call(this)
+    yield getAsset.call(this)
   })
 
 r('/:db/', {strict:true}) //Shows DB info including update_seq#
