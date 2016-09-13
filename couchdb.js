@@ -28,7 +28,7 @@ function isRole(doc, userCtx) {
 
   var authorized
   require('docRoles')(doc, function(role) {
-    authorized = authorized === true || role === undefined || role == userCtx.roles[0] //|| '_admin' == userCtx.roles[0]
+    authorized = authorized === true || role === undefined || role == userCtx.roles[0] || '_admin' == userCtx.roles[0]
   })
   return authorized
 }

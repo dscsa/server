@@ -78,7 +78,7 @@ exports.view = {
 
   //used by drug endpoint to update transactions on drug name/form updates
   drugs(doc) {
-    emitAll(doc.drug._id)
+    emit(doc.drug._id)
   },
 
   shipment(doc) {

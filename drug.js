@@ -121,9 +121,7 @@ exports.bulk_docs = function* () {
 
   for (let drug of body.docs) defaults(drug)
 
-  console.log('drug._bulk_docs', body.docs.length)
   this.body = yield this.http(null, body).body
-  console.log('drug._bulk_docs', this.body)
 
   let chain = Promise.resolve()
 
@@ -265,11 +263,8 @@ function *updateTransactions(drug) {
   let transactions = yield this.transaction.list.drugs(drug._id).body
 
   for (let transaction of transactions) {
-    if(
-      (JSON.stringify(transaction.drug.generics) == JSON.stringify(drug.generics))
-      && (transaction.drug.form == drug.form)
-      && (transaction.drug.brand == drug.brand)
-    ) continue
+    if(transaction.drug.generic == drug.generic)
+      continue
 
     transaction.drug.generics = drug.generics
     transaction.drug.form     = drug.form
@@ -282,6 +277,6 @@ function *updateTransactions(drug) {
     //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
     this.http.put('transaction/'+transaction._id, transaction)
     .headers({authorization})
-    .catch(err => console.log(err))
+    .catch(err => console.log('updateTransactions', err))
   }
 }
