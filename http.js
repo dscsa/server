@@ -8,9 +8,8 @@ let count = 0, old, time //for use with couch.id
 //Since http is ansyncronous, we throw more meaningful errors by
 //saving the stack when API is run and then appending it at end
 function asyncError(err, status) {
-  err = {err}
-  err.status = status
   err = Error(JSON.stringify(err))
+  err.status = status
   err.stack += httpFactory.stack
   return err
 }
@@ -211,7 +210,7 @@ function httpFactory(settings) {
       ctx.status = res.statusCode //Always proxy the status code
 
     //console.log('http response', res.req.method, res.req.path, res.statusCode, res.statusMessage, this.proxy)
-    if (res.statusCode >= 500)
+    if (res.statusCode >= 400)
       return http.json(res).then(body => {
         throw asyncError(body, res.statusCode)
       })
