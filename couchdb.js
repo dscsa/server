@@ -122,7 +122,7 @@ module.exports = function(db, authorization, config) {
     yield next
   }
 
-  function method(startKey = '', endKey = '', opts) {
+  function method(startKey = '', endKey = '', opts = {}) {
 
     let url = `${db}/_design/roles/${this.path}/${this.view}?include_docs=true`
 
