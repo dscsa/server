@@ -8,7 +8,13 @@ let count = 0, old, time //for use with couch.id
 //Since http is ansyncronous, we throw more meaningful errors by
 //saving the stack when API is run and then appending it at end
 function asyncError(err, status) {
-  err = Error(JSON.stringify(err))
+  if (err.name && err.reason)
+    let reason = err.reason
+    err = Error(name)
+    err.reason = reason
+  } else
+    err = Error(JSON.stringify(err))
+    
   err.status = status
   err.stack += httpFactory.stack
   return err
