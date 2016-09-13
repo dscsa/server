@@ -97,7 +97,7 @@ exports.bulk_docs = function* () {
     if (doc._deleted) {
       let url   = '_users/org.couchdb.user:'+doc._id
       let user  = yield this.http.get(url).headers({authorization}).body
-      this.body = yield this.http.delete(url+'?rev='+user._rev).headers({authorization}).body //set _rev in url since _rev within body still triggered 409 conflict
+      this.body = yield this.http.delete(url+'?rev='+user._rev, user).headers({authorization}).body //set _rev in url since _rev within body still triggered 409 conflict
     }
 
   yield this.http(null, body)
@@ -106,6 +106,7 @@ exports.bulk_docs = function* () {
 exports.delete = function* () {
   yield this.http()
   yield this.http(this.path.replace('user', '_users')).headers({authorization})
+
 }
 
 exports.email = function* () {
