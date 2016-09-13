@@ -9,8 +9,8 @@ let count = 0, old, time //for use with couch.id
 //saving the stack when API is run and then appending it at end
 function asyncError(err, status) {
   let asyncErr = Error(JSON.stringify(err))
-  asyncErr.name    = err.name
-  asyncErr.message = err.reason
+  asyncErr.name    = err.name || asyncErr.name
+  asyncErr.message = err.reason || asyncErr.message
   asyncErr.status  = status
   asyncErr.stack  += httpFactory.stack
   return asyncErr
