@@ -46,6 +46,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   ensure('verifiedAt').isDate
   ensure('next').notNull.isArray.assert(next)
   ensure('next.qty').isNumber
+  ensure('history').assert(history)
 
   //Optional
   ensure('qty.from').isNumber
@@ -62,6 +63,10 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
 
     if (qtyRemaining(newDoc) < 0)
       return 'sum of quantities in "next" cannot be larger than newDoc.qty.to || newDoc.qty.from'
+  }
+
+  function history(val) {
+    return val && 'history cannot be set in version 3'
   }
 }
 
