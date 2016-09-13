@@ -11,7 +11,7 @@ exports.lib = {
       return sum + next.qty
     }
 
-    return doc.qty.to || doc.qty.from - doc.next.reduce(sum, 0)
+    return (doc.qty.to || doc.qty.from) - doc.next.reduce(sum, 0)
   },
   isInventory(doc) {
     return doc.verifiedAt && require('qtyRemaining')(doc) > 0 //inventory only
@@ -28,9 +28,6 @@ exports.userRoles = (ctx, emit) => {
 }
 
 exports.validate = function(newDoc, oldDoc, userCtx) {
-  log('transaction.validate')
-  log(newDoc)
-  log(oldDoc)
   var id = /^[a-z0-9]{7}$/
   var ensure          = require('ensure')('transaction', arguments)
   var qtyRemaining    = require('qtyRemaining')
@@ -73,7 +70,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
 exports.view = {
   history(doc) {
     for (var i in doc.next)
-      doc.next[i].transaction && emitAll(doc.next[i].transaction._id)
+      doc.next[i].transaction && emit(doc.next[i].transaction._id)
   },
 
   //used by drug endpoint to update transactions on drug name/form updates
@@ -87,8 +84,7 @@ exports.view = {
 
   //TODO How to incorporate Complete/Verified/Destroyed, multiple map functions?  compound key e.g., [createAt, typeof verified] with grouping?
   record(doc) {
-    if (doc.shipment._id.split('.').length == 3)
-     emitRole(doc.createdAt)
+    doc.shipment._id.split('.').length == 3 && emitRole(doc.createdAt)
   },
 
   //For inventory search.

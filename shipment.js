@@ -47,7 +47,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
 
 exports.get = function* () {
   let s = JSON.parse(this.query.selector)
-  console.log('shipment get', this.query.open_revs)
+
   //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
   if (s._id)
     return yield this.query.open_revs
