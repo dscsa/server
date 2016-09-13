@@ -96,7 +96,7 @@ function* all_docs(db) {
 }
 
 function* changes(db) {
-  this.req.setTimeout(20000) //match timeout in dscsa-pouch
+  this.req.setTimeout(this.query.timeout) //match timeout in dscsa-pouch
   yield this[db].changes()
 }
 
