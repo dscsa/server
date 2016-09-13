@@ -197,7 +197,7 @@ r('/')
     if(this.headers.origin || this.headers.referer) //Not sure why pouchdb checks this.  Shows welcome UUID & Version
       return yield proxy.call(this)
 
-    this.path = '/'+assets+'/index.html'
+    this.path = '/src/views/index.html'
     yield getAsset.call(this)
   })
 
