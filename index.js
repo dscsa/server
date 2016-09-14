@@ -141,7 +141,10 @@ app.use(function* (next) {
   //Sugar
   this.path = decodeURIComponent(this.path)
   //Rather setting up CouchDB for CORS, it's easier & more secure to do here
-  this.method == 'OPTIONS' ? this.status = 204 : yield next
+  if (this.method != 'OPTIONS')
+    return yield next
+
+  this.status = 204
   this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
   this.set('access-control-allow-headers', '*')
   this.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
