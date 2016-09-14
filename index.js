@@ -105,6 +105,8 @@ function* all_docs_get(db) {
 function* changes(db) {
   this.req.setTimeout(+this.query.timeout) //match timeout in dscsa-pouch
   yield this[db].changes()
+  this.remove('content-length')
+  this.set('content-type', 'application/json')
   console.log('changes headers')
   console.log(this.response.headers)
 }
