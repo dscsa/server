@@ -86,7 +86,7 @@ r('/goodrx/:ndc9/:name')
   })
 
 function* proxy() {
-  yield this.http()
+  this.body = yield this.http().body
 }
 
 //This can be a get or a post with specific keys in body.  If
