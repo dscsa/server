@@ -131,10 +131,10 @@ module.exports = function(db, authorization, config) {
 
     if (Array.isArray(startKey)) {
       let keys = startKey.map(key => [config.role, key])
-      let body = http.post(url, {keys}).body
-      for (let row of body.rows)
-        row.key = row.key[1]
-      return body
+      return http.post(url, {keys}).body.then(body => {
+        for (let row of body.rows) row.key = row.key[1]
+        return body
+      })
     }
 
     if (endKey === true || ! endKey && this.hasRole)
