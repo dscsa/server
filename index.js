@@ -27,7 +27,7 @@ function r(url, options) {
   function router(method, handler) {
     app.use(route[method](url, wrapper, options))
     function *wrapper() {
-      this.set('x-endpoint', method+' '+url+' for '+this.url)
+      //this.set('x-endpoint', method+' '+url+' for '+this.url)
       yield handler.apply(this, arguments)
     }
   }
@@ -87,6 +87,7 @@ r('/goodrx/:ndc9/:name')
 
 function* proxy() {
   this.body = yield this.http().body
+  this.remove('Connection')
 }
 
 //This can be a get or a post with specific keys in body.  If
