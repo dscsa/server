@@ -105,9 +105,11 @@ function* all_docs_get(db) {
 }
 
 function* changes(db) {
+  console.log('timeout', +this.query.timeout)
   this.req.setTimeout(+this.query.timeout) //match timeout in dscsa-pouch
-  yield this[db].changes()
-  this.set('content-type', 'application/json')
+  yield this.http()
+  //yield this[db].changes()
+  //this.set('content-type', 'application/json')
   //console.log('changes headers')
   //console.log(this.response.headers)
 }
@@ -148,7 +150,7 @@ app.use(function* (next) {
   this.set('access-control-allow-headers', 'accept, accept-encoding, accept-language, cache-control, connection, if-none-match, authorization, content-type, host, origin, pragma, referer, x-csrf-token, user-agent')
   this.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
   this.set('access-control-allow-credentials', true)
-  this.set('access-control-max-age', 1728000)
+  //this.set('access-control-max-age', 1728000)
   this.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
   this.method == 'OPTIONS' ? this.status = 204 : yield next
 })
