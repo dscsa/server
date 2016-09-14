@@ -144,16 +144,13 @@ function* getAsset(file) {
 
 app.use(function* (next) {
   //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
-  if (this.method != 'OPTIONS')
-    return yield next
-
-  this.status = 204
   this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
   this.set('access-control-allow-headers', 'accept, accept-encoding, accept-language, cache-control, connection, if-none-match, authorization, content-type, host, origin, pragma, referer, x-csrf-token, user-agent')
   this.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
   this.set('access-control-allow-credentials', true)
   this.set('access-control-max-age', 1728000)
   this.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
+  this.method == 'OPTIONS' ? this.status = 204 : yield next
 })
 
 app.use(function *(next) {
