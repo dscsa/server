@@ -202,9 +202,6 @@ function httpFactory(settings, ctx = {}) {
 
   function response(res) {
 
-    if (ctx.url != res.req.path)
-      console.log('response', ctx.url, res.req.path)
-      
     ctx.status = res.statusCode //Always proxy the status code
 
     //console.log('http response', res.req.method, res.req.path, res.statusCode, res.statusMessage, this.proxy)
