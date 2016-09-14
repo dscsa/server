@@ -227,7 +227,7 @@ function httpFactory(settings) {
     if ( ! this.proxy)
       return http.json(res)
 
-    if (ctx.set && ! ctx.headerSent) {
+    if (ctx.set && ! ctx.headerSent)
       ctx.body = res
   }
 }
