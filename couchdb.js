@@ -79,7 +79,8 @@ module.exports = function(db, authorization, config) {
     ddoc.validate_doc_update = string(config.validate)
 
   methods.changes = function() {
-    return http.context(this).get(`${db}/_changes${ ddoc.filters && '?filter=roles/roles' || ''}`)
+    //TODO we can't assume http installed as middleware
+    return this.http.get(`${db}/_changes${ ddoc.filters && '?filter=roles/roles' || ''}`)
   }
 
   lib.ensure = ensure //TODO get rid of this hard dependency
@@ -137,7 +138,8 @@ module.exports = function(db, authorization, config) {
 
       if (Array.isArray(startKey)) {
         let keys = startKey.map(key => [config.role, key])
-        return http.context(this).post(url, {keys}).body.then(body => {
+        //TODO we can't assume http installed as middleware
+        return this.http.post(url, {keys}).body.then(body => {
           for (let row of body.rows) row.key = row.key[1]
           return body
         })
@@ -155,8 +157,8 @@ module.exports = function(db, authorization, config) {
         startKey = JSON.stringify(startKey)
         url += endKey ? `&startkey=${startKey}&endkey=${JSON.stringify(endKey)}` : `&key=${startKey}`
       }
-
-      return http.context(this).get(url)
+      //TODO we can't assume http installed as middleware
+      return this.http.get(url)
     }
   }
 }

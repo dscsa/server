@@ -81,14 +81,12 @@ module.exports = settings => {
     this.body       = this.req,
     this.parsedUrl  = parseUrl(this.url)
 
-    this[middleware] = httpFactory(settings).context(this)
+    this[middleware] = httpFactory(settings, this)
     yield next
   }
 }
 
-function httpFactory(settings) {
-  let ctx = {}
-
+function httpFactory(settings, ctx = {}) {
   function http(url, body) {
     httpFactory.stack = Error().stack
 
@@ -123,11 +121,6 @@ function httpFactory(settings) {
     })
 
     return api
-  }
-
-  http.context = context => {
-    ctx = context || {}
-    return http
   }
 
   http.get = path => http(path).method('get')
@@ -183,7 +176,7 @@ function httpFactory(settings) {
   return http
 
   function request(config) {
-    //console.log('httpRequest', config.method, config.hostname, config.port, config.path, config.headers)
+    //console.log('httpRequest', config.method, config.hostname, config.port, config.path)
     var req = httpRequest(config)
 
     if(config.method == 'GET')
@@ -209,6 +202,9 @@ function httpFactory(settings) {
 
   function response(res) {
 
+    if (ctx.url != res.req.path)
+      console.log('response', ctx.url, res.req.path)
+      
     ctx.status = res.statusCode //Always proxy the status code
 
     //console.log('http response', res.req.method, res.req.path, res.statusCode, res.statusMessage, this.proxy)
