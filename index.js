@@ -142,9 +142,7 @@ function* getAsset(file) {
 }
 
 app.use(function* (next) {
-  //Sugar
-  this.path = decodeURIComponent(this.path)
-  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
+  //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
   if (this.method != 'OPTIONS')
     return yield next
 
@@ -223,6 +221,10 @@ r('/:db/_all_docs')       //Needed if indexedDb cleared on browser
 
 r('/:db/_revs_diff')      //Not sure why PouchDB needs this
   .post(proxy)
+
+r('/:db/_local%2F:doc')
+  .get(proxy)
+  .put(proxy)
 
 r('/:db/_local/:doc')
   .get(proxy)
