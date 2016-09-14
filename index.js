@@ -94,8 +94,8 @@ function* proxy() {
 //We need to prepend the role to each key
 //TODO move this to couchdb
 function* all_docs_put(db) {
-  let body = yield this.http.body
-  yield this[db].view.id(body.keys)
+  let body  = yield this.http.body
+  this.body = yield this[db].view.id(body.keys) //we need to assign to this.body since couchdb.method does have access to this for proxy
 }
 
 function* all_docs_get(db) {
