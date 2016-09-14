@@ -142,7 +142,7 @@ app.use(function* (next) {
   this.path = decodeURIComponent(this.path)
 
   //Rather setting up CouchDB for CORS, it's easier & more secure to do here
-  this.set('access-control-allow-origin', this.headers.origin)
+  this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
   this.set('access-control-allow-headers', 'accept, content-type')
   this.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
   this.set('access-control-allow-credentials', true)
