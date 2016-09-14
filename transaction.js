@@ -110,28 +110,28 @@ exports.get = function* () {
 
   if (s.createdAt && s.createdAt.$gte && s.createdAt.$lte) {
     this.req.setTimeout(10000)
-    return yield this.transaction.list.record(s.createdAt.$gte, s.createdAt.$lte)
+    return yield this.db.transaction.list.record(s.createdAt.$gte, s.createdAt.$lte)
   }
 
   if (s.inventory && s.generic)
-    return yield this.transaction.list.inventoryGeneric(s.generic)
+    return yield this.db.transaction.list.inventoryGeneric(s.generic)
 
   if (s.inventory && s.exp)
-    return yield this.transaction.list.inventoryExp(s.exp, true, {limit:this.query.limit})
+    return yield this.db.transaction.list.inventoryExp(s.exp, true, {limit:this.query.limit})
 
   if (s.inventory && s.location)
-    return yield this.transaction.list.inventoryLocation(s.location, true, {limit:this.query.limit})
+    return yield this.db.transaction.list.inventoryLocation(s.location, true, {limit:this.query.limit})
 
   if (s['shipment._id']) {
     //console.log('this.transaction', this.transaction)
-    return yield this.transaction.list.shipment(s['shipment._id'])
+    return yield this.transaction.db.list.shipment(s['shipment._id'])
   }
 
   //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
   if (s._id)
     return yield this.query.open_revs
       ? this.http.get('transaction/'+s._id)
-      : this.transaction.list.id(s._id)
+      : this.transaction.db.list.id(s._id)
 }
 
 exports.post = function* () {
@@ -142,7 +142,7 @@ exports.post = function* () {
 
   //Making sure these are accurate and upto date is too
   //costly to do on every save so just do it on creation
-  let drugs = yield this.drug.list.id(doc.drug._id).body
+  let drugs = yield this.db.drug.list.id(doc.drug._id).body
   yield drug.updatePrice.call(this, drugs[0])
 
   doc.drug.price    = drugs[0].price
@@ -208,7 +208,7 @@ function *history($this, id) {
   function *history (_id, list) {
 
     let trans = yield $this.http.get('transaction/'+_id).body //don't use show function because we might need to see transactions not directly authorized
-    let prevs = yield $this.transaction.list.history(_id).body  //TODO is there a way to use "joins" http://docs.couchdb.org/en/stable/couchapp/views/joins.html to make this more elegant
+    let prevs = yield $this.db.transaction.list.history(_id).body  //TODO is there a way to use "joins" http://docs.couchdb.org/en/stable/couchapp/views/joins.html to make this more elegant
     let all   = [$this.http.get('shipment/'+trans.shipment._id).body]
     list.push(trans)
 

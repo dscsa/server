@@ -97,21 +97,20 @@ function* proxy() {
 //TODO move this to couchdb
 function* all_docs_put(db) {
   let body  = yield this.http.body
-  this.body = yield this[db].view.id(body.keys) //we need to assign to this.body since couchdb.method does have access to this for proxy
+  this.body = yield this.db[db].view.id(body.keys) //we need to assign to this.body since couchdb.method does have access to this for proxy
 }
 
 function* all_docs_get(db) {
-  yield this[db].view.id()
+  yield this.db[db].view.id()
 }
 
 function* changes(db) {
-  console.log('timeout', +this.query.timeout)
   this.req.setTimeout(+this.query.timeout) //match timeout in dscsa-pouch
-  if (db == 'user' || db == 'shipment' || db == 'transaction')
-    this.url += '&filter=roles/roles'
-
-  yield this.http(this.url)
-  //yield this[db].changes()
+  // if (db == 'user' || db == 'shipment' || db == 'transaction')
+  //   this.url += '&filter=roles/roles'
+  //
+  // yield this.http(this.url)
+  yield this.db[db].changes()
   //this.set('content-type', 'application/json')
   //console.log('changes headers')
   //console.log(this.response.headers)

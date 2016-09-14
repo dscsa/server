@@ -57,7 +57,7 @@ exports.get = function* () {
   if (s._id)
     return yield this.query.open_revs
       ? this.http.get('user/'+s._id)
-      : this.user.list.id(s._id)
+      : this.db.user.list.id(s._id)
 }
 
 //CouchDB requires an _id based on the user's name
@@ -117,7 +117,7 @@ exports.email = function* () {
 exports.session = {
   *post() {
     let login = yield this.http.body
-    let users = yield this.user.list.email(login.email).body //assume just one user per email for now
+    let users = yield this.db.user.list.email(login.email).body //assume just one user per email for now
     if ( ! users[0])
       this.throw(404, 'No user exists with the email '+login.email)
 

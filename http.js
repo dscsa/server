@@ -126,7 +126,7 @@ function httpFactory(settings) {
   }
 
   http.context = context => {
-    ctx = context
+    ctx = context || {}
     return http
   }
 
@@ -208,13 +208,11 @@ function httpFactory(settings) {
   }
 
   function response(res) {
-    if (ctx.set && ! ctx.headerSent) {
-      ctx.status = res.statusCode //Always proxy the status code
-      ctx.set(res.headers)
-    }
+
+    ctx.status = res.statusCode //Always proxy the status code
 
     //console.log('http response', res.req.method, res.req.path, res.statusCode, res.statusMessage, this.proxy)
-    if (res.statusCode >= 500 || res.statusCode == 403)
+    if (res.statusCode >= 500)
       return http.json(res).then(body => {
         throw asyncError(body, res.statusCode)
       })
@@ -227,7 +225,9 @@ function httpFactory(settings) {
     if ( ! this.proxy)
       return http.json(res)
 
-    if (ctx.set && ! ctx.headerSent)
+    if (ctx.set && ! ctx.headerSent) {
+      ctx.set(res.headers)
       ctx.body = res
+    }
   }
 }

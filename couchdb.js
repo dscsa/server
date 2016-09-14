@@ -70,7 +70,7 @@ function viewId(doc) {
 
 module.exports = function(db, authorization, config) {
 
-  let methods = {view:{},list:{}}, ddoc = {
+  let lib = {}, methods = {view:{},list:{}}, ddoc = {
     lists:{roles:string(list)},
     views:config.view || {}
   }
@@ -78,36 +78,35 @@ module.exports = function(db, authorization, config) {
   if (config.validate)
     ddoc.validate_doc_update = string(config.validate)
 
-  methods.changes = _ => {
-    return http.get(`${db}/_changes${ ddoc.filters && '?filter=roles/roles' || ''}`)
+  methods.changes = function() {
+    return http.context(this).get(`${db}/_changes${ ddoc.filters && '?filter=roles/roles' || ''}`)
   }
 
-  ddoc.views.lib = config.lib || {}
-  ddoc.views.lib.ensure = ensure //TODO get rid of this hard dependency
+  lib.ensure = ensure //TODO get rid of this hard dependency
+  lib.docRoles = config.docRoles || defaultDocRoles
+  lib.isRole   = isRole
+  lib.emitRole = emitRole
 
-  if (config.userRoles && config.docRoles) {
+  if (config.userRoles && config.docRoles)
     ddoc.filters = {roles:string(filter)}
-  }
 
   config.userRoles = config.userRoles || defaultUserRoles
-  ddoc.views.lib.docRoles = config.docRoles || defaultDocRoles
-  ddoc.views.lib.isRole   = isRole
-  ddoc.views.lib.emitRole = emitRole
 
   ddoc.views.id = viewId
 
   for (let i in ddoc.views) {
-    if (i == 'lib') continue
     let inject  = "var emitRole = require('views/lib/emitRole')(doc, emit);"
     let view    = string(ddoc.views[i])
     let hasRole = ~ view.indexOf('emitRole(')
     ddoc.views[i] = {map:view.replace('{', '{'+inject)}
-    methods.list[i] = method.bind({hasRole, view:i, path:'_list/roles'})
-    methods.view[i] = method.bind({hasRole, view:i, path:'_view'})
+    methods.list[i] = methodFactory(hasRole, i, '_list/roles')
+    methods.view[i] = methodFactory(hasRole, i, '_view')
   }
 
-  for (let i in ddoc.views.lib)
-    ddoc.views.lib[i] = 'module.exports = '+string(ddoc.views.lib[i])
+  for (let i in lib)
+    lib[i] = 'module.exports = '+string(lib[i])
+
+  ddoc.views.lib = lib
 
   http.put(db, {}).headers({authorization}).catch(_ => null) //Create the database, suppress error
   .then(_   => http.get(db+'/_design/roles').headers({authorization}).body)
@@ -117,40 +116,48 @@ module.exports = function(db, authorization, config) {
 
   return function *(next) {
     config.userRoles(this, role => config.role = role)
-    http.context(this)
-    this[db] = methods
+    this.db = this.db || {}
+    this.db[db] = {list:{}, view:{}}
+    this.db[db].changes = methods.changes.bind(this)
+    for (let i in methods.list) {
+      this.db[db].list[i] = methods.list[i].bind(this)
+      this.db[db].view[i] = methods.view[i].bind(this)
+    }
+
     yield next
   }
 
-  function method(startKey = '', endKey = '', opts = {}) {
+  function methodFactory(hasRole, view, path) {
+    return function(startKey = '', endKey = '', opts = {}) {
 
-    let url = `${db}/_design/roles/${this.path}/${this.view}?include_docs=true`
+      let url = `${db}/_design/roles/${path}/${view}?include_docs=true`
 
-    if (opts.limit)
-      url += `&limit=${opts.limit}`
+      if (opts.limit)
+        url += `&limit=${opts.limit}`
 
-    if (Array.isArray(startKey)) {
-      let keys = startKey.map(key => [config.role, key])
-      return http.post(url, {keys}).body.then(body => {
-        for (let row of body.rows) row.key = row.key[1]
-        return body
-      })
+      if (Array.isArray(startKey)) {
+        let keys = startKey.map(key => [config.role, key])
+        return http.context(this).post(url, {keys}).body.then(body => {
+          for (let row of body.rows) row.key = row.key[1]
+          return body
+        })
+      }
+
+      if (endKey === true || ! endKey && hasRole)
+        endKey = startKey+'\uffff'
+
+      if (hasRole) { //Even if no start/end key, we need to do authentication
+        startKey = [config.role, startKey]
+          endKey = [config.role, endKey]
+      }
+
+      if (startKey) {
+        startKey = JSON.stringify(startKey)
+        url += endKey ? `&startkey=${startKey}&endkey=${JSON.stringify(endKey)}` : `&key=${startKey}`
+      }
+
+      return http.context(this).get(url)
     }
-
-    if (endKey === true || ! endKey && this.hasRole)
-      endKey = startKey+'\uffff'
-
-    if (this.hasRole) { //Even if no start/end key, we need to do authentication
-      startKey = [config.role, startKey]
-        endKey = [config.role, endKey]
-    }
-
-    if (startKey) {
-      startKey = JSON.stringify(startKey)
-      url += endKey ? `&startkey=${startKey}&endkey=${JSON.stringify(endKey)}` : `&key=${startKey}`
-    }
-
-    return http.get(url)
   }
 }
 

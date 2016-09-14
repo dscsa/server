@@ -33,7 +33,7 @@ exports.get = function* () {
   if (s._id)
     return yield this.query.open_revs
       ? this.http.get('account/'+s._id)
-      : this.account.list.id(s._id)
+      : this.db.account.list.id(s._id)
 }
 
 exports.post = function* () {
@@ -75,8 +75,8 @@ exports.authorized = {
   *post() {
     //Authorize a sender
     let body     = yield this.http.body
-    let accounts = yield this.account.list.id(this.session.account._id).body
-    let allAccounts = yield this.account.list.id().body
+    let accounts = yield this.db.account.list.id(this.session.account._id).body
+    let allAccounts = yield this.db.account.list.id().body
 
     if (accounts[0].authorized.includes(body._id)) {
       this.status  = 409
@@ -89,7 +89,7 @@ exports.authorized = {
   *delete() {
     //Unauthorize a sender
     let body     = yield this.http.body
-    let accounts = yield this.account.list.id(this.session.account._id).body
+    let accounts = yield this.db.account.list.id(this.session.account._id).body
     let index    = accounts[0].authorized.indexOf(body._id)
 
     if (index == -1) {

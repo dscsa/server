@@ -52,7 +52,7 @@ exports.get = function* () {
   if (s._id)
     return yield this.query.open_revs
       ? this.http.get('shipment/'+s._id)
-      : this.shipment.list.id(s._id)
+      : this.db.shipment.list.id(s._id)
 }
 
 exports.post = function* () { //TODO querystring with label=fedex creates label, maybe track=true/false eventually

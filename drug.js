@@ -55,7 +55,7 @@ exports.get = function*() {
   if (s._id)
     this.body = yield this.query.open_revs
       ? this.http.get('drug/'+s._id).body
-      : this.drug.list.id(s._id).body
+      : this.db.drug.list.id(s._id).body
 
   if ( ! this.query.open_revs) //this has body in {"ok":doc} formate
     yield exports.updatePrice.call(this, this.body)
@@ -260,7 +260,7 @@ function *getGoodrx(drug) {
 //Get all transactins using this drug so we can update denormalized database
 function *updateTransactions(drug) {
   //TODO don't do this if drug.form and drug.generics were not changed
-  let transactions = yield this.transaction.list.drugs(drug._id).body
+  let transactions = yield this.db.transaction.list.drugs(drug._id).body
 
   for (let transaction of transactions) {
     if(transaction.drug.generic == drug.generic)
