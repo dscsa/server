@@ -214,7 +214,7 @@ function httpFactory(settings) {
     }
 
     //console.log('http response', res.req.method, res.req.path, res.statusCode, res.statusMessage, this.proxy)
-    if (res.statusCode >= 400)
+    if (res.statusCode >= 500 || res.statusCode == 403)
       return http.json(res).then(body => {
         throw asyncError(body, res.statusCode)
       })
