@@ -88,6 +88,7 @@ r('/goodrx/:ndc9/:name')
 function* proxy() {
   this.body = yield this.http().body
   this.remove('Connection')
+  this.set('Content-Type', 'application/json')
 }
 
 //This can be a get or a post with specific keys in body.  If
