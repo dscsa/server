@@ -149,11 +149,11 @@ app.use(function* (next) {
 
   this.status = 204
   this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
-  this.set('access-control-allow-headers', '*')
+  this.set('access-control-allow-headers', 'accept, accept-encoding, accept-language, cache-control, connection, if-none-match, authorization, content-type, host, origin, pragma, referer, x-csrf-token, user-agent')
   this.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
   this.set('access-control-allow-credentials', true)
   this.set('access-control-max-age', 1728000)
-  this.set('access-control-expose-headers', '*')
+  this.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
 })
 
 app.use(function *(next) {
