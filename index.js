@@ -91,7 +91,14 @@ function* proxy() {
 
 //This can be a get or a post with specific keys in body.  If
 //keys in body we cannot specify start/end keys in querystring
-function* all_docs(db) {
+//We need to prepend the role to each key
+//TODO move this to couchdb
+function* all_docs_put(db) {
+  let body = yield this.http.body
+  yield this[db].view.id(body.keys)
+}
+
+function* all_docs_get(db) {
   yield this[db].view.id()
 }
 
@@ -205,8 +212,8 @@ r('/:db/', {strict:true}) //Shows DB info including update_seq#
   .get(proxy)
 
 r('/:db/_all_docs')       //Needed if indexedDb cleared on browser
-  .get(all_docs)
-  .post(all_docs)
+  .get(all_docs_get)
+  .post(all_docs_put)
 
 r('/:db/_revs_diff')      //Not sure why PouchDB needs this
   .post(proxy)

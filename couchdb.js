@@ -129,6 +129,11 @@ module.exports = function(db, authorization, config) {
     if (opts.limit)
       url += `&limit=${opts.limit}`
 
+    if (Array.isArray(startKey)) {
+      let keys = startKey.map(key => [config.role, key])
+      return http.post(url, {keys})
+    }
+
     if (endKey === true || ! endKey && this.hasRole)
       endKey = startKey+'\uffff'
 
