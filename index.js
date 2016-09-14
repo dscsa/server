@@ -143,11 +143,11 @@ app.use(function* (next) {
 
   //Rather setting up CouchDB for CORS, it's easier & more secure to do here
   this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
-  this.set('access-control-allow-headers', 'accept, content-type')
+  this.set('access-control-allow-headers', '*')
   this.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
   this.set('access-control-allow-credentials', true)
   this.set('access-control-max-age', 1728000)
-  this.set('access-control-expose-headers', 'Connection, content-length, date, etag, location, server, x-endpoint')
+  this.set('access-control-expose-headers', 'connection, content-length, date, etag, location, server, x-endpoint')
   this.method == 'OPTIONS' ? this.status = 204 : yield next
 })
 
