@@ -108,9 +108,9 @@ function* changes(db) {
   console.log('timeout', +this.query.timeout)
   this.req.setTimeout(+this.query.timeout) //match timeout in dscsa-pouch
   if (db == 'user' || db == 'shipment' || db == 'transaction')
-    this.path += '&filter=roles/roles'
-    
-  yield this.http(this.path)
+    this.url += '&filter=roles/roles'
+
+  yield this.http(this.url)
   //yield this[db].changes()
   //this.set('content-type', 'application/json')
   //console.log('changes headers')
