@@ -52,7 +52,6 @@ function getDefaults(userUrl = {}, defaultUrl = {}, ctxUrl = {}) {
 function getHeaders(userHeaders, defaultHeaders, ctxHeaders) {
   let headers = Object.assign({}, ctxHeaders, defaultHeaders, userHeaders)
   if (headers['authorization']) delete headers['cookie'] //cookie takes precendence, but we need it not to for /_user calls
-  delete headers['content-length']
   return headers
 }
 
@@ -61,6 +60,7 @@ function makeConfig(user, settings, ctx) {
   config.headers = getHeaders(user.headers, settings.headers, ctx.headers)
   config.method  = (user.method || settings.method || ctx.method).toUpperCase()
   config.body    = user.body || settings.body || ctx.body
+  if (user.body) delete config.headers['content-length']
   return Promise.resolve(config)
 }
 

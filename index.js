@@ -105,10 +105,9 @@ function* all_docs_get(db) {
 function* changes(db) {
   this.req.setTimeout(+this.query.timeout) //match timeout in dscsa-pouch
   yield this[db].changes()
-  this.remove('content-length')
   this.set('content-type', 'application/json')
-  console.log('changes headers')
-  console.log(this.response.headers)
+  //console.log('changes headers')
+  //console.log(this.response.headers)
 }
 
 function* bulk_docs(db) {
@@ -222,11 +221,11 @@ r('/:db/_all_docs')       //Needed if indexedDb cleared on browser
 r('/:db/_revs_diff')      //Not sure why PouchDB needs this
   .post(proxy)
 
-r('/:db/_local%2F:doc')
+r('/:db/_local/:doc')
   .get(proxy)
   .put(proxy)
 
-r('/:db/_local/:doc')
+r('/:db/_local%2F:doc')
   .get(proxy)
   .put(proxy)
 
