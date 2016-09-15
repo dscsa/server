@@ -39,7 +39,7 @@ function getDefaults(userUrl = {}, defaultUrl = {}, ctxUrl = {}) {
   let path  = userUrl.pathname || defaultUrl.pathname || ctxUrl.pathname
   let query = userUrl.query || defaultUrl.query || ctxUrl.query
 
-  //TODO do not forward headers if user.host is specified either, right now getGoodRx & getNadac must set .headers()
+
   if ( ! userUrl.host) //Only proxy querystrings if user does not specify a host
     query = Object.assign({}, ctxUrl && ctxUrl.query, defaultUrl.query, userUrl.query)
 
@@ -57,8 +57,10 @@ function getHeaders(userHeaders, defaultHeaders, ctxHeaders) {
 }
 
 function makeConfig(user, settings, ctx) {
-  let config = getDefaults(parseUrl(user.url || ''), settings.parsedUrl, ctx.parsedUrl)
-  config.headers = getHeaders(user.headers, settings.headers, ctx.headers)
+  let userUrl = parseUrl(user.url || '')
+  let config = getDefaults(userUrl, settings.parsedUrl, ctx.parsedUrl)
+  //Do not forward headers if user.host is specified either, right now getGoodRx & getNadac must set .headers()
+  config.headers = userUrl.host ? user.headers : getHeaders(user.headers, settings.headers, ctx.headers)
   config.method  = (user.method || settings.method || ctx.method).toUpperCase()
   config.body    = user.body || settings.body || ctx.body
   return Promise.resolve(config)
@@ -176,7 +178,7 @@ function httpFactory(settings, ctx = {}) {
   return http
 
   function request(config) {
-    //console.log('httpRequest', config.method, config.hostname, config.port, config.path)
+    //console.log('httpRequest', config.method, config.hostname, config.port, config.path, config.headers)
     var req = httpRequest(config)
 
     if(config.method == 'GET')
@@ -213,7 +215,9 @@ function httpFactory(settings, ctx = {}) {
     //While not an error per-se, no proxy means we are relying on a result that based
     //on the status codes most likely did not come.  Better to throw out of normal flow
     if ( ! this.proxy && (res.statusCode < 200 || res.statusCode >= 300))
-      throw http.json(res)
+      return http.json(res).then(body => {
+        throw body
+      })
 
     if ( ! this.proxy)
       return http.json(res)

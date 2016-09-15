@@ -69,6 +69,7 @@ function r(url, options) {
 // -example
 */
 
+
 app.use(http({host:'localhost:5984', headers:{'content-type':'application/json', accept:'application/json'}, middleware:'http'}))
 app.use(function*(next) {
   this.session = JSON.parse(this.cookies.get('AuthUser') || 'null')
