@@ -124,7 +124,7 @@ exports.get = function* () {
 
   if (s['shipment._id']) {
     //console.log('this.transaction', this.transaction)
-    return yield this.transaction.db.list.shipment(s['shipment._id'])
+    return yield this.db.transaction.list.shipment(s['shipment._id'])
   }
 
   //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
