@@ -70,7 +70,7 @@ function viewId(doc) {
 
 module.exports = function(db, authorization, config) {
 
-  let lib = {}, methods = {view:{},list:{}}, ddoc = {
+  let methods = {view:{},list:{}}, ddoc = {
     lists:{roles:string(list)},
     views:config.view || {}
   }
@@ -83,10 +83,10 @@ module.exports = function(db, authorization, config) {
     return this.http.get(`${db}/_changes${ ddoc.filters && '?filter=roles/roles' || ''}`)
   }
 
-  lib.ensure = ensure //TODO get rid of this hard dependency
-  lib.docRoles = config.docRoles || defaultDocRoles
-  lib.isRole   = isRole
-  lib.emitRole = emitRole
+  config.lib.ensure = ensure //TODO get rid of this hard dependency
+  config.lib.docRoles = config.docRoles || defaultDocRoles
+  config.lib.isRole   = isRole
+  config.lib.emitRole = emitRole
 
   if (config.userRoles && config.docRoles)
     ddoc.filters = {roles:string(filter)}
@@ -104,10 +104,10 @@ module.exports = function(db, authorization, config) {
     methods.view[i] = methodFactory(hasRole, i, '_view')
   }
 
-  for (let i in lib)
-    lib[i] = 'module.exports = '+string(lib[i])
+  for (let i in config.lib)
+    config.lib[i] = 'module.exports = '+string(config.lib[i])
 
-  ddoc.views.lib = lib
+  ddoc.views.lib = config.lib
 
   http.put(db, {}).headers({authorization}).catch(_ => null) //Create the database, suppress error
   .then(_   => http.get(db+'/_design/roles').headers({authorization}).body)
