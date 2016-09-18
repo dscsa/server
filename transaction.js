@@ -151,18 +151,11 @@ exports.post = function* () {
   doc.drug.generics = drugs[0].generics
   doc.drug.form     = drugs[0].form
 
-  let save
-  let id
+  let save = yield this.http.put('transaction/'+this.http.id, doc).body
 
-  try {
-    id = this.http.id
-    save = yield this.http.put('transaction/'+id, doc).body
-    doc._id  = save.id
-    doc._rev = save.rev
-    this.body = doc
-  } catch (e) {
-    console.log('transaction.post', e, id, doc)
-  }
+  doc._id  = save.id
+  doc._rev = save.rev
+  this.body = doc
 }
 
 exports.put = function* () {
