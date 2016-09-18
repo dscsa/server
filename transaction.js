@@ -155,14 +155,13 @@ exports.post = function* () {
 
   try {
     let id = this.http.id
-    let save = yield this.http.put('transaction/'+id, doc).body
+    save = yield this.http.put('transaction/'+id, doc).body
+    doc._id  = save.id
+    doc._rev = save.rev
+    this.body = doc
   } catch (e) {
-    console.log(e, id, doc)
+    console.log('transaction.post', e, id, doc)
   }
-
-  doc._id  = save.id
-  doc._rev = save.rev
-  this.body = doc
 }
 
 exports.put = function* () {
