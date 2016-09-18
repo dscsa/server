@@ -152,9 +152,10 @@ exports.post = function* () {
   doc.drug.form     = drugs[0].form
 
   let save
+  let id
 
   try {
-    let id = this.http.id
+    id = this.http.id
     save = yield this.http.put('transaction/'+id, doc).body
     doc._id  = save.id
     doc._rev = save.rev
