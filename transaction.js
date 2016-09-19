@@ -156,7 +156,7 @@ exports.post = function* () {
     id = this.http.id
     save = yield this.http.put('transaction/'+id, doc).body
   } catch (e) {
-    console.log('transaction.post', id, doc, save)
+    console.log('transaction.post', e, id, doc, save)
   }
 
   doc._id  = save.id
