@@ -113,14 +113,14 @@ exports.get = function* () {
     return yield this.db.transaction.list.record(s.createdAt.$gte, s.createdAt.$lte)
   }
 
-  if (s.inventory && s.generic)
-    return yield this.db.transaction.list.inventoryGeneric(s.generic)
-
   if (s.inventory && s.exp)
     return yield this.db.transaction.list.inventoryExp(s.exp, true, {limit:this.query.limit})
 
   if (s.inventory && s.location)
     return yield this.db.transaction.list.inventoryLocation(s.location, true, {limit:this.query.limit})
+
+  if (s.inventory) //Don't force generic, so that we can export all inventory
+    return yield this.db.transaction.list.inventoryGeneric(s.generic)
 
   if (s['shipment._id']) {
     //console.log('this.transaction', this.transaction)
