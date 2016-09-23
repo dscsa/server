@@ -99,7 +99,7 @@ function* proxy() {
 function* all_docs_put(db) {
   let body  = yield this.http.body
   this.body = yield this.db[db].view.id(body.keys) //we need to assign to this.body since couchdb.method does have access to this for proxy
-  delete this.headers['Content-Length']  //This was causing errors when Jess logged in with a PC ERR: Content Length Mismatch
+  this.remove('Content-Length')  //This was causing errors when Jess logged in with a PC ERR: Content Length Mismatch
 }
 
 function* all_docs_get(db) {
