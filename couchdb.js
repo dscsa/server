@@ -145,13 +145,14 @@ module.exports = function(db, authorization, config) {
         })
       }
 
-      if (endKey === true || ! endKey && hasRole)
+      if (endKey === true)
         endKey = startKey+'\uffff'
 
-      if (hasRole) { //Even if no start/end key, we need to do authentication
+      if (hasRole) //Even if no start key, we need to do authentication
         startKey = [config.role, startKey]
-          endKey = [config.role, endKey]
-      }
+
+      if (hasRole && endKey)
+        endKey = [config.role, endKey]
 
       if (startKey) {
         startKey = JSON.stringify(startKey)
