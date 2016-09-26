@@ -153,7 +153,7 @@ module.exports = function(db, authorization, config) {
         })
       }
 
-      if (endKey === true)
+      if (endKey === true || (hasRole && ! startKey)) //If no start key, we need to do authentication for all_docs which requires a range
         endKey = startKey+'\uffff'
 
       if (hasRole) //Even if no start key, we need to do authentication

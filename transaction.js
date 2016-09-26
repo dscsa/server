@@ -129,8 +129,11 @@ exports.get = function* () {
   if (s.inventory == "sum") //Don't force generic, so that we can sum all inventory
     return yield this.db.transaction.list.inventoryGenericSum(s.generic)
 
-  if (s.inventory) //Don't force generic, so that we can export all inventory
+  if (s.inventory && s.generic)
     return yield this.db.transaction.list.inventoryGeneric(s.generic)
+
+  if (s.inventory) //Export all inventory
+    return yield this.db.transaction.list.inventoryGeneric()
 
   if (s['shipment._id']) {
     //console.log('this.transaction', this.transaction)
