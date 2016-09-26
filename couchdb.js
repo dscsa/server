@@ -45,9 +45,9 @@ function list(head, req) {
   send('[')
   var row = getRow()
   if (row) {
-    send(toJSON(row.doc))
+    send(toJSON(row.doc || row.value))
     while(row = getRow())
-      send(','+toJSON(row.doc))
+      send(','+toJSON(row.doc || row.value))
   }
   send(']')
 }
@@ -97,11 +97,16 @@ module.exports = function(db, authorization, config) {
 
   for (let i in ddoc.views) {
     let inject  = "var emitRole = require('views/lib/emitRole')(doc, emit);"
-    let view    = string(ddoc.views[i])
+    let view    = string(ddoc.views[i].map || ddoc.views[i])
     let hasRole = ~ view.indexOf('emitRole(')
-    ddoc.views[i] = {map:view.replace('{', '{'+inject)}
-    methods.list[i] = methodFactory(hasRole, i, '_list/roles')
-    methods.view[i] = methodFactory(hasRole, i, '_view')
+
+    ddoc.views[i] = {
+      map:view.replace('{', '{'+inject),
+      reduce:ddoc.views[i].reduce
+    }
+
+    methods.list[i] = methodFactory(hasRole, i, '_list/roles', !ddoc.views[i].reduce)
+    methods.view[i] = methodFactory(hasRole, i, '_view', !ddoc.views[i].reduce)
   }
 
   for (let i in config.lib)
@@ -128,13 +133,16 @@ module.exports = function(db, authorization, config) {
     yield next
   }
 
-  function methodFactory(hasRole, view, path) {
+  function methodFactory(hasRole, view, path, includeDocs) {
     return function(startKey = '', endKey = '', opts = {}) {
 
-      let url = `${db}/_design/roles/${path}/${view}?include_docs=true`
+      let url = `${db}/_design/roles/${path}/${view}?`
+
+      if (includeDocs)
+        url += 'include_docs=true&'
 
       if (opts.limit)
-        url += `&limit=${opts.limit}`
+        url += `limit=${opts.limit}&`
 
       if (Array.isArray(startKey)) {
         let keys = startKey.map(key => [config.role, key])

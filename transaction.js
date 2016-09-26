@@ -98,6 +98,13 @@ exports.view = {
 
   inventoryExp(doc) {
     require('isInventory')(doc) && emitRole(doc.exp.to || doc.exp.from)
+  },
+
+  inventoryGenericSum:{
+    map(doc) {
+       doc.verifiedAt && emitRole(doc.drug.generic, require('qtyRemaining')(doc))
+    },
+    reduce:"_sum"
   }
 }
 
@@ -118,6 +125,9 @@ exports.get = function* () {
 
   if (s.inventory && s.location)
     return yield this.db.transaction.list.inventoryLocation(s.location, true, {limit:this.query.limit})
+
+  if (s.inventory == "sum") //Don't force generic, so that we can sum all inventory
+    return yield this.db.transaction.list.inventoryGenericSum(s.generic)
 
   if (s.inventory) //Don't force generic, so that we can export all inventory
     return yield this.db.transaction.list.inventoryGeneric(s.generic)
