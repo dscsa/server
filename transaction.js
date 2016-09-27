@@ -46,12 +46,16 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   ensure('history').assert(history)
 
   //Optional
-  ensure('qty.from').isNumber
-  ensure('qty.to').isNumber
+  ensure('qty.from').isNumber.assert(validQty)
+  ensure('qty.to').isNumber.assert(validQty)
   ensure('exp.from').isDate
   ensure('exp.to').isDate
   ensure('drug.price.goodrx').isNumber
   ensure('drug.price.nadac').isNumber
+
+  function validQty(qty) {
+    if (qty != null && qty < 1 || qty > 999) return 'qty must be between 1 and 999'
+  }
 
   //TODO next.transaction || next.dispensed must exist (and eventually have _id)
   function next(val) {

@@ -27,7 +27,7 @@ function r(url, options) {
   function router(method, handler) {
     app.use(route[method](url, wrapper, options))
     function *wrapper() {
-      //this.set('x-endpoint', method+' '+url+' for '+this.url)
+      this.set('x-endpoint', method+' '+url+' for '+this.url)
       yield handler.apply(this, arguments)
     }
   }
@@ -96,10 +96,12 @@ function* proxy() {
 //keys in body we cannot specify start/end keys in querystring
 //We need to prepend the role to each key
 //TODO move this to couchdb
-function* all_docs_put(db) {
+function* all_docs_post(db) {
   let body  = yield this.http.body
   this.body = yield this.db[db].view.id(body.keys) //we need to assign to this.body since couchdb.method does have access to this for proxy
+  console.log('all_docs res 1', this.response.headers)
   this.remove('Content-Length')  //This was causing errors when Jess logged in with a PC ERR: Content Length Mismatch
+  console.log('all_docs res 2', this.response.headers)
 }
 
 function* all_docs_get(db) {
@@ -221,7 +223,7 @@ r('/:db/', {strict:true}) //Shows DB info including update_seq#
 
 r('/:db/_all_docs')       //Needed if indexedDb cleared on browser
   .get(all_docs_get)
-  .post(all_docs_put)
+  .post(all_docs_post)
 
 r('/:db/_revs_diff')      //Not sure why PouchDB needs this
   .post(proxy)
