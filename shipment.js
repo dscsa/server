@@ -32,6 +32,9 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   var ensure = require('ensure')('shipment', arguments)
   var validShipmentId = require('validShipmentId')
 
+  if ( ! userCtx.roles.length)
+    return 'You must be logged in to save a shipment'
+
   //Required
   ensure('_id').isString.assert(validShipmentId)
   ensure('createdAt').notNull.isDate.notChanged

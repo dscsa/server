@@ -33,6 +33,9 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   var qtyRemaining    = require('qtyRemaining')
   var validShipmentId = require('validShipmentId')
 
+  if ( ! userCtx.roles.length)
+    return 'You must be logged in to save a transaction'
+
   if ( ! newDoc._deleted)
     require('validDrug')('transaction.drug', newDoc.drug, oldDoc && oldDoc.drug, userCtx)
 

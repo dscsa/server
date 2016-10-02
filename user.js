@@ -28,6 +28,9 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   var id = /^[a-z0-9]{7}$/
   var ensure = require('ensure')('user', arguments)
 
+  if ( ! userCtx.roles.length)
+    return 'You must be logged in to save a user'
+
   //Required
   ensure('_id').notNull.regex(id)
   ensure('email').notNull.regex(/[\w._]{2,}@\w{3,}\.(com|org|net|gov)/)
