@@ -98,8 +98,7 @@ function* proxy() {
 //TODO move this to couchdb
 function* all_docs_post(db) {
   let body  = yield this.http.body
-  this.body = yield this.db[db].view.id(body.keys) //we need to assign to this.body since couchdb.method does have access to this for proxy 
-  this.set('transfer-encoding', 'chunked')  //This was sometimes causing errors when Jess/Adam logged in with a PC ERR: Content Length Mismatch
+  this.body = yield this.db[db].view.id(body.keys) //we need to assign to this.body since couchdb.method does have access to this for proxy
 }
 
 function* all_docs_get(db) {
@@ -157,6 +156,7 @@ app.use(function* (next) {
   //this.set('access-control-max-age', 1728000)
   this.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
   this.method == 'OPTIONS' ? this.status = 204 : yield next
+  this.set('transfer-encoding', 'chunked') //This was sometimes causing errors when Jess/Adam logged in with a PC ERR: Content Length Mismatch
 })
 
 app.use(function *(next) {

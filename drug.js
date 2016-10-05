@@ -132,7 +132,7 @@ exports.bulk_docs = function* () {
     if (this.body[i] && this.body[i].rev) //if new_edits == true for replication this.body will be an empty array. http://wiki.apache.org/couchdb/HTTP_Bulk_Document_API#Posting_Existing_Revisions
       drug._rev = this.body[i].rev
     else
-      console.log('no _rev', i, body.docs[i], this.body[i])
+      console.log('Error importing', drug.generic, this.body[i])
 
     //Don't wait for these updates since they could take a while.  Existing drugs needs their denormalized data updated. New drugs need current prices set.
     //If done in parrallel for a large number of transactions updates CouchDB will crash with ENFILE. https://issues.apache.org/jira/browse/COUCHDB-180.
