@@ -41,7 +41,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
 
   //Required
   ensure('_id').notNull.assert(id)
-  ensure('user._id').notNull.assert(id)
+  //ensure('user._id').notNull.assert(id)
   ensure('shipment._id').isString.assert(validShipmentId)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('verifiedAt').isDate
