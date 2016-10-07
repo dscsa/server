@@ -41,6 +41,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
 
   //Required
   ensure('_id').notNull.assert(id)
+  ensure('user._id').notNull.assert(id)
   ensure('shipment._id').isString.assert(validShipmentId)
   ensure('createdAt').notNull.isDate.notChanged
   ensure('verifiedAt').isDate
@@ -112,6 +113,16 @@ exports.view = {
        doc.verifiedAt && emitRole(doc.drug.generic, require('qtyRemaining')(doc))
     },
     reduce:"_sum"
+  },
+
+  transactionCount:{
+    map(doc) {
+      if (doc.user) {  //todo delete once database is cleared of old transactions
+         key = doc.createdAt.slice(0, 10).split('-')
+         emit(key.concat([doc.user._id]))
+      }
+    },
+    reduce:"_count"
   }
 }
 
