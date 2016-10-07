@@ -117,10 +117,8 @@ exports.view = {
 
   transactionCount:{
     map(doc) {
-      if (doc.user) {  //todo delete once database is cleared of old transactions
-         key = doc.createdAt.slice(0, 10).split('-')
-         emit(key.concat([doc.user._id]))
-      }
+       key = doc.createdAt.slice(0, 10).split('-')
+       emit(key.concat(doc.user && doc.user._id))
     },
     reduce:"_count"
   }
