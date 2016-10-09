@@ -40,11 +40,11 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
     require('validDrug')('transaction.drug', newDoc.drug, oldDoc && oldDoc.drug, userCtx)
 
   //Required
-  ensure('_id').notNull.assert(id)
+  ensure('_id').notNull.regex(id)
   //ensure('user._id').notNull.assert(id)
   ensure('shipment._id').isString.assert(validShipmentId)
   ensure('createdAt').notNull.isDate.notChanged
-  ensure('verifiedAt').isDate
+  ensure('verifiedAt').isDate.assert(verified)
   ensure('next').notNull.isArray.assert(next)
   ensure('next.qty').isNumber
   ensure('history').assert(history)
@@ -54,11 +54,19 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   ensure('qty.to').isNumber.assert(validQty)
   ensure('exp.from').isDate
   ensure('exp.to').isDate
+  ensure('location').regex(/[A-Z]\d{3}/)
   ensure('drug.price.goodrx').isNumber
   ensure('drug.price.nadac').isNumber
 
   function validQty(qty) {
     if (qty != null && qty < 1 || qty > 999) return 'qty must be between 1 and 999'
+  }
+
+  function verified(date) {
+    if ( ! date) return
+    if ( ! newDoc.location) return 'cannot be set unless a valid box is set'
+    if ( ! newDoc.qty.from && ! newDoc.qty.to) return 'cannot be set unless a valid qty is set'
+    if ( ! newDoc.exp.from && ! newDoc.exp.to) return 'cannot be set unless a valid exp is set'
   }
 
   //TODO next.transaction || next.dispensed must exist (and eventually have _id)
