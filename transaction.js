@@ -54,7 +54,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   ensure('qty.to').isNumber.assert(validQty)
   ensure('exp.from').isDate
   ensure('exp.to').isDate
-  ensure('location').regex(/[A-Z]\d{3}/)
+  ensure('location').regex(/[A-Z]\d{3}|UNIT/)
   ensure('drug.price.goodrx').isNumber
   ensure('drug.price.nadac').isNumber
 
@@ -64,7 +64,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
 
   function verified(date) {
     if ( ! date) return
-    if ( ! newDoc.location) return 'cannot be set unless a valid box is set'
+    if ( ! newDoc.location && qtyRemaining(newDoc) > 0) return 'cannot be set unless a valid box is set'
     if ( ! newDoc.qty.from && ! newDoc.qty.to) return 'cannot be set unless a valid qty is set'
     if ( ! newDoc.exp.from && ! newDoc.exp.to) return 'cannot be set unless a valid exp is set'
   }
