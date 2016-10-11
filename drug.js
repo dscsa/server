@@ -207,13 +207,19 @@ function *getNadac(drug) {
 
   let res = prices.pop()
 
-  //Need to handle case where price is given per ml to ensure database integrity
+  //Need to handle case where price is given per ml  or per gm to ensure database integrity
   if(res.pricing_unit == "ML" || res.pricing_unit == "GM"){ //a component of the NADAC response that described unit of price ("each", "ml", or "gm")
     let numberOfMLGM = res.ndc_description.match(/\/([0-9.]+)[^\/]*$/) //looks for the denominator in strength to determine per unit cost, not per ml or gm
-    if(numberOfMLGM){  //responds null if there is no denominator value in strength
-      let total = +numberOfMLGM[1] * +res.nadac_per_unit //essentialy number of ml/gm times price per ml/gm
-      console.trace("Converted from price/ml or price/gm to price/unit of: ", total)
-      return +total.toFixed(4)
+
+    if(! numberOfMLGM)  //responds null if there is no denominator value in strength given by NADAC
+        numberOfMLGM = drug.generic.match(/\/([0-9.]+)[^\/]*$/) //in cases where our data contains proper generic and NADAC doesn't, try to check that as wel
+
+    if(! numberOfMLGM){ //Meaning even our generic data does not have the conversion factor
+        console.log("Drug could not be converted to account for GM or ML") //At this point we have no way of converting
+    } else {
+        let total = +numberOfMLGM[1] * +res.nadac_per_unit //at this point, we have a conversion factor we can use
+        console.trace("Converted from price/ml or price/gm to price/unit of: ", total)
+        return +total.toFixed(4)
     }
   }
 
