@@ -152,7 +152,8 @@ exports.view = {
 
   verifiedValueByDispensedAt:{
     map(doc) {
-       for (var next of doc.next) {
+       for (var i in doc.next) {
+         var next  = doc.next[i]
          var date  = next.dispensedAt && next.dispensedAt.slice(0, 10).split('-')
          var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
          emit(date, Math.floor(price*next.qty))
