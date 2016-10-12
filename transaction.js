@@ -160,6 +160,23 @@ exports.view = {
        }
     },
     reduce:"_sum"
+  },
+
+  verifiedAt(doc) {
+    if ( ! doc.verifiedAt) return
+    var date   = doc.createdAt.slice(0, 10).split('-')
+    var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
+    var qty   = doc.qty.to || doc.qty.from || 0
+    emit(date, price*qty)
+  },
+
+  dispensedAt(doc) {
+     for (var i in doc.next) {
+       var next  = doc.next[i]
+       var date  = next.dispensedAt && next.dispensedAt.slice(0, 10).split('-')
+       var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
+       emit(date, price*next.qty)
+     }
   }
 }
 
