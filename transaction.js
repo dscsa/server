@@ -125,10 +125,38 @@ exports.view = {
 
   transactionCount:{
     map(doc) {
-       key = doc.createdAt.slice(0, 10).split('-')
+       var key = doc.createdAt.slice(0, 10).split('-')
        emit(key.concat(doc.user && doc.user._id))
     },
     reduce:"_count"
+  },
+
+  potentialErrors(doc) {
+     var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
+     var qty   = doc.qty.to || doc.qty.from || 0
+     var value = Math.floor(price*qty)
+     if (value > 1000)
+      emit(['Value > $1000', doc._id], value)
+  },
+
+  valueByCreatedAt:{
+    map(doc) {
+       var date   = doc.createdAt.slice(0, 10).split('-')
+       var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
+       var qty   = doc.qty.to || doc.qty.from || 0
+       emit(date, Math.floor(price*qty))
+    },
+    reduce:"_sum"
+  },
+
+  valueByExp:{
+    map(doc) {
+      var date  = doc.exp.to || doc.exp.from || ''
+      var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
+      var qty   = doc.qty.to || doc.qty.from || 0
+      emit(date.slice(0, 10).split('-'), Math.floor(price*qty))
+    },
+    reduce:"_sum"
   }
 }
 
