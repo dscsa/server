@@ -145,7 +145,7 @@ exports.view = {
        var date   = doc.createdAt.slice(0, 10).split('-')
        var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
        var qty   = doc.qty.to || doc.qty.from || 0
-       emit(date, Math.floor(price*qty))
+       emit(date, price*qty)
     },
     reduce:"_sum"
   },
@@ -156,7 +156,7 @@ exports.view = {
          var next  = doc.next[i]
          var date  = next.dispensedAt && next.dispensedAt.slice(0, 10).split('-')
          var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-         emit(date, Math.floor(price*next.qty))
+         emit(date, price*next.qty)
        }
     },
     reduce:"_sum"
