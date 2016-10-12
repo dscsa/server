@@ -139,8 +139,9 @@ exports.view = {
       emit(['Value > $1000', value])
   },
 
-  valueByCreatedAt:{
+  verifiedValueByCreatedAt:{
     map(doc) {
+       if ( ! doc.verifiedAt) return
        var date   = doc.createdAt.slice(0, 10).split('-')
        var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
        var qty   = doc.qty.to || doc.qty.from || 0
@@ -149,12 +150,13 @@ exports.view = {
     reduce:"_sum"
   },
 
-  valueByExp:{
+  verifiedValueByDispensedAt:{
     map(doc) {
-      var date  = doc.exp.to || doc.exp.from || ''
-      var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-      var qty   = doc.qty.to || doc.qty.from || 0
-      emit(date.slice(0, 10).split('-'), Math.floor(price*qty))
+       for (var next of doc.next) {
+         var date  = next.dispensedAt && next.dispensedAt.slice(0, 10).split('-')
+         var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
+         emit(date, Math.floor(price*next.qty))
+       }
     },
     reduce:"_sum"
   }
