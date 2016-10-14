@@ -153,10 +153,10 @@ exports.view = {
   verifiedValueByDispensedAt:{
     map(doc) {
        for (var i in doc.next) {
-         var next  = doc.next[i].dispensed
-         var date  = next.dispensedAt && next.dispensedAt.slice(0, 10).split('-')
+         var next  = doc.next[i]
+         var date  = next.dispensed.dispensedAt || ''
          var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-         emit(date, price*next.qty)
+         emit(date.slice(0, 10).split('-'), price*next.qty)
        }
     },
     reduce:"_sum"
@@ -173,9 +173,9 @@ exports.view = {
   dispensedAt(doc) {
      for (var i in doc.next) {
        var next  = doc.next[i].dispensed
-       var date  = next.dispensedAt && next.dispensedAt.slice(0, 10).split('-')
+       var date  = next.dispensed.dispensedAt || ''
        var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-       emit(date, price*next.qty)
+       emit(date.slice(0, 10).split('-'), price*next.qty)
      }
   }
 }
