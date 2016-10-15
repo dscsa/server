@@ -63,7 +63,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   }
 
   function verified(date) {
-    if ( ! date) return
+    if ( ! date || qtyRemaining === 0) return
     if ( ! newDoc.qty.from && ! newDoc.qty.to) return 'cannot be set unless a valid qty is set'
     if ( ! newDoc.exp.from && ! newDoc.exp.to) return 'cannot be set unless a valid exp is set'
   }
