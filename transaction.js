@@ -30,11 +30,11 @@ exports.userRoles = (ctx, emit) => {
 exports.validate = function(newDoc, oldDoc, userCtx) {
   var id = /^[a-z0-9]{7}$/
   var ensure          = require('ensure')('transaction', arguments)
-  var qtyRemaining    = require('qtyRemaining')
+  var qtyRemaining    = require('qtyRemaining')(newDoc)
   var validShipmentId = require('validShipmentId')
 
   if ( ! userCtx.roles.length)
-    return 'You must be logged in to save a transaction'
+    throw {error:'You must be logged in to save a transaction'}
 
   if ( ! newDoc._deleted)
     require('validDrug')('transaction.drug', newDoc.drug, oldDoc && oldDoc.drug, userCtx)
@@ -64,7 +64,6 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
 
   function verified(date) {
     if ( ! date) return
-    if ( ! newDoc.location && qtyRemaining(newDoc) > 0) return 'cannot be set unless a valid box is set'
     if ( ! newDoc.qty.from && ! newDoc.qty.to) return 'cannot be set unless a valid qty is set'
     if ( ! newDoc.exp.from && ! newDoc.exp.to) return 'cannot be set unless a valid exp is set'
   }
@@ -74,7 +73,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
     if (val.length && ! newDoc.verifiedAt)
       return 'cannot contain any values unless transaction.verifiedAt is set'
 
-    if (qtyRemaining(newDoc) < 0)
+    if (qtyRemaining < 0)
       return 'sum of quantities in "next" cannot be larger than newDoc.qty.to || newDoc.qty.from'
   }
 
