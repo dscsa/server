@@ -163,7 +163,7 @@ exports.view = {
 
   verifiedAt(doc) {
     if ( ! doc.verifiedAt) return
-    var date   = doc.createdAt.slice(0, 10).split('-')
+    var date  = doc.createdAt.slice(0, 10).split('-')
     var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
     var qty   = doc.qty.to || doc.qty.from || 0
     emit(date, price*qty)

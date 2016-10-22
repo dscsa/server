@@ -170,8 +170,11 @@ function httpFactory(settings, ctx = {}) {
     get() {
       old   = time
       time  = Date.now().toString(36).slice(-8, -3) //5 digit timestamp. Updates ever 36^3/1000 = 47 seconds and doesn't repeat for 36^8/1000 = 89 years
-      count = time == old ? count+1 : 0
-      if (count >= 36 * 36) throw Error('Error creating _id, too many requests per second')
+      if (count >= 36 * 36) {
+        old = old.slice(0, -1)+String.fromCharCode(old.charCodeAt(0) + 1)
+      }
+      count = time <= old ? count+1 : 0
+
       return time+("00"+count.toString(36)).slice(-2) //Force Id to 2 digits (36^2 updates per time period).  Overall uuid is 7 digits
     }
   })
