@@ -171,7 +171,7 @@ function httpFactory(settings, ctx = {}) {
       old   = time
       time  = Date.now().toString(36).slice(-8, -3) //5 digit timestamp. Updates ever 36^3/1000 = 47 seconds and doesn't repeat for 36^8/1000 = 89 years
       if (count >= 36 * 36) {
-        old = old.slice(0, -1)+String.fromCharCode(old.charCodeAt(0) + 1)
+        old = old.slice(0, -1)+String.fromCharCode(old.charCodeAt(old.length-1) + 1)
       }
       count = time <= old ? count+1 : 0
 
