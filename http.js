@@ -3,7 +3,7 @@ let httpRequest = require('http').request
 let urlParse    = require('url').parse
 let qsString    = require('querystring').stringify
 
-let count = 0, old, time //for use with couch.id
+let base //for use with couch.id
 
 //Since http is ansyncronous, we throw more meaningful errors by
 //saving the stack when API is run and then appending it at end
@@ -165,18 +165,17 @@ function httpFactory(settings, ctx = {}) {
     }
   })
 
-  //Return a 7 digit uuid that can handle upto 36^2/47 = 27 requests per second
   Object.defineProperty(http, 'id', {
     get() {
-      old  = time
-      time = Date.now().toString(36).slice(-8, -3) //5 digit timestamp. Updates ever 36^3/1000 = 47 seconds and doesn't repeat for 36^8/1000 = 89 years
 
-      if (count >= 36 * 36) {
-        time = old.slice(0, -1)+String.fromCharCode(old.charCodeAt(old.length-1) + 1)
-      }
-      count = time == old ? count+1 : 0
+      let time = Date.now().toString().slice(-12, -2) //Refresh every 0.1 seconds; won't duplicate ids for 10^12/1000/60/60/24/365 = 31 years
 
-      return time+("00"+count.toString(36)).slice(-2) //Force Id to 2 digits (36^2 updates per time period).  Overall uuid is 7 digits
+      if (time > base || ! base)
+        base = time
+      else
+        base++
+
+      return ("0000000"+base.toString(36)).slice(-7) //Force Id to 7 digits
     }
   })
 
