@@ -135,7 +135,7 @@ exports.view = {
      var qty   = doc.qty.to || doc.qty.from || 0
      var value = Math.floor(price*qty)
      if (value > 1000)
-      emit(['Value > $1000', value])
+      emit(doc.createdAt.slice(0, 10).split('-').concat(['Value > $1000', value]))
   },
 
   verifiedValueByCreatedAt:{
