@@ -144,6 +144,9 @@ module.exports = function(db, authorization, config) {
       if (opts.limit)
         url += `limit=${opts.limit}&`
 
+      if (opts.group)
+        url += `group=${opts.group}&`
+
       if (Array.isArray(startKey)) {
         let keys = startKey.map(key => [config.role, key])
         //TODO we can't assume http installed as middleware

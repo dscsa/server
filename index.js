@@ -79,13 +79,6 @@ app.use(function*(next) {
 for (let i in resources)
   app.use(couchdb(i, auth, resources[i]))
 
-//TODO remove this hack once no longer needed
-r('/goodrx/:ndc9/:name')
-  .get(function*(ndc9, generics) {
-    console.log(generics, JSON.parse(generics))
-    this.body = yield resources.drug.goodrx.call(this, {ndc9, generics:JSON.parse(generics)})
-  })
-
 function* proxy() {
   yield this.http()
   this.remove('Connection')

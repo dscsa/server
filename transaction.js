@@ -197,8 +197,13 @@ exports.get = function* () {
   if (s.inventory && s.location)
     return yield this.db.transaction.list.inventoryLocation(s.location, true, {limit:this.query.limit})
 
-  if (s.inventory == "sum") //Don't force generic, so that we can sum all inventory
-    return yield this.db.transaction.list.inventoryGenericSum(s.generic)
+  if (s.inventory == "sum") {//Don't force generic, so that we can sum all inventory
+    this.body = []
+    let view = yield this.db.transaction.view.inventoryGenericSum(s.generic, true, {group:true}).body
+    return this.body = view.rows.reverse().map(row => {
+      return {generic:row.key[1], qty:row.value}
+    })
+  }
 
   if (s.inventory && s.generic)
     return yield this.db.transaction.list.inventoryGeneric(s.generic)
