@@ -99,7 +99,7 @@ function* all_docs_get(db) {
 }
 
 function* changes(db) {
-  this.req.setTimeout(+this.query.timeout) //match timeout in dscsa-pouch
+  this.req.setTimeout(+this.query.timeout || 25000) //match timeout in dscsa-pouch
   // if (db == 'user' || db == 'shipment' || db == 'transaction')
   //   this.url += '&filter=roles/roles'
   //
