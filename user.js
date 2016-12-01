@@ -126,8 +126,10 @@ exports.session = {
 
     yield this.http('_session', {name:users[0]._id, password:login.password}) //.headers(this.headers)
 
-    this.body = {_id:users[0]._id, account:{_id:users[0].account._id}}
-    this.cookies.set('AuthUser', JSON.stringify(this.body), {httpOnly:false})
+    if (this.status == 200) { //401 status should not log us in
+      this.body = {_id:users[0]._id, account:{_id:users[0].account._id}}
+      this.cookies.set('AuthUser', JSON.stringify(this.body), {httpOnly:false})
+    }
   },
 
   *delete() {
