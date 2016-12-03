@@ -89,6 +89,9 @@ exports.post = function* () {
   if (typeof drug != 'object' || Array.isArray(drug))
     this.throw(422, 'drug must be an object')
 
+  if ( ! Array.isArray(drug.generics))
+    this.throw(422, 'drug.generics must be an array')
+
   defaults(drug)
 
   let save = yield exports.updatePrice.call(this, drug)
@@ -156,7 +159,7 @@ function generic(drug) {
   function concat(generic) {
     return generic.name+" "+generic.strength
   }
-  if ( ! drug.generics) console.log('no drug.generics', drug)
+
   return (drug.generics.map(concat).join(', ')+' '+drug.form).replace(/ Capsule| Tablet/, '').replace(/ ( |,)/g, "$1")
 }
 
