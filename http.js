@@ -209,9 +209,12 @@ function httpFactory(settings, ctx = {}) {
   function response(res) {
 
     ctx.status = res.statusCode //Always proxy the status code
-
     //console.log('http response', res.req.method, res.req.path, res.statusCode, res.statusMessage, this.proxy)
-    if (res.statusCode >= 500)
+
+    //500 is always an error.  If we are proxying, then a 400 error should also exit immediately
+    //since that resource didn't exist.  For example in drug.post if the save fails with a 403
+    //unauthorized, we don't want to then get the updated copy (with new _rev).
+    if (res.statusCode >= 500 || (this.proxy && res.statusCode >= 400))
       return http.json(res).then(body => {
         throw asyncError(body, res.statusCode)
       })
