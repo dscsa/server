@@ -168,7 +168,7 @@ function httpFactory(settings, ctx = {}) {
   Object.defineProperty(http, 'id', {
     get() {
 
-      let time = Date.now().toString().slice(-12, -2) //Refresh every 0.1 seconds; won't duplicate ids for 10^12/1000/60/60/24/365 = 31 years
+      let time = +Date.now().toString().slice(-12, -2) //Refresh every 0.1 seconds; won't duplicate ids for 10^12/1000/60/60/24/365 = 31 years
 
       if (time > base || ! base)
         base = time
@@ -207,9 +207,9 @@ function httpFactory(settings, ctx = {}) {
   }
 
   function response(res) {
+    //console.log('http response', res.req.method, res.req.path, res.statusCode, res.statusMessage, this.proxy)
 
     ctx.status = res.statusCode //Always proxy the status code
-    //console.log('http response', res.req.method, res.req.path, res.statusCode, res.statusMessage, this.proxy)
 
     //500 is always an error.  If we are proxying, then a 400 error should also exit immediately
     //since that resource didn't exist.  For example in drug.post if the save fails with a 403
