@@ -6,15 +6,8 @@ exports.lib = {
   generic:drug.generic,
   validDrug:drug.lib.validDrug,
   validShipmentId:shipment.lib.validShipmentId,
-  qtyRemaining(doc) {
-    function sum(sum, next) {
-      return sum + next.qty
-    }
-
-    return (doc.qty.to || doc.qty.from) - doc.next.reduce(sum, 0)
-  },
   isInventory(doc) {
-    return doc.verifiedAt && require('qtyRemaining')(doc) > 0 //inventory only
+    return doc.verifiedAt && doc.next.length == 0 //inventory only
   }
 }
 
@@ -30,7 +23,6 @@ exports.userRoles = (ctx, emit) => {
 exports.validate = function(newDoc, oldDoc, userCtx) {
   var id = /^[a-z0-9]{7}$/
   var ensure          = require('ensure')('transaction', arguments)
-  var qtyRemaining    = require('qtyRemaining')(newDoc)
   var validShipmentId = require('validShipmentId')
 
   if ( ! userCtx.roles.length)
@@ -63,7 +55,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   }
 
   function verified(date) {
-    if ( ! date || qtyRemaining === 0) return
+    if ( ! date) return
     if ( ! newDoc.qty.from && ! newDoc.qty.to) return 'cannot be set unless a valid qty is set'
     if ( ! newDoc.exp.from && ! newDoc.exp.to) return 'cannot be set unless a valid exp is set'
   }
@@ -72,9 +64,6 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   function next(val) {
     if (val.length && ! newDoc.verifiedAt)
       return 'cannot contain any values unless transaction.verifiedAt is set'
-
-    if (qtyRemaining < 0)
-      return 'sum of quantities in "next" cannot be larger than newDoc.qty.to || newDoc.qty.from'
   }
 
   function history(val) {
@@ -102,6 +91,10 @@ exports.view = {
     doc.shipment._id.split('.').length == 3 && emitRole(doc.createdAt)
   },
 
+  isPending(doc) {
+    return doc.next[0] && doc.next[0].pending && emitRole(doc.next[0].createdAt)
+  },
+
   //For inventory search.
   inventoryGeneric(doc) {
     require('isInventory')(doc) && emitRole(doc.drug.generic)
@@ -117,7 +110,7 @@ exports.view = {
 
   inventoryGenericSum:{
     map(doc) {
-       doc.verifiedAt && emitRole(doc.drug.generic, require('qtyRemaining')(doc))
+       require('isInventory')(doc) && emitRole(doc.drug.generic, doc.qty.to || doc.qty.from || 0)
     },
     reduce:"_sum"
   },
@@ -153,9 +146,12 @@ exports.view = {
     map(doc) {
        for (var i in doc.next) {
          var next  = doc.next[i]
-         var date  = next.dispensed.dispensedAt || ''
-         var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-         emit(date.slice(0, 10).split('-'), price*next.qty)
+         if (next.dispensed) {
+           var date  = next.createdAt || ''
+           var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
+           var qty   = doc.qty.to || doc.qty.from || 0
+           emit(date.slice(0, 10).split('-'), price*qty)
+         }
        }
     },
     reduce:"_sum"
@@ -172,9 +168,12 @@ exports.view = {
   dispensedAt(doc) {
      for (var i in doc.next) {
        var next  = doc.next[i]
-       var date  = next.dispensed.dispensedAt || ''
-       var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-       emit(date.slice(0, 10).split('-'), price*next.qty)
+       if (next.dispensed) {
+         var date  = next.createdAt || ''
+         var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
+         var qty   = doc.qty.to || doc.qty.from || 0
+         emit(date.slice(0, 10).split('-'), price*qty)
+       }
      }
   }
 }
@@ -190,6 +189,9 @@ exports.get = function* () {
     this.req.setTimeout(10000)
     return yield this.db.transaction.list.record(s.createdAt.$gte, s.createdAt.$lte)
   }
+
+  if (s.pending)
+    return yield this.db.transaction.list.isPending(s.pending === true ? null : s.pending)
 
   if (s.inventory && s.exp)
     return yield this.db.transaction.list.inventoryExp(s.exp, true, {limit:this.query.limit})
