@@ -201,7 +201,7 @@ exports.get = function* () {
 
   if (s.inventory == "sum") {//Don't force generic, so that we can sum all inventory
     this.body = []
-    let view = yield this.db.transaction.view.inventoryGenericSum(s.generic, true, {group:true}).body
+    let view = yield this.db.transaction.view.inventoryGenericSum(s.generic, true, {group:true, role:s.account}).body
     return this.body = view.rows.reverse().map(row => {
       return {generic:row.key[1], qty:row.value}
     })

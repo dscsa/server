@@ -136,7 +136,8 @@ module.exports = function(db, authorization, config) {
   function methodFactory(hasRole, view, path, includeDocs) {
     return function(startKey = '', endKey = '', opts = {}) {
 
-      let url = `${db}/_design/roles/${path}/${view}?`
+      let url  = `${db}/_design/roles/${path}/${view}?`
+      let role = opts.role || config.role
 
       if (includeDocs)
         url += 'include_docs=true&'
@@ -148,7 +149,7 @@ module.exports = function(db, authorization, config) {
         url += `group=${opts.group}&`
 
       if (Array.isArray(startKey)) {
-        let keys = startKey.map(key => [config.role, key])
+        let keys = startKey.map(key => [role, key])
         //TODO we can't assume http installed as middleware
         return this.http.post(url, {keys}).body.then(body => {
           for (let row of body.rows) row.key = row.key[1]
@@ -160,10 +161,10 @@ module.exports = function(db, authorization, config) {
         endKey = startKey+'\uffff'
 
       if (hasRole) //Even if no start key, we need to do authentication
-        startKey = [config.role, startKey]
+        startKey = [role, startKey]
 
       if (hasRole && endKey)
-        endKey = [config.role, endKey]
+        endKey = [role, endKey]
 
       if (startKey) {
         startKey = JSON.stringify(startKey)
