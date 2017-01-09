@@ -46,7 +46,7 @@ exports.validate = function(newDoc, oldDoc, userCtx) {
   ensure('qty.to').isNumber.assert(validQty)
   ensure('exp.from').isDate
   ensure('exp.to').isDate
-  ensure('location').regex(/[A-Z]\d{3}|UNIT/)
+  ensure('location').regex(/[A-Z]\d{2,3}|UNIT/)
   ensure('drug.price.goodrx').isNumber
   ensure('drug.price.nadac').isNumber
 
@@ -110,9 +110,23 @@ exports.view = {
 
   inventoryGenericSum:{
     map(doc) {
-       require('isInventory')(doc) && emitRole(doc.drug.generic, doc.qty.to || doc.qty.from || 0)
+       if (require('isInventory')(doc)) {
+         var qty    = doc.qty.to || doc.qty.from || 0
+         var repack = doc.shipment._id.indexOf('.') == -1
+         emitRole(doc.drug.generic, repack ? {inventory:0, repack:qty} : {inventory:qty, repack:0})
+       }
     },
-    reduce:"_sum"
+    reduce(keys, vals, rereduce) {
+      // reduce function
+      var result = {inventory:0, repack:0}
+
+      for(var i in vals) {
+        result.inventory += vals[i].inventory
+        result.repack    += vals[i].repack
+      }
+
+      return result
+    }
   },
 
   transactionCount:{
@@ -199,12 +213,16 @@ exports.get = function* () {
   if (s.inventory && s.location)
     return yield this.db.transaction.list.inventoryLocation(s.location, true, {limit:this.query.limit})
 
-  if (s.inventory == "sum") {//Don't force generic, so that we can sum all inventory
+  //TODO make all views available in a CSV rather than JSON format
+  if (s.inventory == "sum") {//Don't force generic, so that we can sum all inventory.
     this.body = []
     let view = yield this.db.transaction.view.inventoryGenericSum(s.generic, true, {group:true, role:s.account}).body
-    return this.body = view.rows.reverse().map(row => {
-      return {generic:row.key[1], qty:row.value}
+
+    view = view.rows.reverse().map(row => {
+      return row.key[1]+','+row.value.inventory+','+row.value.repack
     })
+    view.unshift('generic name,inventory qty,repack qty')
+    return this.body = view.join('\n')
   }
 
   if (s.inventory && s.generic)
