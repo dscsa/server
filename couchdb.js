@@ -12,6 +12,7 @@ let http = require('./http')({host:'localhost:5984', headers:{'content-type':'ap
 // })
 
 function string(fn) {
+  if ( ! fn || typeof fn == 'string') return fn
   fn = fn.toString()
   fn = fn.startsWith('function') ? fn : 'function '+fn
 
@@ -102,7 +103,7 @@ module.exports = function(db, authorization, config) {
 
     ddoc.views[i] = {
       map:view.replace('{', '{'+inject),
-      reduce:ddoc.views[i].reduce
+      reduce:string(ddoc.views[i].reduce)
     }
 
     methods.list[i] = methodFactory(hasRole, i, '_list/roles', !ddoc.views[i].reduce)
