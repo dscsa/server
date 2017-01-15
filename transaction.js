@@ -110,19 +110,27 @@ exports.view = {
 
   inventoryGenericSum:{
     map(doc) {
-       if (require('isInventory')(doc)) {
-         var qty    = doc.qty.to || doc.qty.from || 0
-         var repack = doc.shipment._id.indexOf('.') == -1
-         emitRole(doc.drug.generic, repack ? {inventory:0, repack:qty} : {inventory:qty, repack:0})
-       }
+      var qty = doc.qty.to || doc.qty.from || 0
+      if (require('isInventory')(doc)) {
+        var repack = doc.shipment._id.indexOf('.') == -1
+        var value  = repack
+          ? {inventory:0, repack:qty, pending:0}
+          : {inventory:qty, repack:0, pending:0}
+
+        emitRole(doc.drug.generic, value)
+      }
+      //TODO combine this with the isPending() function
+      else if (doc.next[0] && doc.next[0].pending)
+        emitRole(doc.drug.generic, {inventory:0, repack:0, pending:qty})
     },
     reduce(keys, vals, rereduce) {
       // reduce function
-      var result = {inventory:0, repack:0}
+      var result = {inventory:0, repack:0, pending:0}
 
       for(var i in vals) {
         result.inventory += vals[i].inventory
         result.repack    += vals[i].repack
+        result.pending   += vals[i].pending
       }
 
       return result
@@ -219,9 +227,9 @@ exports.get = function* () {
     let view = yield this.db.transaction.view.inventoryGenericSum(s.generic, true, {group:true, role:s.account}).body
 
     view = view.rows.reverse().map(row => {
-      return row.key[1]+','+row.value.inventory+','+row.value.repack
+      return row.key[1]+','+row.value.inventory+','+row.value.repack+','+row.value.pending
     })
-    view.unshift('generic name,inventory qty,repack qty')
+    view.unshift('Generic Drug Name,Inventory Qty,Repack Qty,Pending Qty')
     return this.body = view.join('\n')
   }
 
