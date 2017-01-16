@@ -76,7 +76,7 @@ exports.updatePrice = function* (drug) {
   drug.price.goodrx = prices[1] || drug.price.goodrx
   drug.price.updatedAt = new Date().toJSON()
 
-  yield this.http.put('drug/'+drug._id, drug).catch(err => {
+  return yield this.http.put('drug/'+drug._id, drug).body.catch(err => {
     console.log('Error updating drug price!', err, 'drug/'+drug._id, this.status, this.message, err, drug)
     //let others now that the drug was updated by returning undefined if err/no update, and response if update
   })
