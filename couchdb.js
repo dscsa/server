@@ -70,6 +70,10 @@ function filter(doc, req) {
   return require('isRole')(doc, req.userCtx)
 }
 
+function defaultDocRoles(doc, emit) {
+   doc._id.slice(0, 7) != '_design/' && emit()		
+}
+
 function defaultUserRoles(doc, emit) {
   emit()
 }
@@ -94,7 +98,7 @@ module.exports = function(db, authorization, config) {
   }
 
   config.lib.ensure = ensure //TODO get rid of this hard dependency
-  config.lib.docRoles = config.docRoles
+  config.lib.docRoles = config.docRoles || defaultDocRoles
   config.lib.isRole   = isRole
   config.lib.emitRole = emitRole
 

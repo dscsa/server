@@ -63,6 +63,7 @@ exports.get = function*() {
 
 //Exporting non-standard method, but is used by transaction.js
 exports.updatePrice = function* (drug) {
+
   drug.generic = drug.generic || exports.generic(drug)
 
   if ( ! drug.price || new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)
