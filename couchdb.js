@@ -23,22 +23,35 @@ function string(fn) {
   return fn.replace(/function[^(]*/, 'function')
 }
 
-function isRole(doc, userCtx) {
+function isRole(doc, userCtx, role) {
   if (doc._deleted) return userCtx.roles.length
   if (doc._id.slice(0, 8) == '_design/') return false
 
   var authorized
-  require('docRoles')(doc, function(role) {
-    authorized = authorized === true || role === undefined || role == userCtx.roles[0] || '_admin' == userCtx.roles[0]
+  require('docRoles')(doc, function(roleName, roleValue) {
+    if (authorized === true) return
+    if (role && role != roleName) return
+    if (roleValue === undefined || roleValue == userCtx.roles[0] || '_admin' == userCtx.roles[0])
+      return authorized = true
   })
   return authorized
 }
 
+//Todo handle situtation where a roleName has multiple values such as
+// emit('donee', 1)
+// emit('donor', 2)
+// emit('donor', 3)
 function emitRole(doc, emit) {
-  return function(key, val) {
-    require('docRoles')(doc, function(role) {
-      emit([role, key], val)
-    })
+  require('docRoles')(doc, function(roleName, roleValue) {
+    emit[roleName] = function(key, val) {
+        emit([roleValue, key], val)
+    }
+  })
+
+  emit.allRoles = function(key, val) {
+    for (var i in emit)
+      if (i != 'allRoles')
+        emit[i](key, val)
   }
 }
 
@@ -57,16 +70,12 @@ function filter(doc, req) {
   return require('isRole')(doc, req.userCtx)
 }
 
-function defaultDocRoles(doc, emit) {
-  doc._id.slice(0, 7) != '_design/' && emit()
-}
-
 function defaultUserRoles(doc, emit) {
   emit()
 }
 
 function viewId(doc) {
-  emitRole(doc._id, {rev:doc._rev})
+  emit.allRoles(doc._id, {rev:doc._rev})
 }
 
 module.exports = function(db, authorization, config) {
@@ -85,7 +94,7 @@ module.exports = function(db, authorization, config) {
   }
 
   config.lib.ensure = ensure //TODO get rid of this hard dependency
-  config.lib.docRoles = config.docRoles || defaultDocRoles
+  config.lib.docRoles = config.docRoles
   config.lib.isRole   = isRole
   config.lib.emitRole = emitRole
 
@@ -97,9 +106,9 @@ module.exports = function(db, authorization, config) {
   ddoc.views.id = viewId
 
   for (let i in ddoc.views) {
-    let inject  = "var emitRole = require('views/lib/emitRole')(doc, emit);"
+    let inject  = "require('views/lib/emitRole')(doc, emit);"
     let view    = string(ddoc.views[i].map || ddoc.views[i])
-    let hasRole = ~ view.indexOf('emitRole(')
+    let hasRole = ~ view.indexOf('emit.')
 
     ddoc.views[i] = {
       map:view.replace('{', '{'+inject),

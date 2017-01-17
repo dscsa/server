@@ -7,13 +7,22 @@ exports.lib = {
   validDrug:drug.lib.validDrug,
   validShipmentId:shipment.lib.validShipmentId,
   isInventory(doc) {
-    return doc.verifiedAt && doc.next.length == 0 //inventory only
+    //verifiedAt is the checkmark, next can have pending, dispensed, or a transaction meaning this transaction has been used for something else
+    return doc.verifiedAt && doc.next.length == 0
+  },
+  isPending(doc) {
+    return doc.next[0] && doc.next[0].pending
   }
 }
 
 exports.docRoles = function(doc, emit) {
   //Determine whether user is authorized to see the doc
-  doc.shipment._id.split('.').slice(0, 2).forEach(emit)
+  //Determine whether user is authorized to see the doc
+  var shipment  = doc.shipment._id.split('.')
+
+  emit('donee', shipment[0]) //this handles both shipment._id = account._id and a three segment shipment._id
+
+  shipment.length == 3 && emit('donor', shipment[1])
 }
 
 exports.userRoles = (ctx, emit) => {
@@ -83,29 +92,31 @@ exports.view = {
   },
 
   shipment(doc) {
-    emitRole(doc.shipment._id)
+    emit.allRoles(doc.shipment._id)
   },
 
   //TODO How to incorporate Complete/Verified/Destroyed, multiple map functions?  compound key e.g., [createAt, typeof verified] with grouping?
   record(doc) {
-    doc.shipment._id.split('.').length == 3 && emitRole(doc.createdAt)
+    //Don't include inventory added without a shipment
+    if (doc.shipment._id.split('.').length == 3)
+      emit.allRoles(doc.createdAt)
   },
 
-  isPending(doc) {
-    return doc.next[0] && doc.next[0].pending && emitRole(doc.next[0].createdAt)
+  inventoryPending(doc) {
+    require('isPending')(doc) && emit.donee(doc.next[0].createdAt)
   },
 
   //For inventory search.
   inventoryGeneric(doc) {
-    require('isInventory')(doc) && emitRole(doc.drug.generic)
+    require('isInventory')(doc) && emit.donee(doc.drug.generic)
   },
 
   inventoryLocation(doc) {
-    require('isInventory')(doc) && emitRole(doc.location)
+    require('isInventory')(doc) && emit.donee(doc.location)
   },
 
   inventoryExp(doc) {
-    require('isInventory')(doc) && emitRole(doc.exp.to || doc.exp.from)
+    require('isInventory')(doc) && emit.donee(doc.exp.to || doc.exp.from)
   },
 
   inventoryGenericSum:{
@@ -117,11 +128,10 @@ exports.view = {
           ? {inventory:0, repack:qty, pending:0}
           : {inventory:qty, repack:0, pending:0}
 
-        emitRole(doc.drug.generic, value)
+        emit.donee(doc.drug.generic, value)
       }
-      //TODO combine this with the isPending() function
-      else if (doc.next[0] && doc.next[0].pending)
-        emitRole(doc.drug.generic, {inventory:0, repack:0, pending:qty})
+      else if (require('isPending')(doc))
+        emit.donee(doc.drug.generic, {inventory:0, repack:0, pending:qty})
     },
     reduce(keys, vals, rereduce) {
       // reduce function
@@ -213,7 +223,7 @@ exports.get = function* () {
   }
 
   if (s.pending)
-    return yield this.db.transaction.list.isPending(s.pending === true ? null : s.pending)
+    return yield this.db.transaction.list.inventoryPending(s.pending === true ? null : s.pending)
 
   if (s.inventory && s.exp)
     return yield this.db.transaction.list.inventoryExp(s.exp, true, {limit:this.query.limit})
@@ -222,7 +232,7 @@ exports.get = function* () {
     return yield this.db.transaction.list.inventoryLocation(s.location, true, {limit:this.query.limit})
 
   //TODO make all views available in a CSV rather than JSON format
-  if (s.inventory == "sum") {//Don't force generic, so that we can sum all inventory.
+  if (s.inventory && s.account) {//Don't force generic, so that we can sum all inventory.
     this.body = []
     let view = yield this.db.transaction.view.inventoryGenericSum(s.generic, true, {group:true, role:s.account}).body
 

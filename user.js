@@ -4,19 +4,10 @@ let authorization = 'Basic '+new Buffer(secret.username+':'+secret.password).toS
 
 exports.lib = {}
 
-exports.getRoles = function(doc, reduce) {
-  //Authorize _deleted docs but not _design docs
-  if (doc._deleted || doc._id.slice(0, 7) == '_design')
-    return doc._deleted
-
-  //Only users can access their account
-  return reduce(null, doc.account._id)
-}
-
 //Must account for deleted, design, and regular
 exports.docRoles = function(doc, emit) {
   //Determine whether user is authorized to see the doc
-  emit(doc.account._id)
+  emit('account', doc.account._id)
 }
 
 exports.userRoles = (ctx, emit) => {

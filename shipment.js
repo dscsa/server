@@ -16,10 +16,14 @@ exports.lib = {
   }
 }
 
-
 exports.docRoles = function(doc, emit) {
   //Determine whether user is authorized to see the doc
-  doc._id.split('.').slice(0, 2).forEach(emit)
+  //Determine whether user is authorized to see the doc
+  var shipment  = doc._id.split('.')
+
+  emit('donee', shipment[0]) //this handles both shipment._id = account._id and a three segment shipment._id
+
+  shipment.length == 3 && emit('donor', shipment[1])
 }
 
 exports.userRoles = (ctx, emit) => {
@@ -69,7 +73,7 @@ exports.post = function* () { //TODO querystring with label=fedex creates label,
 
   //Complicated id is not need for shipment, but is needed for transaction that references shipment
   //this way a list function ensure transactions are only provided to the correct from/to accounts
-  let _id = `${this.body.account.from._id}.${this.body.account.to._id}.${this.http.id}`
+  let _id = `${this.body.account.to._id}.${this.body.account.from._id}.${this.http.id}`
   let save = yield this.http.put('shipment/'+_id, this.body).body
 
   this.body._id  = save.id
