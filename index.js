@@ -1,183 +1,35 @@
 "use strict"
 
-let fs          = require('fs')
-let extname     = require('path').extname
-let app         = require('koa')()
-let route       = require('koa-route')
-let http        = require('./http')
-let couchdb     = require('./couchdb')
-let project     = require('../client/aurelia_project/aurelia')
-let secret      = require('../../keys/dev')
-let assets      = project.build.targets[0].output
+let fs      = require('fs')
+//let extname = require('path').extname
+let app     = require('koa')()
+let r       = require('./router')(app)
+let body    = require('./body')
+let http    = require('./http')
+let pouchdb = require('../db/pouchdb-server')
+let project = require('../client/aurelia_project/aurelia')
+let secret  = require('../../keys/dev')
+let baseUrl = 'http://localhost:5984/'
+let assets  = project.build.targets[0].output
 
-//TODO set _users db admin role to ['user']
-//TODO set this on the command line rather than in code
-let auth = 'Basic '+new Buffer(secret.username+':'+secret.password).toString('base64')
-
-let resources = {
-  drug          : require('./drug'),
-  account       : require('./account'),
-  user          : require('./user'),
-  shipment      : require('./shipment'),
-  transaction   : require('./transaction'),
+let models = {
+  drug        : require('./drug'),
+  account     : require('./account'),
+  user        : require('./user'),
+  shipment    : require('./shipment'),
+  transaction : require('./transaction'),
 }
 
-function r(url, options) {
-
-  function router(method, handler) {
-    app.use(route[method](url, wrapper, options))
-    function *wrapper() {
-      this.set('x-endpoint', method+' '+url+' for '+this.url)
-      yield handler.apply(this, arguments)
-    }
-  }
-
-  return {
-    get(handler) {
-      router('get', handler)
-      return this
-    },
-    post(handler) {
-      router('post', handler)
-      return this
-    },
-    put(handler) {
-      router('put', handler)
-      return this
-    },
-    del(handler) {
-      router('del', handler)
-      return this
-    },
-    all(handler) {
-      router('all', handler)
-      return this
-    }
-  }
-}
-
-/*
-//resources Documentation Guide:
-//End Point
-//Request Headers
-//Success Response Headers
-//Error Response
-//Methods
+// Models Documentation Guide:
+// End Point
+// Request Headers
+// Success Response Headers
+// Error Response
+// Methods
 // -query string
 // -request body
 // -response body
 // -example
-*/
-
-
-app.use(http({host:'localhost:5984', headers:{'content-type':'application/json', accept:'application/json'}, middleware:'http'}))
-app.use(function*(next) {
-  this.session = JSON.parse(this.cookies.get('AuthUser') || 'null')
-  yield next
-})
-
-for (let i in resources)
-  app.use(couchdb(i, auth, resources[i]))
-
-function* proxy() {
-  yield this.http()
-  this.remove('Connection')
-  this.set('Content-Type', 'application/json')
-}
-
-//This can be a get or a post with specific keys in body.  If
-//keys in body we cannot specify start/end keys in querystring
-//We need to prepend the role to each key
-//TODO move this to couchdb
-function* all_docs_post(db) {
-  let body  = yield this.http.body
-  this.body = yield this.db[db].view.id(body.keys) //we need to assign to this.body since couchdb.method does have access to this for proxy
-}
-
-function* all_docs_get(db) {
-  yield this.db[db].view.id()
-}
-
-function* changes(db) {
-  this.req.setTimeout(+this.query.timeout || 25000) //match timeout in dscsa-pouch
-  // if (db == 'user' || db == 'shipment' || db == 'transaction')
-  //   this.url += '&filter=roles/roles'
-  //
-  // yield this.http(this.url)
-  yield this.db[db].changes()
-  //this.set('content-type', 'application/json')
-  //console.log('changes headers')
-  //console.log(this.response.headers)
-}
-
-function* bulk_docs(db) {
-  yield resources[db].bulk_docs.call(this)
-}
-
-function* bulk_get(id) {
-  this.status = 400
-}
-
-function* get(db) {
-  yield resources[db].get.call(this)
-}
-
-function* post(db) {
-  yield resources[db].post.call(this)
-}
-
-function* put(db) {
-  yield resources[db].put.call(this)
-}
-
-function* del(db) {
-  yield resources[db].delete.call(this)
-}
-
-function* getAsset(file) {
-  this.type = extname(this.path)
-  let path = project.paths['/'+assets+'/'+file]
-  this.body = fs.createReadStream(__dirname + (path ? this.path.replace(assets+'/'+file, path.slice(3)) : '/../client'+this.path))
-}
-
-app.use(function* (next) {
-  //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
-  this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
-  this.set('access-control-allow-headers', 'accept, accept-encoding, accept-language, cache-control, connection, if-none-match, authorization, content-type, host, origin, pragma, referer, x-csrf-token, user-agent')
-  this.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
-  this.set('access-control-allow-credentials', true)
-  //this.set('access-control-max-age', 1728000)
-  this.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
-  this.method == 'OPTIONS' ? this.status = 204 : yield next
-  this.set('transfer-encoding', 'chunked') //This was sometimes causing errors when Jess/Adam logged in with a PC ERR: Content Length Mismatch
-})
-
-app.use(function *(next) {
-  try {
-    yield next
-  } catch (err) {
-
-  this.status >= 400 ? this.status : 500
-
-    //Handle three types of errors
-    //1) actual coding errors, which will be instanceof Error
-    //2) this.throw() errors from my code which will be instanceof Error
-    //3) http statusCodes <200 && >=300 in which we want to stop normal flow and proxy response to user
-    this.body = err
-    if (err instanceof Error) {
-      this.status  = err.status || 500 //koa's this.throw sets err.status
-      this.message = err.name+': '+err.message
-      this.body = { //Mimic the a CouchDB error structure as closely as possible
-        error:err.name,
-        reason:err.message,
-        stack:err.stack.split("\n"),
-        request:this.req.body && JSON.parse(this.req.body),
-        status:this.status
-      }
-    }
-  }
-})
-
 // CRUD Enpoints (common accross resourcess)
 // GET    users?selector={"email":"adam@sirum.org"} || users?selector={"_id":"abcdef"} || selector={"name.first":"adam"}
 // POST   users
@@ -195,26 +47,117 @@ app.use(function *(next) {
 // POST   users/_revs_diff
 // POST   users/_changes
 
-//Serve the application and assets
-r('/'+assets+'/:file', {end:false})
-  .get(getAsset)
 
+//Parse our manual cookie so we know account _ids without relying on couchdb
+//Collect the request body so that we can use it with pouch
+app.use(function*(next) {
+  this.db = pouchdb
+  //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
+  this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
+  this.set('access-control-allow-headers', 'accept, accept-encoding, accept-language, cache-control, connection, if-none-match, authorization, content-type, host, origin, pragma, referer, x-csrf-token, user-agent')
+  this.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
+  this.set('access-control-allow-credentials', true)
+  //this.set('access-control-max-age', 1728000)
+
+  if (this.method == 'OPTIONS')
+    return this.status = 204
+
+  let cookie  = JSON.parse(this.cookies.get('AuthUser') || 'null')
+
+  this.user    = {_id:cookie && cookie._id}
+  this.account = {_id:cookie && cookie.account._id}
+
+  yield body(this.req)
+  yield next
+
+  this.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
+  this.set('transfer-encoding', 'chunked') //This was sometimes causing errors when Jess/Adam logged in with a PC ERR: Content Length Mismatch
+})
+
+app.use(function*(next) {
+  //TODO should we be relying on a private method here?
+  //maybe use node's native http library or require "request"?
+  this.ajax = opts => {
+    let options  = {
+      baseUrl,
+      url:opts.url,
+      headers:opts.headers,
+      method:opts.method,
+      timeout:opts.timeout,
+      body:opts.pipe && ! opts.body ? opts : opts.body
+    }
+
+    //TODO share this code with client?
+    //Promisify request object but don't lose ability to stream it
+    //PouchDB's ajaxCore makes there be a callback even if not needed
+    //this means that request collects the body and adds to response
+    let request = this.db.user._ajax(options, _ => null)
+    let promise = new Promise((resolve, reject) => {
+      request.on('response', response => {
+        delete response.headers['access-control-expose-headers'] //this was overriding our index.js default CORS headers.
+        resolve(response)
+      })
+      const stack = new Error().stack
+      request.on('error', err => {
+        err.stack += '\n'+stack
+        console.log('err', err)
+        reject(err)
+      })
+    })
+
+    request.then = promise.then.bind(promise)
+    request.catch = promise.catch.bind(promise)
+
+    return request
+  }
+
+  yield next
+})
+
+app.use(function *(next) {
+  try {
+    yield next
+  } catch (err) {
+    //Handle three types of errors
+    //1) actual coding errors, which will be instanceof Error
+    //2) this.throw() errors from my code which will be instanceof Error
+    //3) http statusCodes <200 && >=300 in which we want to stop normal flow and proxy response to user
+    //Server errors should mimic CouchDB errors as closely as possible
+    if (err instanceof Error) {
+      err = {
+        error:err.name,
+        reason:err.message,
+        status:err.status,
+        stack:err.stack.split("\n")
+      }
+    }
+
+    err.request = this.req.body
+    this.message = err.error+': '+err.reason
+    this.status = err.status || 500 //koa's this.throw sets err.status
+    this.body   = err
+  }
+})
+
+//
 //CouchDB/PouchDB Replication API
+//
+
 r('/')
   .get(function*() {
     if(this.headers.origin || this.headers.referer) //Not sure why pouchdb checks this.  Shows welcome UUID & Version
       return yield proxy.call(this)
 
     this.path = '/src/views/index.html'
-    yield getAsset.call(this)
+    yield get_asset.call(this)
   })
+
+//Serve the application and assets
+r('/'+assets+'/:file', {end:false})
+  .get(get_asset)
 
 r('/:db/', {strict:true}) //Shows DB info including update_seq#
   .get(proxy)
-
-r('/:db/_all_docs')       //Needed if indexedDb cleared on browser
-  .get(all_docs_get)
-  .post(all_docs_post)
 
 r('/:db/_revs_diff')      //Not sure why PouchDB needs this
   .post(proxy)
@@ -224,80 +167,111 @@ r('/:db/_local/:doc')
   .put(proxy)
 
 r('/:db/_local%2F:doc')
+  .put(proxy)
+
+r('/:db/_design/:doc')
   .get(proxy)
   .put(proxy)
 
-r('/:db/_bulk_docs')    //Update denormalized transactions when drug is updated
-  .post(bulk_docs)
+r('/:db/_design/:ddoc/_view/:view')
+  .get(proxy)
 
 r('/:db/_changes')      //Lets PouchDB watch db using longpolling
-  .get(changes)
+  .get(proxy)
+
+r('/:db/_all_docs')       //Needed if indexedDb cleared on browser
+  .get(model('all_docs'))
+  .post(model('all_docs'))
+
+r('/:db/_bulk_docs')    //Update denormalized transactions when drug is updated
+  .post(model('bulk_docs'))
 
 r('/:db/_bulk_get')     //Allow PouchDB to make bulk edits
-  .post(bulk_get)
+  .post(model('bulk_get'))
 
-//TODO remove once bulk_get is implemented so that replication no longer needs get method
-app.use(function* (next) {
-  if (this.method == 'GET') {
-
-    let path = this.path.split('/')
-
-    if (path.length == 3) {
-      let _id  = path.pop()
-
-      this.query.selector = JSON.stringify({_id})
-
-      this.query = this.query
-      this.path  = path.join('/')
-    }
-  }
-
-  yield next
-})
-
+//
 //User API Endpoints
+//
+
 r('/:db', {strict:true})
-  .get(get)
-  .post(post)
-  .put(put)
-  .del(del)
+  .get(model('get'))
+  .post(model('post'))
 
-r('/account/email')
-  .post(resources.account.email)                 //Allow user to get, modify, & delete docs
-
-r('/account/authorized')     //Allow user to get, modify, & delete docs
-  .get(resources.account.authorized.get)
-  .post(resources.account.authorized.post)
-  .del(resources.account.authorized.delete)
-
-r('/user/email')
-  .post(resources.user.email)           //TODO only get, modify, & delete user for logged in account
 
 r('/user/session')
-  .post(resources.user.session.post)  //Login
-  .del(resources.user.session.delete) //Logout
+  .post(models.user.session.post)  //Login
+  .del(models.user.session.delete) //Logout
 
-r('/shipment/shipped')
-  .post(resources.shipment.shipped)         // TODO add shipped_at date and change status to shipped
+r('/account/authorized')     //Allow user to get, modify, & delete docs
+  .get(models.account.authorized.get)
+  .post(models.account.authorized.post)
+  .del(models.account.authorized.delete)
 
-r('/shipment/received')
-  .post(resources.shipment.received)       // TODO add recieved_at date and change status to received
+r('/:db/:id')
+  .get(function*(db, id) {
+    this.query.selector = `{"id":"${id}"}`
+    yield model('get').call(this, db)
+  })
+  .put(model('put'))
+  .del(model('delete'))
 
-r('/shipment/pickup')
-  .post(resources.shipment.pickup.post)      // add pickup_at date. Allow webhook filtering based on query string ?description=tracker.updated&result.status=delivered.
-  .del(resources.shipment.pickup.delete)     // delete pickup_at date
-
-r('/shipment/manifest')
-  .get(resources.shipment.manifest.get)    // pdf options?  if not exists then create, rather than an explicit POST method
-  .del(resources.shipment.manifest.delete) // delete an old manifest
+// r('/shipment/shipped')
+//   .post(models.shipment.shipped)         // TODO add shipped_at date and change status to shipped
+//
+// r('/shipment/received')
+//   .post(models.shipment.received)       // TODO add recieved_at date and change status to received
+//
+// r('/shipment/pickup')
+//   .post(models.shipment.pickup.post)      // add pickup_at date. Allow webhook filtering based on query string ?description=tracker.updated&result.status=delivered.
+//   .del(models.shipment.pickup.delete)     // delete pickup_at date
+//
+// r('/shipment/manifest')
+//   .get(models.shipment.manifest.get)    // pdf options?  if not exists then create, rather than an explicit POST method
+//   .del(models.shipment.manifest.delete) // delete an old manifest
 
 // r('/transaction/verified')
 //   .post(resources.transaction.verified.post)  //New transaction created in inventory, available for further transactions
 //   .del(resources.transaction.verified.delete) //New transaction removed from inventory, cannot be done if item has further transactions
 
+// r('/account/email')
+//   .post(models.account.email)                 //Allow user to get, modify, & delete docs
+//
+//
+// r('/user/email')
+//   .post(models.user.email)           //TODO only get, modify, & delete user for logged in account
 
 //all(/on?deep.field=this&this.must.be.true.to.trigger=true)
 //all(/on?deep.field=this)
 //all(/event)
 
 app.listen(80); console.log('listening on port 80')
+
+//
+// Hoisted Helper Functions
+//
+
+function* proxy(db) {
+  //honor the 25 sec timeout
+  if (this.query.timeout)
+    this.req.timeout = this.query.timeout //this is not actually a node thing, just a flag for pouchdb-server.ajax
+
+  //ajax returns a stream that koa can handle
+  this.body = this.ajax(this.req)
+}
+
+function model(method) {
+  return function*() {
+    yield models[arguments[0]][method].apply(this, arguments)
+  }
+}
+
+function* get_asset(file) {
+  //this.type = extname(this.path)
+  let path = project.paths['/'+assets+'/'+file]
+
+  path = path
+    ? this.path.replace(assets+'/'+file, path.slice(3))
+    : '/../client'+this.path
+
+  this.body = fs.createReadStream(__dirname + path)
+}

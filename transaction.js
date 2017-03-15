@@ -1,328 +1,279 @@
 "use strict"
+//defaults
+module.exports = exports = Object.create(require('./model'))
+
 let drug     = require('./drug')
 let shipment = require('./shipment')
 
 exports.lib = {
-  generic:drug.generic,
-  validDrug:drug.lib.validDrug,
-  validShipmentId:shipment.lib.validShipmentId,
+  qty(doc) {
+    return doc.qty.to || doc.qty.from || 0
+  },
+
+  price(doc) {
+    return doc.drug.price.goodrx || doc.drug.price.nadac || 0
+  },
+
+  value(doc) {
+    var qty   = require('views/lib/qty')(doc)
+    var price = require('views/lib/price')(doc)
+    return Math.floor(price * qty)
+  },
+
   isInventory(doc) {
     //verifiedAt is the checkmark, next can have pending, dispensed, or a transaction meaning this transaction has been used for something else
-    return doc.verifiedAt && doc.next.length == 0
+    return doc.verifiedAt && doc.next && doc.next.length == 0
   },
+
   isPending(doc) {
-    return doc.next[0] && doc.next[0].pending
-  }
+    return doc.next && doc.next[0] && doc.next[0].pending
+  },
+
+  map(emit, doc, val, prepend) {
+    var value = {
+      received:val, verified:0, disposed:0,
+    }
+
+    if (doc.verifiedAt)
+      value.verified = val
+
+    if ( ! doc.verifiedAt)
+      value.disposed = val
+
+    value.dispensed = doc.next.reduce(function(sum, next) {
+      return sum + (next.dispensed ? 0 : val)
+    }, 0)
+
+    var key = doc._id.slice(0, 10).split('-')
+
+    if (prepend)
+      key.unshift(prepend)
+
+    return emit(key, value)
+  },
 }
 
-exports.docRoles = function(doc, emit) {
-  //Determine whether user is authorized to see the doc
-  //Determine whether user is authorized to see the doc
-  var shipment  = doc.shipment._id.split('.')
-
-  emit('donee', shipment[0]) //this handles both shipment._id = account._id and a three segment shipment._id
-
-  shipment.length == 3 && emit('donor', shipment[1])
-}
-
-exports.userRoles = (ctx, emit) => {
-  ctx.session && emit(ctx.session.account._id)
-}
-
-exports.validate = function(newDoc, oldDoc, userCtx) {
-  var id = /^[a-z0-9]{7}$/
-  var ensure          = require('ensure')('transaction', arguments)
-  var validShipmentId = require('validShipmentId')
-
-  if ( ! userCtx.roles.length)
-    throw {unauthorized:'You must be logged in to save a transaction'}
-
-  if ( ! newDoc._deleted)
-    require('validDrug')('transaction.drug', newDoc.drug, oldDoc && oldDoc.drug, userCtx)
-
-  //Required
-  ensure('_id').notNull.regex(id)
-  //ensure('user._id').notNull.assert(id)
-  ensure('shipment._id').isString.assert(validShipmentId)
-  ensure('createdAt').notNull.isDate.notChanged
-  ensure('verifiedAt').isDate.assert(verified)
-  ensure('next').notNull.isArray.assert(next)
-  ensure('next.qty').isNumber
-  ensure('history').assert(history)
-
-  //Optional
-  ensure('qty.from').isNumber.assert(validQty)
-  ensure('qty.to').isNumber.assert(validQty)
-  ensure('exp.from').isDate
-  ensure('exp.to').isDate
-  ensure('location').regex(/[A-Z]\d{2,3}|UNIT/)
-  ensure('drug.price.goodrx').isNumber
-  ensure('drug.price.nadac').isNumber
-
-  function validQty(qty) {
-    if (qty != null && qty < 1 || qty > 999) return 'qty must be between 1 and 999'
-  }
-
-  function verified(date) {
-    if ( ! date) return
-    if ( ! newDoc.qty.from && ! newDoc.qty.to) return 'cannot be set unless a valid qty is set'
-    if ( ! newDoc.exp.from && ! newDoc.exp.to) return 'cannot be set unless a valid exp is set'
-  }
-
-  //TODO next.transaction || next.dispensed must exist (and eventually have _id)
-  function next(val) {
-    if (val.length && ! newDoc.verifiedAt)
-      return 'cannot contain any values unless transaction.verifiedAt is set'
-  }
-
-  function history(val) {
-    return val && 'history cannot be set in version 3'
-  }
-}
-
-exports.view = {
-  history(doc) {
+//Transactions
+exports.views = {
+  'next.transaction._id':function(doc) {
     for (var i in doc.next)
       doc.next[i].transaction && emit(doc.next[i].transaction._id)
   },
 
   //used by drug endpoint to update transactions on drug name/form updates
-  drugs(doc) {
+  'drug._id':function(doc) {
     emit(doc.drug._id)
   },
 
-  shipment(doc) {
-    emit.allRoles(doc.shipment._id)
+  'shipment._id':function(doc) {
+    emit(doc.shipment._id)
   },
 
-  //TODO How to incorporate Complete/Verified/Destroyed, multiple map functions?  compound key e.g., [createAt, typeof verified] with grouping?
-  record(doc) {
-    //Don't include inventory added without a shipment
-    if (doc.shipment._id.split('.').length == 3)
-      emit.allRoles(doc.createdAt)
+  'inventory.pendingAt':function(doc) {
+    require('isPending')(doc) && emit(doc.next[0].createdAt)
   },
 
-  inventoryPending(doc) {
-    require('isPending')(doc) && emit.donee(doc.next[0].createdAt)
+  'inventory.location':function(doc) {
+    require('isInventory')(doc) && emit(doc.location)
   },
 
-  //For inventory search.
-  inventoryGeneric(doc) {
-    require('isInventory')(doc) && emit.donee(doc.drug.generic)
+  'inventory.exp':function(doc) {
+    require('isInventory')(doc) && emit(doc.exp.to || doc.exp.from)
   },
 
-  inventoryLocation(doc) {
-    require('isInventory')(doc) && emit.donee(doc.location)
+  'inventory.drug.generic':function(doc) {
+    require('isInventory')(doc) && doc.drug && emit(doc.drug.generic)
   },
 
-  inventoryExp(doc) {
-    require('isInventory')(doc) && emit.donee(doc.exp.to || doc.exp.from)
-  },
-
-  inventoryGenericSum:{
+  inventory:{
     map(doc) {
-      var qty = doc.qty.to || doc.qty.from || 0
-      if (require('isInventory')(doc)) {
-        var repack = doc.shipment._id.indexOf('.') == -1
-        var value  = repack
-          ? {inventory:0, repack:qty, pending:0}
-          : {inventory:qty, repack:0, pending:0}
+      var qty = require('qty')(doc)
+      var isInventory = require('isInventory')(doc)
+      var isPending   = require('isPending')(doc)
+      var repack      = doc.next.length
+      var val = {bins:0, repack:0, pending:0}
 
-        emit.donee(doc.drug.generic, value)
-      }
-      else if (require('isPending')(doc))
-        emit.donee(doc.drug.generic, {inventory:0, repack:0, pending:qty})
+      if (isInventory && repack)
+        val.repack = qty
+      if (isInventory && ! repack)
+        val.bins = qty
+      if (isPending)
+        val.pending = qty
+
+      emit(doc.drug.generic, val)
     },
     reduce(keys, vals, rereduce) {
       // reduce function
-      var result = {inventory:0, repack:0, pending:0}
+      var result = {bins:0, repack:0, pending:0}
 
       for(var i in vals) {
-        result.inventory += vals[i].inventory
-        result.repack    += vals[i].repack
-        result.pending   += vals[i].pending
+        result.bins    += vals[i].bins
+        result.repack  += vals[i].repack
+        result.pending += vals[i].pending
       }
 
       return result
     }
   },
 
-  transactionCount:{
+  'user._id':{
     map(doc) {
-       var key = doc.createdAt.slice(0, 10).split('-')
-       emit(key.concat(doc.user && doc.user._id))
+      require('map')(emit, doc, require('qty')(doc), doc.user._id)
     },
-    reduce:"_count"
+    reduce
   },
 
-  potentialErrors(doc) {
-     var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-     var qty   = doc.qty.to || doc.qty.from || 0
-     var value = Math.floor(price*qty)
-     if (value > 1000)
-      emit(doc.createdAt.slice(0, 10).split('-').concat(['Value > $1000', value]))
-  },
-
-  verifiedValueByCreatedAt:{
+  qty:{
     map(doc) {
-       if ( ! doc.verifiedAt) return
-       var date   = doc.createdAt.slice(0, 10).split('-')
-       var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-       var qty   = doc.qty.to || doc.qty.from || 0
-       emit(date, price*qty)
+      require('map')(emit, doc, require('qty')(doc))
     },
-    reduce:"_sum"
+    reduce
   },
 
-  verifiedValueByDispensedAt:{
+  value:{
     map(doc) {
-       for (var i in doc.next) {
-         var next  = doc.next[i]
-         if (next.dispensed) {
-           var date  = next.createdAt || ''
-           var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-           var qty   = doc.qty.to || doc.qty.from || 0
-           emit(date.slice(0, 10).split('-'), price*qty)
-         }
-       }
+      require('map')(emit, doc, require('value')(doc))
     },
-    reduce:"_sum"
-  },
-
-  verifiedAt(doc) {
-    if ( ! doc.verifiedAt) return
-    var date  = doc.createdAt.slice(0, 10).split('-')
-    var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-    var qty   = doc.qty.to || doc.qty.from || 0
-    emit(date, price*qty)
-  },
-
-  dispensedAt(doc) {
-     for (var i in doc.next) {
-       var next  = doc.next[i]
-       if (next.dispensed) {
-         var date  = next.createdAt || ''
-         var price = doc.drug.price.goodrx || doc.drug.price.nadac || 0
-         var qty   = doc.qty.to || doc.qty.from || 0
-         emit(date.slice(0, 10).split('-'), price*qty)
-       }
-     }
+    reduce
   }
 }
 
-exports.get = function* () {
+//Server-side validation methods to supplement shared ones.
+exports.validate = function(model) {
+  return model
+    .ensure('isChecked').set(doc => undefined) //client sets this but we don't want to save it
+    .ensure('shipment._id').custom(authorized).withMessage('You are not authorized to modify this transaction')
+    .ensure('drug').set(updateDrug).withMessage('Could not get drug information')
+}
 
-  let url, s = JSON.parse(this.query.selector)
+//Context-specific - options MUST have 'this' property in order to work.
+function authorized(doc, shipment_id) {
+  var id = shipment_id.split(".")
+  return id[0] == this.account._id || id[2] == this.account._id
+}
 
-  if (this.query.history && s._id)
-    return this.body = yield history(this, s._id)
+//Context-specific - options MUST have 'this' property in order to work.
+function updateDrug(doc) {
+  //Making sure drug property is accurate and upto date is
+  //too costly to do on every save so just do it on creation
+  if (doc._rev && doc._rev[0] != 1)
+    return doc.drug
 
-  if (s.createdAt && s.createdAt.$gte && s.createdAt.$lte) {
-    this.req.setTimeout(10000)
-    return yield this.db.transaction.list.record(s.createdAt.$gte, s.createdAt.$lte)
+  return this.db.drug.get(doc.drug._id).then(drug => {
+    let res = updatePrice.call(this, drug)
+    return res
+  })
+}
+
+function updatePrice(drug) {
+  if (drug.price && (new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)) //this has body in {"ok":doc} formate
+    return Promise.resolve(drug)
+
+  return {
+    _id:drug._id,
+    price:drug.price,
+    brand:drug.brand,
+    generic:drug.generic,
+    generics:drug.generics,
+    form:drug.form,
+    pkg:drug.pkg
   }
 
-  if (s.pending)
-    return yield this.db.transaction.list.inventoryPending(s.pending === true ? null : s.pending)
+  //TODO destructuring
+  return Promise.all([getNadac.call(this, drug), getGoodrx.call(this, drug)]).then(prices => {
+    drug.price        = drug.price || {}
+    drug.price.nadac  = prices[0]  || drug.price.nadac
+    drug.price.goodrx = prices[1]  || drug.price.goodrx
+    drug.price.updatedAt = new Date().toJSON()
+  })
+}
 
-  if (s.inventory && s.exp)
-    return yield this.db.transaction.list.inventoryExp(s.exp, true, {limit:this.query.limit})
+function *getNadac(drug) {
+  //Datbase not always up to date so can't always do last week.  On 2016-06-18 last as_of_date was 2016-05-11.
+  let date = new Date(new Date().getFullYear(), 0, 1).toJSON().slice(0, -1)
+  let baseUrl  = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date>"${date}"`
+  let prices = ""
 
-  if (s.inventory && s.location)
-    return yield this.db.transaction.list.inventoryLocation(s.location, true, {limit:this.query.limit})
+  try {
+    let url1 = `${baseUrl} AND starts_with(ndc,"${drug.ndc9}")`
+    prices = yield this.ajax({url:url1})
+    if ( ! prices.length) //API returns a status of 200 even on failure ;-(
+      throw console.log('No NADAC price found for an ndc starting with '+drug.ndc9)
+  } catch (err1) {
+    let url2 = baseUrl
+    let delimiter = drug.generics.length > 1 ? '%' : ''
+    for (generic of drug.generics) {
+      let str = generic.strength.replace(/[^0-9.]/g, '%')
+      let name = delimiter+generic.name.toUpperCase().slice(0,4)
+      url2 += ` AND ndc_description like "${name}%${str}%"`.replace(/%+/g, '%25') //In order to make sure Chrome recognizes as % symbol, necessary to represent wildcard in api
+    }
 
-  //TODO make all views available in a CSV rather than JSON format
-  if (s.inventory && s.account) {//Don't force generic, so that we can sum all inventory.
-    this.body = []
-    let view = yield this.db.transaction.view.inventoryGenericSum(s.generic, true, {group:true, role:s.account}).body
+    try{
+      prices = yield this.ajax({url:url2})
 
-    view = view.rows.reverse().map(row => {
-      return row.key[1]+','+row.value.inventory+','+row.value.repack+','+row.value.pending
-    })
-    view.unshift('Generic Drug Name,Inventory Qty,Repack Qty,Pending Qty')
-    return this.body = view.join('\n')
+      if( ! prices.length)  //When the price is not found but no error is thrown
+        throw console.log('No NADAC price found for an ndc starting with '+err+' or by name '+url)
+
+    } catch (err2) {
+      return console.log(url1, err1, url2, err2, drug, prices)
+    }
   }
 
-  if (s.inventory && s.generic)
-    return yield this.db.transaction.list.inventoryGeneric(s.generic)
+  let res = prices.pop()
 
-  if (s.inventory) //Export all inventory
-    return yield this.db.transaction.list.inventoryGeneric()
+  //Need to handle case where price is given per ml  or per gm to ensure database integrity
+  if(res.pricing_unit == "ML" || res.pricing_unit == "GM"){ //a component of the NADAC response that described unit of price ("each", "ml", or "gm")
+    let numberOfMLGM = res.ndc_description.match(/\/([0-9.]+)[^\/]*$/) //looks for the denominator in strength to determine per unit cost, not per ml or gm
 
-  if (s['shipment._id']) {
-    //console.log('this.transaction', this.transaction)
-    return yield this.db.transaction.list.shipment(s['shipment._id'])
+    if( ! numberOfMLGM)  //responds null if there is no denominator value in strength given by NADAC
+      numberOfMLGM = drug.generic.match(/\/([0-9.]+)[^\/]*$/) //in cases where our data contains proper generic and NADAC doesn't, try to check that as wel
+
+    if( ! numberOfMLGM){ //Meaning even our generic data does not have the conversion factor
+      console.log("Drug could not be converted to account for GM or ML") //At this point we have no way of converting
+    } else {
+      let total = +numberOfMLGM[1] * +res.nadac_per_unit //at this point, we have a conversion factor we can use
+      //console.trace("Converted from price/ml or price/gm to price/unit of: ", total)
+      return +total.toFixed(4)
+    }
   }
 
-  //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
-  if (s._id)
-    return yield this.query.open_revs
-      ? this.http.get('transaction/'+s._id)
-      : this.transaction.db.list.id(s._id)
+  return +(+res.nadac_per_unit).toFixed(4) //In other case where price is found, will return here
 }
 
-exports.post = function* () {
+function *getGoodrx(drug) {
 
-  let doc = yield this.http.body
+  let makeUrl = (name, dosage) => {
+    let qs  =`name=${name}&dosage=${dosage}&api_key=f46cd9446f`.replace(/ /g, '%20')
+    let sig = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
+    return `https://api.goodrx.com/fair-price?${qs}&sig=${sig}`
+  }
 
-  defaults.call(this, doc)
+  //Brand better for compound name. Otherwise use first word since, suffixes like hydrochloride sometimes don't match
+  let fullName = drug.brand || drug.generics.map(generic => generic.name).join('-') //.split(' ')[0]
+  let strength = drug.generics.map(generic => generic.strength.replace(' ', '')).join('-')
+  let price = {data:{}}
+  let candidateUrl, fullNameUrl = makeUrl(fullName, strength)
+  let message = ''
+  try {
+    price = yield this.ajax({url:fullNameUrl})
+  } catch(err) {
+    try {
+      if( ! err.errors || ! err.errors[0].candidates) //then there's no fair price drug so this is undefined
+        return console.trace('GoodRx responded that there is no fair price for', err, drug._id, drug.generic, fullNameUrl)
 
-  //Making sure these are accurate and upto date is too
-  //costly to do on every save so just do it on creation
-  let drugs = yield this.db.drug.list.id(doc.drug._id).body
-  yield drug.updatePrice.call(this, drugs[0])
+      candidateUrl = makeUrl(err.errors[0].candidates[0], strength)
+      price = yield this.ajax({url:candidateUrl})
+      console.trace("GoodRx substituting a candidate", err.errors[0].candidates[0], 'for', drug._id, drug.generic)
+    } catch(err2) {
+      //409 error means qs not properly encoded, 400 means missing drug
+      return console.trace("GoodRx price could not be updated", this.status, this.message, price, drug._id, drug.generics, fullNameUrl, candidateUrl)
+    }
+  }
 
-  doc.drug.price    = drugs[0].price
-  doc.drug.brand    = drugs[0].brand
-  doc.drug.generic  = drugs[0].generic
-  doc.drug.generics = drugs[0].generics
-  doc.drug.form     = drugs[0].form
+  if ( ! price.data.quantity)
+    return console.trace('GoodRx did not return a quantity', price) || null
 
-  let id = this.http.id
-  let save = yield this.http.put('transaction/'+id, doc).body
-
-  doc._id  = save.id
-  doc._rev = save.rev
-  this.body = doc
-}
-
-exports.put = function* () {
-  let doc = yield this.http.body
-  defaults(doc)
-  let save = yield this.http('transaction/'+doc._id, doc).body
-  doc._rev = save.rev
-  this.body = doc
-}
-
-//TODO enforce drug consistency on every save?
-exports.bulk_docs = function* () {
-  yield this.http()
-}
-
-exports.delete = function* () {
-  let doc = yield this.http.body
-
-  if (doc.next.length)
-    this.throw(409, `Cannot delete this transaction because it has subsequent transactions in "next" property`)
-
-  //TODO delete all elements in transaction.nexts that have this transaction listed
-  //Need to think through whether these items would get put back into inventory or what
-
-  yield this.http('transaction/'+doc._id+'?rev='+doc._rev, doc)
-}
-
-function defaults(body) {
-  //TODO ensure that there is a qty
-  body.next      = body.next || []
-  body.createdAt = body.createdAt || new Date().toJSON()
-
-  //TODO [TypeError: Cannot read property 'to' of undefined] is malformed request
-  //Empty string -> null, string -> number, number -> number (including 0)
-  body.qty.to     = body.qty.to != null && body.qty.to !== '' ? +body.qty.to : null     //don't turn null to 0 since it will get erased
-  body.qty.from   = body.qty.from != null && body.qty.from !== '' ? +body.qty.from : null //don't turn null to 0 since it will get erased
-  body.shipment   = body.shipment && body.shipment._id ? body.shipment : {_id:this.session.account._id}
-
-  return body
+  return +(price.data.price/price.data.quantity).toFixed(4)
 }
 
 //TODO don't search for shipment if shipment._id doesn't have two periods (inventory)
@@ -331,13 +282,17 @@ function *history($this, id) {
 
   let result = []
 
-  return yield history(id, result)
+  return yield recurse(id, result)
 
-  function *history (_id, list) {
+  function *recurse (_id, list) {
 
-    let trans = yield $this.http.get('transaction/'+_id).body //don't use show function because we might need to see transactions not directly authorized
-    let prevs = yield $this.db.transaction.list.history(_id).body  //TODO is there a way to use "joins" http://docs.couchdb.org/en/stable/couchapp/views/joins.html to make this more elegant
-    let all   = [$this.http.get('shipment/'+trans.shipment._id).body]
+    let [trans, prevs] = yield [
+      $this.db.transaction.get(_id), //don't use show function because we might need to see transactions not directly authorized
+      $this.db.transaction.query('roles/history', {key:_id})
+    ]
+
+    let all = [$this.db.shipment.get(trans.shipment._id)]
+
     list.push(trans)
 
     let indentedList = []
@@ -351,7 +306,7 @@ function *history($this, id) {
 
     //Recursive call!
     for (let prev of prevs)
-      all.push(history(prev._id, prevs.length == 1 ? list : indentedList))
+      all.push(recurse(prev._id, prevs.length == 1 ? list : indentedList))
 
     //Search for transaction's ancestors and shipment in parallel
     all = yield all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
@@ -363,8 +318,8 @@ function *history($this, id) {
     //TODO this call is serial. Can we do in parallel with next async call?
     //TODO this is co specific won't work when upgrading to async/await which need Promise.all
     let accounts = yield [
-      $this.http.get('account/'+account.from._id).body,
-      account.to && $this.http.get('account/'+account.to._id).body
+      $this.db.account.get(account.from._id),
+      account.to && $this.db.account.get(account.from._id)
     ]
 
     account.from = accounts[0]
@@ -374,73 +329,22 @@ function *history($this, id) {
 }
 
 
-/* Makeshift PATCH */
-// function *patch(id, updates) {
-//
-//   let doc  = yield this.http.get(view.id(id))
-//   let save = yield this.http.put('transaction/'+id).body(Object.assign(doc, updates))
-//
-//   doc._rev = save.rev
-//   return doc
-// }
+function reduce(keys, vals, rereduce) {
+  // reduce function
+  var result = {received:0, verified:0, disposed:0, dispensed:0}
 
+  for(var i in vals) {
+    result.received  += vals[i].received
+    result.verified  += vals[i].verified
+    result.disposed  += vals[i].disposed
+    result.dispensed += vals[i].dispensed
+  }
 
-// exports.verified = {
-//   *post() {
-//     let doc = yield this.http.body
-//     let inv = yield this.http.get(view.history(doc._id))
-//
-//     //TODO We should make sure verifiedAt is saved as true for this transaction
-//     if (inv[0])
-//       this.throw(409, `Cannot verify this transaction because transaction ${inv[0]._id} with _id ${doc._id} already has this transaction in its history`)
-//
-//     doc = yield patch.call(this, doc._id, {verifiedAt:new Date().toJSON()}) //Verify transaction and send back new _rev so user can continue to make edits
-//
-//     //Create the new inventory item
-//     inv = defaults.call(this, {
-//       drug:doc.drug,
-//       verifiedAt:null,
-//       history:[{
-//         transaction:{_id:doc._id},
-//         qty:doc.qty.to || doc.qty.from
-//       }],
-//       qty:{
-//         to:null,
-//         from:doc.qty.to || doc.qty.from
-//       },
-//       exp:doc.exp && {
-//         to:null,
-//         from:doc.exp.to || doc.exp.from
-//       },
-//       lot:doc.lot && {
-//         to:null,
-//         from:doc.lot.to || doc.lot.from
-//       }
-//       location:doc.location
-//     })
-//
-//     yield this.http.put('transaction/'+this.http.id).body(inv)
-//     this.body = doc
-//     //TODO rollback transaction verification if this creation fails
-//   },
-//
-//   //This is a bit complex here are the steps:
-//   //1. Does this transaction id have a matching inventory item. No? Already un-verified
-//   //2. Can this inventory item be deleted. No? a subsequent transaction is based on this verification so it cannot be undone
-//   //3. Delete the item with inventory._id
-//   //4. Update the original transaction with verified_at = null
-//   *delete() {
-//     let doc = yield this.http.body
-//     let inv = yield this.http.get(view.history(doc._id))
-//     inv = inv[0]
-//
-//     if ( ! inv) //Only delete inventory if it actually exists
-//       this.throw(409, `Cannot unverify this transaction because no subsequent transaction with history containing ${doc._id} could be found`)
-//
-//     if (inv.shipment._id != this.session.account._id)
-//       this.throw(409, `Cannot unverify this transaction because the subsequent transaction ${inv._id} has already been assigned to another shipment`)
-//
-//     yield this.http.delete('transaction/'+inv._id+'?rev='+inv._rev).body(inv)
-//     this.body = yield patch.call(this, doc._id, {verifiedAt:null}) //Un-verify transaction and send back new _rev so user can continue to make edits
-//   }
-// }
+  result.percent = {
+    verified:result.verified/result.received,
+    disposed:result.disposed/result.received,
+    dispensed:result.disposed/result.verified,
+  }
+
+  return result
+}

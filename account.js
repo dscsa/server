@@ -1,69 +1,29 @@
 "use strict"
+//defaults
+module.exports = exports = Object.create(require('./model'))
 
-exports.lib = {}
+exports.views = {
+  authorized(doc) {
+    for (var i in doc.authorized) {
+      emit(doc.authorized[i])
+    }
+  },
 
-exports.validate = function(newDoc, oldDoc, userCtx) {
-
-  var id = /^[a-z0-9]{7}$/
-  var ensure = require('ensure')('account', arguments)
-
-  //Required
-  ensure('_id').notNull.assert(validId)
-  ensure('name').notNull.isString
-  ensure('license').notNull.isString
-  ensure('street').notNull.isString
-  ensure('city').notNull.isString
-  ensure('state').notNull.isString.length(2).notChanged
-  ensure('zip').notNull.regex(/\d{5}/)
-  ensure('createdAt').notNull.isDate.notChanged
-  ensure('authorized').notNull.isArray
-
-  //Optional
-  ensure('ordered').isObject
-
-  function validId(val) {
-    return require('isRole')(newDoc, userCtx) || 'can only be modified by one of its users'
+  state(doc) {
+    emit(doc.state)
   }
+  //Use _bulk_get here instead? Not supported in 1.6
+  //this.db.account.get({_id:{$gt:null, $in:accounts[0].authorized}}),
 }
 
-exports.get = function* () {
-  let s = JSON.parse(this.query.selector)
-
-  //TODO remove this once bulk_get is supported and we no longer need to handle replication through regular get
-  if (s._id)
-    return yield this.query.open_revs
-      ? this.http.get('account/'+s._id)
-      : this.db.account.list.id(s._id)
+exports.validate = function(model) {
+  return model
+    .ensure('_id').custom(authorized).withMessage('You are not authorized to modify this account')
 }
 
-exports.post = function* () {
-  let doc        = yield this.http.body
-  doc.createdAt  = new Date().toJSON()
-  doc.authorized = doc.authorized || []
-  doc._rev       = undefined
-
-  let save = yield this.http.put('account/'+this.http.id, doc).body
-
-  doc._id  = save.id
-  doc._rev = save.rev
-  this.body = doc
-}
-
-exports.put = function* () {
-  yield this.http()
-}
-
-exports.bulk_docs = function* () {
-  yield this.http()
-}
-
-exports.delete = function* (id) {
-  yield this.http()
-}
-
-//TODO need to update shipments account.from/to.name on change of account name
-exports.email = function* (id) {
-  this.status = 501 //not implemented
+//Context-specific - options MUST have 'this' property in order to work.
+function authorized(doc) {
+  return doc._rev[0] == 1 || doc._id == this.account._id
 }
 
 exports.authorized = {
@@ -74,30 +34,42 @@ exports.authorized = {
   },
   *post() {
     //Authorize a sender
-    let body     = yield this.http.body
-    let accounts = yield this.db.account.list.id(this.session.account._id).body
-    let allAccounts = yield this.db.account.list.id().body
-
-    if (accounts[0].authorized.includes(body._id)) {
+    console.log(this.account._id, this.req.body)
+    let account = yield this.db.account.get(this.account._id)
+    console.log(1)
+    //allow body to be an array of ids to authorize
+    let index = account.authorized.indexOf(this.req.body)
+  console.log(2)
+    if (index != -1) {
       this.status  = 409
       this.message = 'This account is already authorized'
     } else {
-      accounts[0].authorized.push(body._id)
-      yield this.http.put('account/'+accounts[0]._id, accounts[0])
+      account.authorized.push(this.req.body)
+        console.log(3)
+      this.body = yield this.db.account.put(account)
+      this.body.authorized = account.authorized
     }
   },
+
   *delete() {
     //Unauthorize a sender
-    let body     = yield this.http.body
-    let accounts = yield this.db.account.list.id(this.session.account._id).body
-    let index    = accounts[0].authorized.indexOf(body._id)
+    let account = yield this.db.account.get(this.account._id)
+
+    //allow body to be an array of ids to unauthorize
+    let index   = account.authorized.indexOf(this.req.body)
 
     if (index == -1) {
       this.status  = 409
       this.message = 'This account is already not authorized'
     } else {
-      accounts[0].authorized.splice(index, 1)
-      yield this.http.put('account/'+accounts[0]._id, accounts[0])
+      account.authorized.splice(index, 1)
+      this.body = yield this.db.account.put(account)
+      this.body.authorized = account.authorized
     }
   }
+}
+
+function authorized(doc, account_id) {
+  //doc._rev[0] == 1 allows for new users to be added
+  return ~ doc._id.indexOf('_design/') ? false : doc._rev[0] == 1 || doc._id == account_id
 }
