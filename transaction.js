@@ -112,6 +112,8 @@ exports.views = {
         result.pending += vals[i].pending
       }
 
+      result.total = result.bins+result.repack+result.pending
+
       return result
     }
   },
