@@ -49,6 +49,8 @@ exports.lib = {
     if (prepend)
       key.unshift(prepend)
 
+    key.unshift(doc.shipment._id.slice(0, 10)) //recipient account id
+
     return emit(key, value)
   },
 }
@@ -57,32 +59,32 @@ exports.lib = {
 exports.views = {
   'next.transaction._id':function(doc) {
     for (var i in doc.next)
-      doc.next[i].transaction && emit(doc.next[i].transaction._id)
+      doc.next[i].transaction && emit([doc.shipment._id.slice(0, 10), doc.next[i].transaction._id])
   },
 
   //used by drug endpoint to update transactions on drug name/form updates
   'drug._id':function(doc) {
-    emit(doc.drug._id)
+    emit([doc.shipment._id.slice(0, 10), doc.drug._id])
   },
 
   'shipment._id':function(doc) {
-    emit(doc.shipment._id)
+    emit([doc.shipment._id.slice(0, 10), doc.shipment._id])
   },
 
   'inventory.pendingAt':function(doc) {
-    require('isPending')(doc) && emit(doc.next[0].createdAt)
+    require('isPending')(doc) && emit([doc.shipment._id.slice(0, 10), doc.next[0].createdAt])
   },
 
   'inventory.location':function(doc) {
-    require('isInventory')(doc) && emit(doc.location)
+    require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.location])
   },
 
   'inventory.exp':function(doc) {
-    require('isInventory')(doc) && emit(doc.exp.to || doc.exp.from)
+    require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.exp.to || doc.exp.from])
   },
 
   'inventory.drug.generic':function(doc) {
-    require('isInventory')(doc) && doc.drug && emit(doc.drug.generic)
+    require('isInventory')(doc) && doc.drug && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
   },
 
   inventory:{
@@ -100,7 +102,7 @@ exports.views = {
       if (isPending)
         val.pending = qty
 
-      emit(doc.drug.generic, val)
+      emit([doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id], val)
     },
     reduce(keys, vals, rereduce) {
       // reduce function

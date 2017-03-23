@@ -33,9 +33,12 @@ function deleteLogin(doc) {
 //When creating user locally you don't know how long it will take to replicate
 //to the server so you don't know when to POST user/session.  Save the hassle
 //and when creating a user just log them in automatically
-function saveLogin(doc, val, opts) {
+function saveLogin(doc, val, key, opts) {
   if ( ! doc._rev || (doc._rev[0] == 1 && opts.new_edits === false)) {
-    let _user = {name:doc.phone, password:doc.password, roles:[doc.account._id]}
+    //User ._id not .phone since _id has had all extraneous characters removed
+    let _user = {name:doc._id, password:doc.password, roles:[doc.account._id]}
+    console.log('saveLogin', _user, doc)
+    delete doc.password //we don't want to save this in the user table
     return this.db._users.put(_user, admin).then(_ => session.call(this, _user)).catch(err => console.log('new session err', err))
   }
   return true
@@ -44,9 +47,14 @@ function saveLogin(doc, val, opts) {
 function session(_user) {
   const body = {name:_user.name, password:_user.password} //including roles with cause a couchdb badarg err
   return this.ajax({url:'/_session', method:'post', body}).then(res => {
-    if (res.statusCode != 200)
-      return Promise.reject(res)//401 status should not log us in
+    console.log('body', body, res.statusCode, res.body)
 
+    if (res.statusCode != 200)
+      this.throw(res.statusCode, res.body)//401 status should not log us in
+      console.log('session success 000',res.body)
+      setTimeout(_ => console.log('session success 010', res.body), 10)
+      setTimeout(_ => console.log('session success 050', res.body), 50)
+      setTimeout(_ => console.log('session success 100', res.body), 100)
     //this.status = 201
     this.set(res.headers)
     const cookie = JSON.stringify({_id:res.body.name, account:{_id:res.body.roles[0]}})
@@ -59,20 +67,24 @@ exports.session = {
   *post() {
 
     const _user = {
-      name:this.req.body.phone,
+      name:this.req.body.phone.replace(/[^\d]/g, ''),
       password:this.req.body.password
     }
-
     const user = yield this.db.user.get(_user.name)
 
     user
       ? this.body = yield session.call(this, _user)
       : this.throw(404, 'No user exists with the phone '+_user.name)
+
+      console.log('this.body', this.body)
   },
 
   *delete() {
     console.log('user.session.delete')
-    yield this.ajax({url:'/_session',  method:'delete'})
+    let res = yield this.ajax({url:'/_session',  method:'delete'})
+    this.status = res.statusCode
+    this.body   = res.body
+    console.log('user.session.delete', this.body)
     this.cookies.set('AuthUser', '') //This has to be set after the proxy since proxy will overwrite our cookie
   }
 }

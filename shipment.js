@@ -8,9 +8,10 @@ exports.views = {
     emit(doc.tracking)
   },
 
-  'account.to._id':function(doc) {
-    emit(doc.account.to._id)
-  },
+  //This is currently handled by allDocs since _id leads with recipient
+  // 'account.to._id':function(doc) {
+  //   emit(doc.account.to._id)
+  // },
 
   'account.from._id':function(doc) {
     emit(doc.account.from._id)

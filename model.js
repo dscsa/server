@@ -1,7 +1,6 @@
 "use strict"
 
 exports.get = function* (name) {
-  console.trace('model.get', name, this.query, this.url)
   this.query.selector  = JSON.parse(this.query.selector)
   this.query.open_revs = JSON.parse(this.query.open_revs)
   this.body = yield this.db[name].get(this.query.selector.id, this.query)

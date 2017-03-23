@@ -94,7 +94,7 @@ app.use(function*(next) {
     let promise = new Promise((resolve, reject) => {
       request.on('response', response => {
         delete response.headers['access-control-expose-headers'] //this was overriding our index.js default CORS headers.
-        resolve(response)
+        setTimeout(_ => resolve(response), 20) //is there a better way to 1) return stream 2) but wait for body property to be set
       })
       const stack = new Error().stack
       request.on('error', err => {
