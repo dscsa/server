@@ -11,13 +11,13 @@ exports.lib = {
   },
 
   price(doc) {
-    return doc.drug.price.goodrx || doc.drug.price.nadac || 0
+    return doc.drug.price ? doc.drug.price.goodrx || doc.drug.price.nadac || 0 : 0
   },
 
   value(doc) {
-    var qty   = require('views/lib/qty')(doc)
-    var price = require('views/lib/price')(doc)
-    return Math.floor(price * qty)
+    var qty   = require('qty')(doc)
+    var price = require('price')(doc)
+    return price * qty
   },
 
   isInventory(doc) {
@@ -57,9 +57,15 @@ exports.lib = {
 
 //Transactions
 exports.views = {
+  //Used by history
   'next.transaction._id':function(doc) {
     for (var i in doc.next)
       doc.next[i].transaction && emit([doc.shipment._id.slice(0, 10), doc.next[i].transaction._id])
+  },
+
+  //used by drug endpoint to update transactions on drug name/form updates
+  'createdAt':function(doc) {
+    emit([doc.shipment._id.slice(0, 10), doc._id])
   },
 
   //used by drug endpoint to update transactions on drug name/form updates
@@ -122,14 +128,21 @@ exports.views = {
 
   'user._id':{
     map(doc) {
-      require('map')(emit, doc, require('qty')(doc), doc.user._id)
+      require('map')(emit, doc, 1, doc.user._id)
     },
     reduce
   },
 
-  qty:{
+  count:{
     map(doc) {
-      require('map')(emit, doc, require('qty')(doc))
+      require('map')(emit, doc, 1)
+    },
+    reduce
+  },
+
+  rxs:{
+    map(doc) {
+      require('map')(emit, doc, require('qty')(doc)/30)
     },
     reduce
   },
@@ -282,23 +295,18 @@ function *getGoodrx(drug) {
 
 //TODO don't search for shipment if shipment._id doesn't have two periods (inventory)
 //TODO option to include full from/to account information
-function *history($this, id) {
-
+exports.history = function *history(id) {
+  let $this = this
   let result = []
 
-  return yield recurse(id, result)
-
+  this.body = yield recurse(id, result)
   function *recurse (_id, list) {
-
-    let [trans, prevs] = yield [
+    let [trans, {rows:prevs}] = yield [
       $this.db.transaction.get(_id), //don't use show function because we might need to see transactions not directly authorized
-      $this.db.transaction.query('roles/history', {key:_id})
+      $this.db.transaction.query('next.transaction._id', {key:_id})
     ]
-
     let all = [$this.db.shipment.get(trans.shipment._id)]
-
     list.push(trans)
-
     let indentedList = []
 
     if (prevs.length > 1) {
@@ -307,25 +315,20 @@ function *history($this, id) {
     } else {
       trans.type = 'Transaction'
     }
-
     //Recursive call!
     for (let prev of prevs)
       all.push(recurse(prev._id, prevs.length == 1 ? list : indentedList))
-
     //Search for transaction's ancestors and shipment in parallel
     all = yield all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
-
     //Now we just fill in full shipment and account info into the transaction
     trans.shipment = all[0]
     let account    = all[0].account
-
     //TODO this call is serial. Can we do in parallel with next async call?
     //TODO this is co specific won't work when upgrading to async/await which need Promise.all
     let accounts = yield [
       $this.db.account.get(account.from._id),
       account.to && $this.db.account.get(account.from._id)
     ]
-
     account.from = accounts[0]
     account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
     return result

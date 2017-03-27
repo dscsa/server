@@ -206,6 +206,10 @@ r('/account/authorized')     //Allow user to get, modify, & delete docs
   .post(models.account.authorized.post)
   .del(models.account.authorized.delete)
 
+r('/transaction/:id/history')     //Allow user to get, modify, & delete docs
+  .get(models.transaction.history)
+
+
 r('/:db/:id')
   .get(function*(db, id) {
     this.query.selector = `{"id":"${id}"}`
