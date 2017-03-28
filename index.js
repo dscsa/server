@@ -276,5 +276,6 @@ function* get_asset(file) {
     ? this.path.replace(assets+'/'+file, path.slice(3))
     : '/../client'+this.path
 
+  this.type = path.split('.').pop()
   this.body = fs.createReadStream(__dirname + path)
 }
