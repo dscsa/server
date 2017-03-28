@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "dependencies": {
     "koa":"^0.21.0",
-    "koa-route":"^2.4.2"
+    "koa-route":"^2.4.2",
+    "pouchdb-core":"*",
+    "pouchdb-mapreduce":"*",
+    "pouchdb-adapter-http":"*"
   }
 }
