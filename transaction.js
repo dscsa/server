@@ -338,8 +338,7 @@ exports.history = function *history(id) {
 exports.inventory = function* () {
   let view = yield this.db.transaction.query('inventory', {group_level:2, startkey:[this.account._id], endkey:[this.account._id, {}]})
 
-  this.body = ['Generic Drug,Bin Qty,Repack Qty,Pending Qty,Total Qty']
-  .concat(view.rows.map(row => row.key[1]+','+Object.values(row.value)))
+  this.body = view.rows.map(row => row.key[1]+','+Object.values(row.value))
   .join('\n')
 }
 

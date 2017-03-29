@@ -192,7 +192,7 @@ r('/:db/_bulk_get')     //Allow PouchDB to make bulk edits
 //User API Endpoints
 //
 
-r('/inventory.csv')     //Allow user to get, modify, & delete docs
+r('/inventory')     //Allow user to get, modify, & delete docs
   .get(models.transaction.inventory)
 
 r('/:db', {strict:true})
