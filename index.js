@@ -192,9 +192,6 @@ r('/:db/_bulk_get')     //Allow PouchDB to make bulk edits
 //User API Endpoints
 //
 
-r('/inventory')     //Allow user to get, modify, & delete docs
-  .get(models.transaction.inventory)
-
 r('/:db', {strict:true})
   .get(model('get'))
   .post(model('post'))
@@ -211,6 +208,8 @@ r('/account/authorized')     //Allow user to get, modify, & delete docs
 r('/transaction/:id/history')
   .get(models.transaction.history)
 
+r('/account/:id/inventory')     //Allow user to get, modify, & delete docs
+  .get(models.account.inventory)
 
 r('/:db/:id')
   .get(function*(db, id) {

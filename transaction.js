@@ -335,15 +335,6 @@ exports.history = function *history(id) {
   }
 }
 
-exports.inventory = function* () {
-  let view = yield this.db.transaction.query('inventory', {group_level:2, startkey:[this.account._id], endkey:[this.account._id, {}]})
-
-  this.body = view.rows.map(row => row.key[1]+','+Object.values(row.value))
-  .join('\n')
-}
-
-
-
 function reduce(keys, vals, rereduce) {
   // reduce function
   var result = {received:0, verified:0, disposed:0, dispensed:0}

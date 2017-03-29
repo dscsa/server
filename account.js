@@ -16,6 +16,14 @@ exports.views = {
   //this.db.account.get({_id:{$gt:null, $in:accounts[0].authorized}}),
 }
 
+exports.inventory = function* (id) { //account._id will not be set because google does not send cookie
+  let view = yield this.db.transaction.query('inventory', {group_level:2, startkey:[id], endkey:[id, {}]})
+
+  this.body = ['Generic Drug,Bin Qty,Repack Qty,Pending Qty,Total Qty']
+  .concat(view.rows.map(row => row.key[1]+','+Object.values(row.value)))
+  .join('\n')
+}
+
 exports.validate = function(model) {
   return model
     .ensure('_id').custom(authorized).withMessage('You are not authorized to modify this account')
