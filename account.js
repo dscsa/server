@@ -20,12 +20,25 @@ exports.inventory = function* (id) { //account._id will not be set because googl
   let view  = this.db.transaction.query('inventory', {group_level:2, startkey:[id], endkey:[id, {}]})
   let all   = yield [view, this.db.account.get(id)]
   let order = all[1].ordered
+
+  view = all[0].rows.map(row => {
+    let generic = row.key[1]
+    let o = order[generic]
+    delete order[generic]
+    return generic+','+Object.values(row.value)+','+!!o+','+orderCSV(o)
+  })
+
+  order = Object.keys(order).map(generic => generic+',0,0,0,0,'+true+','+orderCSV(order[generic]))
+
   this.body = ['Generic Drug,Bin Qty,Repack Qty,Pending Qty,Total Qty,Ordered,Max Inventory,Min Qty,Min Days,Verified Message,Destroyed Message,Default Location']
-  .concat(all[0].rows.map(row => {
-    let o = order[row.key[1]] || {}
-    return row.key[1]+','+Object.values(row.value)+','+!!order[row.key[1]]+','+o.maxInventory+','+o.minQty+','+o.minDays+','+o.verifiedMessage+','+o.destroyedMessage+','+o.defaultLocation
-  }))
-  .join('\n').replace(/undefined/g, '')
+  .concat(view)
+  .concat(order)
+  .join('\n')
+  .replace(/undefined/g, '')
+
+  function orderCSV(o = {}) {
+    return o.maxInventory+','+o.minQty+','+o.minDays+','+o.verifiedMessage+','+o.destroyedMessage+','+o.defaultLocation
+  }
 }
 
 exports.validate = function(model) {
