@@ -17,10 +17,16 @@ exports.views = {
 }
 
 exports.inventory = function* (id) { //account._id will not be set because google does not send cookie
-  let view = yield this.db.transaction.query('inventory', {group_level:2, startkey:[id], endkey:[id, {}]})
-
-  this.body = ['Generic Drug,Bin Qty,Repack Qty,Pending Qty,Total Qty']
-  .concat(view.rows.map(row => row.key[1]+','+Object.values(row.value)))
+  let view = this.db.transaction.query('inventory', {group_level:2, startkey:[id], endkey:[id, {}]})
+  let all  = yield [view, this.db.account.get(id)]
+  console.log('all', all)
+  view  = all[0]
+  let order = all[1].ordered
+  this.body = ['Generic Drug,Bin Qty,Repack Qty,Pending Qty,Total Qty,Max Inventory,Min Qty,Min Days,Verified Message,Destroyed Message,Default Location']
+  .concat(view.rows.map(row => {
+    let o = order[row.key[1]] || {}
+    return row.key[1]+','+Object.values(row.value)+','+o.maxInventory+','+o.minQty+','+o.minDays+','+o.verifiedMessage+','+o.destroyedMessage+','+o.defaultLocation
+  }))
   .join('\n')
 }
 
