@@ -9,12 +9,13 @@ try {
   fs.accessSync(__dirname+'/../../keys/dev.js')
   defineRoutes()
 } catch(e) {
-  fs.mkdirSync(__dirname+'/../../keys')
-  rl.question(`What is the CouchDB admin username?`, username => {
-    rl.question(`What is the CouchDB admin password?`, password => {
-      fs.writeFileSync(__dirname+'/../../keys/dev.js', `exports.username = '${username}'\nexports.password = '${password}'`)
-      rl.close()
-      defineRoutes()
+  fs.mkdir(__dirname+'/../../keys', err => {
+    rl.question(`What is the CouchDB admin username?`, username => {
+      rl.question(`What is the CouchDB admin password?`, password => {
+        fs.writeFileSync(__dirname+'/../../keys/dev.js', `exports.username = '${username}'\nexports.password = '${password}'`)
+        rl.close()
+        defineRoutes()
+      })
     })
   })
 }
