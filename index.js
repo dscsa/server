@@ -306,18 +306,10 @@ function defineRoutes() {
 
   function* get_asset(file) {
 
-    let dependencies =  {
-      db: "../pouch",
-      csv: "../csv",
-      server: "../server"
-    }
-
-    let path = dependencies[file]
-
     if (file == 'pouch' || file == 'csv' || file == 'server') {
-      path = this.path.replace(assets+'/'+file, '../'+path)
+      var path = this.path.replace(assets+'/'+file, '../../'+file)
     } else {
-      path = '/../client'+this.path
+      var path = '/../client'+this.path
     }
 
     this.type = path.split('.').pop()
