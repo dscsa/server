@@ -71,7 +71,7 @@ function defineRoutes() {
   let app     = require('koa')()
   let r       = require('./router')(app)
   let body    = require('./body')
-  let pouchdb = require('../db/pouchdb-server')
+  let pouchdb = require('../pouch/pouchdb-server')
   let models  = {
     drug        : require('./drug'),
     account     : require('./account'),
