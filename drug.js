@@ -3,7 +3,7 @@
 module.exports = exports = Object.create(require('./model'))
 
 let crypto = require('crypto')
-let admin  = {ajax:{auth:require('../../keys/dev')}}
+let admin  = {ajax:{auth:require('../../keys/dev.js')}}
 
 //Drugs
 exports.views = {
