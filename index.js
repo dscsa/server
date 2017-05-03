@@ -309,11 +309,11 @@ function defineRoutes() {
   }
 
 
-  function* get_asset(path) {
+  function* get_asset(asset) {
 
-    path = path ? this.path : '/client/src/views/index.html'
+    asset = asset ? this.path : '/client/src/views/index.html'
 
     this.type = path.split('.').pop()
-    this.body = fs.createReadStream(__dirname+'/..'+path)
+    this.body = fs.createReadStream(__dirname+'/..'+asset)
   }
 }
