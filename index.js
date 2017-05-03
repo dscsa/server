@@ -20,24 +20,6 @@ try {
   })
 }
 
-// const rl = cli.createInterface({input:process.stdin, output:process.stdout})
-//
-// rl.question('What do you think of Node.js? ', (answer) => {
-//   // TODO: Log the answer in a database
-//   console.log(`Thank you for your valuable feedback: ${answer}`);
-//
-//   rl.close();
-// });
-//
-// //wx flag fails if file already exists
-// fs.writeFile(path, data, { flag: 'wx' }, function (err) {
-//     if (err) throw err;
-//     console.log("It's saved!");
-// })
-//
-//
-
-
 // Models Documentation Guide:
 // End Point
 // Request Headers
