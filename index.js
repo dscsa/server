@@ -68,7 +68,6 @@ try {
 function defineRoutes() {
 
   let baseUrl = 'http://localhost:5984/'
-  let assets  = "../client/assets"
   let app     = require('koa')()
   let r       = require('./router')(app)
   let body    = require('./body')
@@ -186,7 +185,7 @@ function defineRoutes() {
     })
 
   //Serve the application and assets
-  r('/'+assets+'/:file', {end:false})
+  r('/assets/:file', {end:false})
     .get(get_asset)
 
   r('/:db/', {strict:true}) //Shows DB info including update_seq#
@@ -306,13 +305,12 @@ function defineRoutes() {
 
   function* get_asset(file) {
 
-    if (file == 'pouch' || file == 'csv' || file == 'server') {
-      var path = this.path.replace(assets+'/'+file, '../../'+file)
-    } else {
-      var path = '/../client'+this.path
-    }
+    if (file != 'pouch' && file != 'csv' && file != 'server')
+      file = 'client'
 
+    var path = __dirname.replace('server', file)+this.path
+console.log('get_asset', file, path)
     this.type = path.split('.').pop()
-    this.body = fs.createReadStream(__dirname+'../'+path)
+    this.body = fs.createReadStream(path)
   }
 }
