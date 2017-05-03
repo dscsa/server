@@ -313,7 +313,7 @@ function defineRoutes() {
 
     asset = asset ? this.path : '/client/src/views/index.html'
 
-    this.type = path.split('.').pop()
+    this.type = asset.split('.').pop()
     this.body = fs.createReadStream(__dirname+'/..'+asset)
   }
 }
