@@ -1,67 +1,21 @@
 "use strict"
 
+let keys    = require('./keys')
 let fs      = require('fs')
-let rl      = require('readline').createInterface({input:process.stdin, output:process.stdout})
-
-"use strict"
-
-try {
-  fs.accessSync(__dirname+'/../../keys/dev.js')
-  defineRoutes()
-} catch(e) {
-  fs.mkdir(__dirname+'/../../keys', err => {
-    rl.question(`What is the CouchDB admin username?`, username => {
-      rl.question(`What is the CouchDB admin password?`, password => {
-        fs.writeFileSync(__dirname+'/../../keys/dev.js', `exports.username = '${username}'\nexports.password = '${password}'`)
-        rl.close()
-        defineRoutes()
-      })
-    })
-  })
+let baseUrl = 'http://localhost:5984/'
+let app     = require('koa')()
+let r       = require('./router')(app)
+let body    = require('./body')
+let pouchdb = require('../pouch/pouchdb-server')
+let models  = {
+  drug        : require('./drug'),
+  account     : require('./account'),
+  user        : require('./user'),
+  shipment    : require('./shipment'),
+  transaction : require('./transaction'),
 }
 
-// Models Documentation Guide:
-// End Point
-// Request Headers
-// Success Response Headers
-// Error Response
-// Methods
-// -query string
-// -request body
-// -response body
-// -example
-// CRUD Enpoints (common accross resourcess)
-// GET    users?selector={"email":"adam@sirum.org"} || users?selector={"_id":"abcdef"} || selector={"name.first":"adam"}
-// POST   users
-// PUT    users {_id:abcdef, _rev:abcdef}
-// DELETE users {_id:abcdef, _rev:abcdef}
-
-//Custom endpoints (specific to this resources)
-// POST   users/session        {email:adam@sirum.org, password}
-// POST   users/email          {email:adam@sirum.org, subject, message, attachment}
-
-//Replication Endpoints (for pouchdb, begin with underscore)
-// POST   users/_bulk_get
-// POST   users/_bulk_docs
-// POST   users/_all_docs
-// POST   users/_revs_diff
-// POST   users/_changes
-
-function defineRoutes() {
-
-  let baseUrl = 'http://localhost:5984/'
-  let app     = require('koa')()
-  let r       = require('./router')(app)
-  let body    = require('./body')
-  let pouchdb = require('../pouch/pouchdb-server')
-  let models  = {
-    drug        : require('./drug'),
-    account     : require('./account'),
-    user        : require('./user'),
-    shipment    : require('./shipment'),
-    transaction : require('./transaction'),
-  }
-
+keys(function() {
   //Parse our manual cookie so we know account _ids without relying on couchdb
   //Collect the request body so that we can use it with pouch
   app.use(function*(next) {
@@ -290,7 +244,6 @@ function defineRoutes() {
     }
   }
 
-
   function* get_asset(asset) {
 
     asset = asset ? this.path : '/client/src/views/index.html'
@@ -298,4 +251,4 @@ function defineRoutes() {
     this.type = asset.split('.').pop()
     this.body = fs.createReadStream(__dirname+'/..'+asset)
   }
-}
+})
