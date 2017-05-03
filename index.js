@@ -150,6 +150,7 @@ function defineRoutes() {
     try {
       yield next
     } catch (err) {
+      console.log('server error:', this.path, err)
       //Handle three types of errors
       //1) actual coding errors, which will be instanceof Error
       //2) this.throw() errors from my code which will be instanceof Error
@@ -180,12 +181,17 @@ function defineRoutes() {
       if(this.headers.origin || this.headers.referer) //Not sure why pouchdb checks this.  Shows welcome UUID & Version
         return yield proxy.call(this)
 
-      this.path = '/src/views/index.html'
       yield get_asset.call(this)
     })
 
   //Serve the application and assets
-  r('/assets/:file', {end:false})
+  r('/client/:file', {end:false})
+    .get(get_asset)
+
+  r('/pouch/:file', {end:false})
+    .get(get_asset)
+
+  r('/csv/:file', {end:false})
     .get(get_asset)
 
   r('/:db/', {strict:true}) //Shows DB info including update_seq#
@@ -303,14 +309,11 @@ function defineRoutes() {
   }
 
 
-  function* get_asset(file) {
+  function* get_asset(path) {
 
-    if (file != 'pouch' && file != 'csv' && file != 'server')
-      file = 'client'
+    path = path ? this.path : '/client/src/views/index.html'
 
-    var path = __dirname.replace('server', file)+this.path
-console.log('get_asset', file, path)
     this.type = path.split('.').pop()
-    this.body = fs.createReadStream(path)
+    this.body = fs.createReadStream(__dirname+'/..'+path)
   }
 }
