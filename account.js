@@ -25,7 +25,7 @@ exports.inventory = function* (id) { //account._id will not be set because googl
     let generic = row.key[1]
     let o = order[generic]
     delete order[generic]
-    return '"'+generic+'",'+Object.values(row.value)+','+!!o+','+orderCSV(o)
+    return '"'+generic+'","'+Object.values(row.value).join('","')+'",'+!!o+','+orderCSV(o)
   })
 
   order = Object.keys(order).map(generic => '"'+generic+'"'+',0,0,0,0,'+true+','+orderCSV(order[generic]))
@@ -37,7 +37,7 @@ exports.inventory = function* (id) { //account._id will not be set because googl
   .replace(/undefined/g, '')
 
   function orderCSV(o = {}) {
-    return o.maxInventory+','+o.minQty+','+o.minDays+','+o.verifiedMessage+','+o.destroyedMessage+','+o.defaultLocation+','+o.price30+','+o.price90
+    return '"'+o.maxInventory+'","'+o.minQty+'","'+o.minDays+'","'+o.verifiedMessage+'","'+o.destroyedMessage+'","'+o.defaultLocation+'","'+o.price30+'","'+o.price90+'"'
   }
 }
 
