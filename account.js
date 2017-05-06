@@ -25,10 +25,10 @@ exports.inventory = function* (id) { //account._id will not be set because googl
     let generic = row.key[1]
     let o = order[generic]
     delete order[generic]
-    return generic+','+Object.values(row.value)+','+!!o+','+orderCSV(o)
+    return '"'+generic+'",'+Object.values(row.value)+','+!!o+','+orderCSV(o)
   })
 
-  order = Object.keys(order).map(generic => generic+',0,0,0,0,'+true+','+orderCSV(order[generic]))
+  order = Object.keys(order).map(generic => '"'+generic+'"'+',0,0,0,0,'+true+','+orderCSV(order[generic]))
 
   this.body = ['Generic Drug,Bin Qty,Repack Qty,Pending Qty,Total Qty,Ordered,Max Inventory,Min Qty,Min Days,Verified Message,Destroyed Message,Default Location,30 day price,90 day price']
   .concat(view)
