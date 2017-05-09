@@ -81,8 +81,8 @@ exports.views = {
     require('isPending')(doc) && emit([doc.shipment._id.slice(0, 10), doc.next[0].createdAt])
   },
 
-  'inventory.location':function(doc) {
-    require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.location])
+  'inventory.bin':function(doc) {
+    require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.bin])
   },
 
   'inventory.exp':function(doc) {
