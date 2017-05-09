@@ -36,7 +36,7 @@ exports.inventory = function* (id) { //account._id will not be set because googl
   .replace(/undefined/g, '')
 
   function orderCSV(o = {}) {
-    return '"'+o.maxInventory+'","'+o.minQty+'","'+o.minDays+'","'+o.verifiedMessage+'","'+o.destroyedMessage+'","'+o.defaultLocation+'","'+o.price30+'","'+o.price90+'"'+'","'+o.vialQty+'","'+o.vialSize+'"'
+    return '"'+o.maxInventory+'","'+o.minQty+'","'+o.minDays+'","'+o.verifiedMessage+'","'+o.destroyedMessage+'","'+o.defaultLocation+'","'+o.price30+'","'+o.price90+'","'+o.vialQty+'","'+o.vialSize+'"'
   }
 }
 
