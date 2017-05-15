@@ -51,10 +51,7 @@ function session(_user) {
 
     if (res.statusCode != 200)
       this.throw(res.statusCode, res.body)//401 status should not log us in
-      console.log('session success 000',res.body)
-      setTimeout(_ => console.log('session success 010', res.body), 10)
-      setTimeout(_ => console.log('session success 050', res.body), 50)
-      setTimeout(_ => console.log('session success 100', res.body), 100)
+    
     //this.status = 201
     this.set(res.headers)
     const cookie = JSON.stringify({_id:res.body.name, account:{_id:res.body.roles[0]}})
