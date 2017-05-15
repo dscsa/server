@@ -192,7 +192,7 @@ keys(function() {
       yield model('get').call(this, db)
     })
     .put(model('put'))
-    .del(model('remove'))
+    .del(model('del'))
 
   // r('/shipment/shipped')
   //   .post(models.shipment.shipped)         // TODO add shipped_at date and change status to shipped
