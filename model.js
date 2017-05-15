@@ -43,6 +43,6 @@ exports.bulk_docs = function* (name) {
   }
 }
 
-exports.delete = function* (name) {
-  this.body = yield this.db[name].delete(this.req.body, {this:this})
+exports.remove = function* (name) {
+  this.body = yield this.db[name].remove(this.req.body, {this:this})
 }
