@@ -35,7 +35,7 @@ exports.validate = function(model) {
 function updateTransactions(doc, rev) {
   return rev[0] == 1 || this.db.transaction.query('drug._id')
   .then(transactions => {
-    return Promise.all(transactions.map(transaction => {
+    return Promise.all(transactions.rows.map(transaction => {
       if(
           transaction.drug.generic == drug.generic &&
           transaction.drug.form == drug.form &&
