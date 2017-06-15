@@ -32,7 +32,7 @@ exports.validate = function(model) {
 
 //Context-specific - options MUST have 'this' property in order to work.
 //Get all transactins using this drug so we can update denormalized database
-function updateTransactions(doc, rev) {
+function updateTransactions(drug, rev) {
   return rev[0] == 1 || this.db.transaction.query('drug._id')
   .then(transactions => {
     return Promise.all(transactions.rows.map(row => {
