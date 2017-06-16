@@ -35,7 +35,7 @@ exports.validate = function(model) {
 function updateTransactions(drug, rev) {
   return rev[0] == 1 || this.db.transaction.query('drug._id')
   .then(transactions => {
-    console.log(transactions)
+    console.log('updateTransactions transactions', transactions)
     return Promise.all(transactions.rows.map(row => {
       let transaction = row.value
       if(
@@ -57,5 +57,8 @@ function updateTransactions(drug, rev) {
       //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
       this.db.transaction.put(transaction, admin)
     }))
+  })
+  .catch(err => {
+    console.log('updateTransactions err', err)
   })
 }
