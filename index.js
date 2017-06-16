@@ -97,7 +97,7 @@ keys(function() {
           error:err.name,
           reason:err.message,
           status:err.status,
-          stack:err.stack.split("\n")
+          stack:err.stack.split && err.stack.split("\n")
         }
       }
 
