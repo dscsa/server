@@ -99,25 +99,25 @@ exports.views = {
       var isInventory = require('isInventory')(doc)
       var isPending   = require('isPending')(doc)
       var repack      = doc.next.length
-      var val = {bins:0, repack:0, pending:0}
+      var key         = [doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id]
 
       if (isInventory && repack)
-        val.repack = qty
-      if (isInventory && ! repack)
-        val.bins = qty
-      if (isPending)
-        val.pending = qty
+        emit(key, {repack:qty})
 
-      emit([doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id], val)
+      if (isInventory && ! repack)
+        emit(key, {bins:qty})
+
+      if (isPending)
+        emit(key, {pending:qty})
     },
     reduce(keys, vals, rereduce) {
       // reduce function
       var result = {bins:0, repack:0, pending:0}
 
       for(var i in vals) {
-        result.bins    += vals[i].bins
-        result.repack  += vals[i].repack
-        result.pending += vals[i].pending
+        result.bins    += vals[i].bins || 0
+        result.repack  += vals[i].repack || 0
+        result.pending += vals[i].pending || 0
       }
 
       result.total = result.bins+result.repack+result.pending
