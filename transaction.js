@@ -29,6 +29,10 @@ exports.lib = {
     return doc.next && doc.next[0] && doc.next[0].pending
   },
 
+  isDispensed(doc) {
+    return doc.next && doc.next[0] && doc.next[0].dispensed
+  },
+
   map(emit, doc, val, prepend) {
     var value = {
       received:val, verified:0, disposed:0,
@@ -91,6 +95,10 @@ exports.views = {
 
   'inventory.drug.generic':function(doc) {
     require('isInventory')(doc) && doc.drug && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
+  },
+
+  'dispensed.drug.generic':function(doc) {
+    require('isDispensed')(doc) && doc.drug && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
   },
 
   inventory:{
