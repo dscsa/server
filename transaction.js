@@ -106,7 +106,7 @@ exports.views = {
       var qty = require('qty')(doc)
       var isInventory = require('isInventory')(doc)
       var isPending   = require('isPending')(doc)
-      var repack      = doc.next.length
+      var repack      = doc.shipment._id.indexOf('.') == -1
       var key         = [doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id]
 
       if (isInventory && repack)
