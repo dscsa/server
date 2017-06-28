@@ -47,7 +47,7 @@ exports.validate = function(model) {
 
 //Context-specific - options MUST have 'this' property in order to work.
 function authorized(doc) {
-  return doc._rev[0] == 1 || doc._id == this.account._id
+  return doc._rev.split('-')[0] == 1 || doc._id == this.account._id
 }
 
 exports.authorized = {
@@ -94,6 +94,6 @@ exports.authorized = {
 }
 
 function authorized(doc, account_id) {
-  //doc._rev[0] == 1 allows for new users to be added
-  return ~ doc._id.indexOf('_design/') ? false : doc._rev[0] == 1 || doc._id == account_id
+  //doc._rev.split('-')[0] == 1 allows for new users to be added
+  return ~ doc._id.indexOf('_design/') ? false : doc._rev.split('-')[0] == 1 || doc._id == account_id
 }

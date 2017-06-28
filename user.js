@@ -21,7 +21,7 @@ exports.validate = function(model) {
 
 //Context-specific - options MUST have 'this' property in order to work.
 function authorized(doc) {
-  return doc._rev[0] == 1 || doc.account._id == this.account._id
+  return doc._rev.split('-')[0] == 1 || doc.account._id == this.account._id
 }
 
 //Context-specific - options MUST have 'this' property in order to work.
@@ -34,7 +34,7 @@ function deleteLogin(doc) {
 //to the server so you don't know when to POST user/session.  Save the hassle
 //and when creating a user just log them in automatically
 function saveLogin(doc, val, key, opts) {
-  if ( ! doc._rev || (doc._rev[0] == 1 && opts.new_edits === false)) {
+  if ( ! doc._rev || (doc._rev.split('-')[0] == 1 && opts.new_edits === false)) {
     //User ._id not .phone since _id has had all extraneous characters removed
     let _user = {name:doc._id, password:doc.password, roles:[doc.account._id]}
     console.log('saveLogin', _user, doc)
@@ -51,7 +51,7 @@ function session(_user) {
 
     if (res.statusCode != 200)
       this.throw(res.statusCode, res.body)//401 status should not log us in
-    
+
     //this.status = 201
     this.set(res.headers)
     const cookie = JSON.stringify({_id:res.body.name, account:{_id:res.body.roles[0]}})

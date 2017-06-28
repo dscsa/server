@@ -181,7 +181,7 @@ function authorized(doc, shipment_id) {
 function updateDrug(doc) {
   //Making sure drug property is accurate and upto date is
   //too costly to do on every save so just do it on creation
-  if (doc._rev && doc._rev[0] != 1)
+  if (doc._rev && doc._rev.split('-')[0] != 1)
     return doc.drug
 
   return this.db.drug.get(doc.drug._id).then(drug => {
