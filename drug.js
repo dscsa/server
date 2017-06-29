@@ -35,7 +35,7 @@ exports.validate = function(model) {
 function updateTransactions(drug, rev) {
   return rev.split('-')[0] == 1 || this.db.transaction.query('drug._id', {key:[this.account._id, drug._id], include_docs:true})
   .then(transactions => {
-    console.log('updateTransactions transactions', transactions)
+    //console.log('updateTransactions', transactions)
     return Promise.all(transactions.rows.map(row => {
       let transaction = row.doc
       if(
@@ -54,11 +54,15 @@ function updateTransactions(drug, rev) {
       if ( ! transaction.drug.price)
         transaction.drug.price = drug.price
 
+      //console.log('updateTransaction', transaction)
       //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
-      this.db.transaction.put(transaction, admin)
+      return this.db.transaction.put(transaction, {this:this, ajax:admin.ajax})
     }))
   })
+  .then(puts => {
+    console.log(`updated ${puts.length} transactions to have drug name ${drug.generic}`) //err.errors['shipment._id'].rules
+  })
   .catch(err => {
-    console.log('updateTransactions err', err)
+    console.log('updateTransactions err', err.errors) //err.errors['shipment._id'].rules
   })
 }
