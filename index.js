@@ -186,6 +186,9 @@ keys(function() {
   r('/account/:id/inventory')     //Allow user to get, modify, & delete docs
     .get(models.account.inventory)
 
+  r('/account/:id/metrics')     //Allow user to get, modify, & delete docs
+    .get(models.account.metrics)
+
   r('/:db/:id')
     .get(function*(db, id) {
       this.query.selector = `{"id":"${id}"}`

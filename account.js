@@ -40,6 +40,15 @@ exports.inventory = function* (id) { //account._id will not be set because googl
   }
 }
 
+exports.metrics = function* (id) { //account._id will not be set because google does not send cookie
+  let view  = yield this.db.transaction.query('metrics', {group_level:this.query.group_level, startkey:[id], endkey:[id, {}]})
+
+  this.body = view.rows.reduce((csv, row) => {
+    let date = row.key && row.key.slice(1).join('-')
+    return csv+'\n'+date+','+Object.values(row.value.flat)
+  }, 'date,'+Object.keys(view.rows[0].value.flat))
+}
+
 exports.validate = function(model) {
   return model
     .ensure('_id').custom(authorized).withMessage('You are not authorized to modify this account')
@@ -60,16 +69,15 @@ exports.authorized = {
     //Authorize a sender
     console.log(this.account._id, this.req.body)
     let account = yield this.db.account.get(this.account._id)
-    console.log(1)
+
     //allow body to be an array of ids to authorize
     let index = account.authorized.indexOf(this.req.body)
-  console.log(2)
+
     if (index != -1) {
       this.status  = 409
       this.message = 'This account is already authorized'
     } else {
       account.authorized.push(this.req.body)
-        console.log(3)
       this.body = yield this.db.account.put(account)
       this.body.authorized = account.authorized
     }

@@ -33,30 +33,9 @@ exports.lib = {
     return doc.next && doc.next[0] && doc.next[0].dispensed
   },
 
-  map(emit, doc, val, prepend) {
-    var value = {
-      received:val, verified:0, disposed:0,
-    }
-
-    if (doc.verifiedAt)
-      value.verified = val
-
-    if ( ! doc.verifiedAt)
-      value.disposed = val
-
-    value.dispensed = doc.next.reduce(function(sum, next) {
-      return sum + (next.dispensed ? 0 : val)
-    }, 0)
-
-    var key = doc._id.slice(0, 10).split('-')
-
-    if (prepend)
-      key.unshift(prepend)
-
-    key.unshift(doc.shipment._id.slice(0, 10)) //recipient account id
-
-    return emit(key, value)
-  },
+  isRepacked(doc) {
+    return doc.shipment._id.indexOf('.') == -1
+  }
 }
 
 //Transactions
@@ -134,32 +113,57 @@ exports.views = {
     }
   },
 
-  'user._id':{
+  metrics:{
     map(doc) {
-      require('map')(emit, doc, 1, doc.user._id)
-    },
-    reduce
-  },
+      var qty = require('qty')(doc)
+      var value = require('value')(doc)
+      var isRepacked  = require('isRepacked')(doc)
+      var isReceived  = ! isRepacked
+      var isDispensed = require('isDispensed')(doc)
+      var isInventory = require('isInventory')(doc) || require('isPending')(doc)
+      var isAccepted  = doc.verifiedAt && ! isRepacked
+      var isDisposed  = ! doc.verifiedAt
 
-  count:{
-    map(doc) {
-      require('map')(emit, doc, 1)
-    },
-    reduce
-  },
+      var key = [doc.shipment._id.slice(0, 10)].concat(doc._id.slice(0, 10).split('-'))
 
-  rxs:{
-    map(doc) {
-      require('map')(emit, doc, require('qty')(doc)/30)
-    },
-    reduce
-  },
+      if (isReceived)
+        val('received')
 
-  value:{
-    map(doc) {
-      require('map')(emit, doc, require('value')(doc))
+      if (isDispensed)
+        val('dispensed')
+
+      if (isInventory)
+        val('inventory')
+
+      if (isRepacked)
+        val('repacked')
+
+      if (isAccepted)
+        val('accepted')
+
+      if (isDisposed)
+        val('disposed')
+
+      val(doc.user._id)
+
+      function val(type) {
+        var metrics = {}
+        metrics[type+'.count'] = 1
+        metrics[type+'.qty'] = qty
+        metrics[type+'.value'] = value
+        emit(key, metrics)
+      }
     },
-    reduce
+    reduce(ids, vals, rereduce) {
+      // reduce function give overflow (too many keys?) if not put into a property.
+      var result = {flat:{}}
+
+      for(var i in vals)
+        for (var metric in vals[i])
+          result.flat[metric] = (result.flat[metric] || 0) + (vals[i][metric] || 0)
+
+      return result
+    }
   }
 }
 
