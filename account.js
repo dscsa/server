@@ -28,7 +28,7 @@ exports.inventory = function* (id) { //account._id will not be set because googl
     return '"'+generic+'","'+Object.values(row.value).join('","')+'",'+!!o+','+orderCSV(o)
   })
 
-  order = Object.keys(order).map(generic => '"'+generic+'"'+',0,0,0,0,'+true+','+orderCSV(order[generic]))
+  order = Object.keys(order).map(generic => '"'+generic+'"'+',0,0,0,'+true+','+orderCSV(order[generic]))
 
   this.body = ['Generic Drug,Bin Qty,Repack Qty,Pending Qty,Ordered,Max Inventory,Min Qty,Min Days,Verified Message,Destroyed Message,Default Location,30 day price,90 day price,Vial Qty,Vial Size']
   .concat(view.concat(order).sort())
