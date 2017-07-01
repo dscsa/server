@@ -158,9 +158,11 @@ exports.views = {
       // reduce function give overflow (too many keys?) if not put into a property.
       var result = {flat:{}}
 
-      for(var i in vals)
-        for (var metric in vals[i])
-          result.flat[metric] = (result.flat[metric] || 0) + (vals[i][metric] || 0)
+      for(var i in vals) {
+        var val = rereduce ? vals[i].flat : vals[i]
+        for (var metric in val)
+          result.flat[metric] = (result.flat[metric] || 0) + (val[metric] || 0)
+      }
 
       return result
     }
