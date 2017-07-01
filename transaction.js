@@ -33,8 +33,36 @@ exports.lib = {
     return doc.next && doc.next[0] && doc.next[0].dispensed
   },
 
+  //It did not come in a shipment
   isRepacked(doc) {
     return doc.shipment._id.indexOf('.') == -1
+  },
+
+  //It came in a shipment
+  isReceived(doc) {
+    return doc.shipment._id.indexOf('.') != -1
+  },
+
+  //Checkmark sets verifiedAt
+  isAccepted(doc) {
+    return doc.verifiedAt && required('isReceived')
+  },
+
+  //No checkmark
+  isDisposed(doc) {
+    return ! doc.verifiedAt
+  },
+
+  dateKey(doc) {
+    return [doc.shipment._id.slice(0, 10)].concat(doc._id.slice(0, 10).split('-'))
+  },
+
+  metric(type) {
+    var metric = {}
+    metric[type+'.count'] = 1
+    metric[type+'.qty'] = require('qty')(doc)
+    metric[type+'.value'] = require('value')(doc)
+    return metric
   }
 }
 
@@ -113,60 +141,163 @@ exports.views = {
     }
   },
 
-  metrics:{
+  'received':{
     map(doc) {
-      var qty = require('qty')(doc)
-      var value = require('value')(doc)
-      var isRepacked  = require('isRepacked')(doc)
-      var isReceived  = ! isRepacked
-      var isDispensed = require('isDispensed')(doc)
-      var isInventory = require('isInventory')(doc) || require('isPending')(doc)
-      var isAccepted  = doc.verifiedAt && ! isRepacked
-      var isDisposed  = ! doc.verifiedAt
-
-      var key = [doc.shipment._id.slice(0, 10)].concat(doc._id.slice(0, 10).split('-'))
-
-      if (isReceived)
-        val('received')
-
-      if (isDispensed)
-        val('dispensed')
-
-      if (isInventory)
-        val('inventory')
-
-      if (isRepacked)
-        val('repacked')
-
-      if (isAccepted)
-        val('accepted')
-
-      if (isDisposed)
-        val('disposed')
-
-      //val(doc.user._id)
-
-      function val(type) {
-        var metrics = {}
-        metrics[type+'.count'] = 1
-        metrics[type+'.qty'] = qty
-        metrics[type+'.value'] = value
-        emit(key, metrics)
-      }
+      if (require('isReceived')(doc))
+        emit(require('dateKey')(doc), require('metric')('received'))
     },
-    reduce(ids, vals, rereduce) {
-      // reduce function give overflow (too many keys?) if not put into a property.
-      var result = {flat:{}}
+    reduce
+  },
 
-      for(var i in vals) {
-        var val = rereduce ? vals[i].flat : vals[i]
-        for (var metric in val)
-          result.flat[metric] = (result.flat[metric] || 0) + (val[metric] || 0)
-      }
+  'received.qty':{
+    map(doc) {
+      if (require('isReceived')(doc))
+        emit(require('dateKey')(doc), require('qty')(doc))
+    },
+    reduce:'_sum'
+  },
 
-      return result
-    }
-  }
+  'received.value':{
+    map(doc) {
+      if (require('isReceived')(doc))
+        emit(require('dateKey')(doc), require('value')(doc))
+    },
+    reduce:'_sum'
+  },
+
+  'received.count':{
+    map(doc) {
+      if (require('isReceived')(doc))
+        emit(require('dateKey')(doc))
+    },
+    reduce:'_count'
+  },
+
+  'repacked.qty':{
+    map(doc) {
+      if (require('isRepacked')(doc))
+        emit(require('dateKey')(doc), require('qty')(doc))
+    },
+    reduce:'_sum'
+  },
+
+  'repacked.value':{
+    map(doc) {
+      if (require('isRepacked')(doc))
+        emit(require('dateKey')(doc), require('value')(doc))
+    },
+    reduce:'_sum'
+  },
+
+  'repacked.count':{
+    map(doc) {
+      if (require('isRepacked')(doc))
+        emit(require('dateKey')(doc))
+    },
+    reduce:'_count'
+  },
+
+  'accepted.qty':{
+    map(doc) {
+      if (require('isAccepted')(doc))
+        emit(require('dateKey')(doc), require('qty')(doc))
+    },
+    reduce:'_sum'
+  },
+
+  'accepted.value':{
+    map(doc) {
+      if (require('isAccepted')(doc))
+        emit(require('dateKey')(doc), require('value')(doc))
+    },
+    reduce:'_sum'
+  },
+
+  'accepted.count':{
+    map(doc) {
+      if (require('isAccepted')(doc))
+        emit(require('dateKey')(doc))
+    },
+    reduce:'_count'
+  },
+
+  'disposed.qty':{
+    map(doc) {
+      if (require('isDisposed')(doc))
+        emit(require('dateKey')(doc), require('qty')(doc))
+    },
+    reduce:'_sum'
+  },
+
+  'disposed.value':{
+    map(doc) {
+      if (require('isDisposed')(doc))
+        emit(require('dateKey')(doc), require('value')(doc))
+    },
+    reduce:'_sum'
+  },
+
+  'disposed.count':{
+    map(doc) {
+      if (require('isDisposed')(doc))
+        emit(require('dateKey')(doc))
+    },
+    reduce:'_count'
+  },
+
+  'user':{
+    map(doc) {
+      emit(require('dateKey')(doc), require('metric')(doc.user._id))
+    },
+    reduce
+  },
+
+  // metrics:{
+  //   map(doc) {
+  //     var isRepacked  = require('isRepacked')(doc)
+  //     var isReceived  = ! isRepacked
+  //     var isDispensed = require('isDispensed')(doc)
+  //     var isInventory = require('isInventory')(doc) || require('isPending')(doc)
+  //     var isAccepted  = doc.verifiedAt && ! isRepacked
+  //     var isDisposed  = ! doc.verifiedAt
+  //
+  //
+  //
+  //     if (isReceived)
+  //       val('received')
+  //
+  //     if (isDispensed)
+  //       val('dispensed')
+  //
+  //     if (isInventory)
+  //       val('inventory')
+  //
+  //     if (isRepacked)
+  //       val('repacked')
+  //
+  //     if (isAccepted)
+  //       val('accepted')
+  //
+  //     if (isDisposed)
+  //       val('disposed')
+  //
+  //     //val(doc.user._id)
+  //
+  //
+  //   },
+  //   reduce
+  // }
+}
+
+function reduce(ids, vals, rereduce) {
+  // reduce function give overflow (too many keys?) if not put into a property.
+  var result = {}
+
+  for(var i in vals)
+    for (var metric in vals[i])
+      result[metric] = (result[metric] || 0) + (vals[i][metric] || 0)
+
+  return result
 }
 
 //Server-side validation methods to supplement shared ones.
@@ -347,24 +478,4 @@ exports.history = function *history(id) {
     account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
     return result
   }
-}
-
-function reduce(keys, vals, rereduce) {
-  // reduce function
-  var result = {received:0, verified:0, disposed:0, dispensed:0}
-
-  for(var i in vals) {
-    result.received  += vals[i].received
-    result.verified  += vals[i].verified
-    result.disposed  += vals[i].disposed
-    result.dispensed += vals[i].dispensed
-  }
-
-  result.percent = {
-    verified:result.verified/result.received,
-    disposed:result.disposed/result.received,
-    dispensed:result.disposed/result.verified,
-  }
-
-  return result
 }
