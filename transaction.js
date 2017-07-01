@@ -113,33 +113,35 @@ exports.views = {
       var qty = require('qty')(doc)
       var isInventory = require('isInventory')(doc)
       var isPending   = require('isPending')(doc)
-      var repack      = doc.shipment._id.indexOf('.') == -1
+      var isRepacked  = require('isRepacked')(doc)
       var key         = [doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id]
 
-      if (isInventory && repack)
+      if (isInventory && isRepacked)
         emit(key, {repack:qty})
 
-      if (isInventory && ! repack)
+      if (isInventory && ! isRepacked)
         emit(key, {bins:qty})
 
       if (isPending)
         emit(key, {pending:qty})
     },
-    reduce(keys, vals, rereduce) {
-      // reduce function
-      var result = {bins:0, repack:0, pending:0}
-
-      for(var i in vals) {
-        result.bins    += vals[i].bins || 0
-        result.repack  += vals[i].repack || 0
-        result.pending += vals[i].pending || 0
-      }
-
-      result.total = result.bins+result.repack+result.pending
-
-      return result
-    }
+    reduce
   },
+
+  // reduce(keys, vals, rereduce) {
+  //   // reduce function
+  //   var result = {bins:0, repack:0, pending:0}
+  //
+  //   for(var i in vals) {
+  //     result.bins    += vals[i].bins || 0
+  //     result.repack  += vals[i].repack || 0
+  //     result.pending += vals[i].pending || 0
+  //   }
+  //
+  //   result.total = result.bins+result.repack+result.pending
+  //
+  //   return result
+  // }
 
   'received':{
     map(doc) {
@@ -149,100 +151,28 @@ exports.views = {
     reduce
   },
 
-  'received.qty':{
-    map(doc) {
-      if (require('isReceived')(doc))
-        emit(require('dateKey')(doc), require('qty')(doc))
-    },
-    reduce:'_sum'
-  },
-
-  'received.value':{
-    map(doc) {
-      if (require('isReceived')(doc))
-        emit(require('dateKey')(doc), require('value')(doc))
-    },
-    reduce:'_sum'
-  },
-
-  'received.count':{
-    map(doc) {
-      if (require('isReceived')(doc))
-        emit(require('dateKey')(doc))
-    },
-    reduce:'_count'
-  },
-
-  'repacked.qty':{
+  'repacked':{
     map(doc) {
       if (require('isRepacked')(doc))
-        emit(require('dateKey')(doc), require('qty')(doc))
+        emit(require('dateKey')(doc), require('metric')('repacked'))
     },
-    reduce:'_sum'
+    reduce
   },
 
-  'repacked.value':{
-    map(doc) {
-      if (require('isRepacked')(doc))
-        emit(require('dateKey')(doc), require('value')(doc))
-    },
-    reduce:'_sum'
-  },
-
-  'repacked.count':{
-    map(doc) {
-      if (require('isRepacked')(doc))
-        emit(require('dateKey')(doc))
-    },
-    reduce:'_count'
-  },
-
-  'accepted.qty':{
+  'accepted':{
     map(doc) {
       if (require('isAccepted')(doc))
-        emit(require('dateKey')(doc), require('qty')(doc))
+        emit(require('dateKey')(doc), require('metric')('accepted'))
     },
-    reduce:'_sum'
+    reduce
   },
 
-  'accepted.value':{
-    map(doc) {
-      if (require('isAccepted')(doc))
-        emit(require('dateKey')(doc), require('value')(doc))
-    },
-    reduce:'_sum'
-  },
-
-  'accepted.count':{
-    map(doc) {
-      if (require('isAccepted')(doc))
-        emit(require('dateKey')(doc))
-    },
-    reduce:'_count'
-  },
-
-  'disposed.qty':{
+  'disposed':{
     map(doc) {
       if (require('isDisposed')(doc))
-        emit(require('dateKey')(doc), require('qty')(doc))
+        emit(require('dateKey')(doc), require('metric')('disposed'))
     },
-    reduce:'_sum'
-  },
-
-  'disposed.value':{
-    map(doc) {
-      if (require('isDisposed')(doc))
-        emit(require('dateKey')(doc), require('value')(doc))
-    },
-    reduce:'_sum'
-  },
-
-  'disposed.count':{
-    map(doc) {
-      if (require('isDisposed')(doc))
-        emit(require('dateKey')(doc))
-    },
-    reduce:'_count'
+    reduce
   },
 
   'user':{
@@ -250,43 +180,7 @@ exports.views = {
       emit(require('dateKey')(doc), require('metric')(doc.user._id))
     },
     reduce
-  },
-
-  // metrics:{
-  //   map(doc) {
-  //     var isRepacked  = require('isRepacked')(doc)
-  //     var isReceived  = ! isRepacked
-  //     var isDispensed = require('isDispensed')(doc)
-  //     var isInventory = require('isInventory')(doc) || require('isPending')(doc)
-  //     var isAccepted  = doc.verifiedAt && ! isRepacked
-  //     var isDisposed  = ! doc.verifiedAt
-  //
-  //
-  //
-  //     if (isReceived)
-  //       val('received')
-  //
-  //     if (isDispensed)
-  //       val('dispensed')
-  //
-  //     if (isInventory)
-  //       val('inventory')
-  //
-  //     if (isRepacked)
-  //       val('repacked')
-  //
-  //     if (isAccepted)
-  //       val('accepted')
-  //
-  //     if (isDisposed)
-  //       val('disposed')
-  //
-  //     //val(doc.user._id)
-  //
-  //
-  //   },
-  //   reduce
-  // }
+  }
 }
 
 function reduce(ids, vals, rereduce) {
