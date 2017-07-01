@@ -117,13 +117,13 @@ exports.views = {
       var key         = [doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id]
 
       if (isInventory && isRepacked)
-        emit(key, {repack:qty})
+        emit(key, {bins:0, pending:0, repack:qty})
 
       if (isInventory && ! isRepacked)
-        emit(key, {bins:qty})
+        emit(key, {bins:qty, pending:0, repack:0})
 
       if (isPending)
-        emit(key, {pending:qty})
+        emit(key, {bins:0, pending:qty, repack:0})
     },
     reduce
   },
