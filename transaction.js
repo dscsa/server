@@ -45,7 +45,7 @@ exports.lib = {
 
   //Checkmark sets verifiedAt
   isAccepted(doc) {
-    return doc.verifiedAt && required('./isReceived')
+    return doc.verifiedAt && require('isReceived')
   },
 
   //No checkmark
