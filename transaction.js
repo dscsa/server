@@ -144,7 +144,7 @@ exports.views = {
       if (isDisposed)
         val('disposed')
 
-      val(doc.user._id)
+      //val(doc.user._id)
 
       function val(type) {
         var metrics = {}
