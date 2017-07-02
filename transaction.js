@@ -40,27 +40,17 @@ exports.lib = {
 
   //It came in a shipment
   isReceived(doc) {
-    return doc.shipment && (doc.shipment._id.indexOf('.') != -1)
+    return doc.shipment._id.indexOf('.') != -1
   },
 
   //Checkmark sets verifiedAt
   isAccepted(doc) {
-    var accepted = require('isReceived') && doc.verifiedAt
-    if (accepted) {
-      log('accepted')
-      log(doc)
-    }
-    return accepted
+    return doc.verifiedAt && require('isReceived')(doc)
   },
 
   //No checkmark
   isDisposed(doc) {
-    var disposed = require('isReceived') && ! doc.verifiedAt
-    if (disposed) {
-      log('disposed')
-      log(doc)
-    }
-    return disposed
+    return  ! doc.verifiedAt && require('isReceived')(doc)
   },
 
   dateKey(doc) {
