@@ -135,21 +135,6 @@ exports.views = {
     reduce
   },
 
-  // reduce(keys, vals, rereduce) {
-  //   // reduce function
-  //   var result = {bins:0, repack:0, pending:0}
-  //
-  //   for(var i in vals) {
-  //     result.bins    += vals[i].bins || 0
-  //     result.repack  += vals[i].repack || 0
-  //     result.pending += vals[i].pending || 0
-  //   }
-  //
-  //   result.total = result.bins+result.repack+result.pending
-  //
-  //   return result
-  // }
-
   count:{
     map(doc) {
       emit(require('dateKey')(doc), require('metrics')(doc, 1))

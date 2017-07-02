@@ -43,12 +43,6 @@ exports.count = csv('count')
 exports.qty = csv('qty')
 exports.value = csv('value')
 
-exports.received = csv('received')
-exports.repacked = csv('repacked')
-exports.accepted = csv('accepted')
-exports.disposed = csv('disposed')
-exports.user = csv('user')
-
 function csv(metric) {
   return function* (id) { //account._id will not be set because google does not send cookie
     let view = yield this.db.transaction.query(metric, {group_level:this.query.group_level, startkey:[id], endkey:[id, {}]})
