@@ -186,8 +186,20 @@ keys(function() {
   r('/account/:id/inventory')     //Allow user to get, modify, & delete docs
     .get(models.account.inventory)
 
-  r('/account/:id/metrics')     //Allow user to get, modify, & delete docs
-    .get(models.account.metrics)
+  r('/account/:id/received')     //Allow user to get, modify, & delete docs
+    .get(models.account.received)
+
+  r('/account/:id/repacked')     //Allow user to get, modify, & delete docs
+  .get(models.account.repacked)
+
+  r('/account/:id/accepted')     //Allow user to get, modify, & delete docs
+  .get(models.account.accepted)
+
+  r('/account/:id/disposed')     //Allow user to get, modify, & delete docs
+  .get(models.account.disposed)
+
+  r('/account/:id/user')     //Allow user to get, modify, & delete docs
+  .get(models.account.user)
 
   r('/:db/:id')
     .get(function*(db, id) {
