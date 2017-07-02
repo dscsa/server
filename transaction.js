@@ -63,6 +63,35 @@ exports.lib = {
     metric[type+'.qty'] = require('qty')(doc)
     metric[type+'.value'] = require('value')(doc)
     return metric
+  },
+
+  metrics(doc, val) {
+    var metric = {}
+
+    if (require('isReceived')(doc))
+      metric['received'] = val
+
+    if (require('isAccepted')(doc))
+      metric['accepted'] = val
+
+    if (require('isDisposed')(doc))
+      metric['disposed'] = val
+
+    if (require('isInventory')(doc))
+      metric['inventory'] = val
+
+    if (require('isPending')(doc))
+      metric['pending'] = val
+
+    if (require('isRepacked')(doc))
+      metric['repacked'] = val
+
+    if (require('isDispensed')(doc))
+      metric['dispensed'] = val
+
+    metric[doc.user._id] = val
+
+    return metric
   }
 }
 
@@ -142,6 +171,27 @@ exports.views = {
   //
   //   return result
   // }
+
+  count:{
+    map(doc) {
+      emit(require('dateKey')(doc), require('metrics')(doc, 1))
+    },
+    reduce
+  },
+
+  qty:{
+    map(doc) {
+      emit(require('dateKey')(doc), require('metrics')(doc, require('qty')(doc)))
+    },
+    reduce
+  },
+
+  value:{
+    map(doc) {
+      emit(require('dateKey')(doc), require('metrics')(doc, require('value')(doc)))
+    },
+    reduce
+  },
 
   'received':{
     map(doc) {

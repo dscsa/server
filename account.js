@@ -39,6 +39,9 @@ exports.inventory = function* (id) { //account._id will not be set because googl
     return '"'+o.maxInventory+'","'+o.minQty+'","'+o.minDays+'","'+o.verifiedMessage+'","'+o.destroyedMessage+'","'+o.defaultLocation+'","'+o.price30+'","'+o.price90+'","'+o.vialQty+'","'+o.vialSize+'"'
   }
 }
+exports.count = csv('count')
+exports.qty = csv('qty')
+exports.value = csv('value')
 
 exports.received = csv('received')
 exports.repacked = csv('repacked')
@@ -49,10 +52,11 @@ exports.user = csv('user')
 function csv(metric) {
   return function* (id) { //account._id will not be set because google does not send cookie
     let view = yield this.db.transaction.query(metric, {group_level:this.query.group_level, startkey:[id], endkey:[id, {}]})
-    this.body = view.rows.reduce((csv, row) => {
-      const date = row.key && row.key.slice(1).join('-')
-      return csv+'\n'+date+','+Object.values(row.value)
-    }, 'date,'+Object.keys(view.rows[0].value))
+    this.body = view
+    // this.body = view.rows.reduce((csv, row) => {
+    //   const date = row.key && row.key.slice(1).join('-')
+    //   return csv+'\n'+date+','+Object.values(row.value)
+    // }, 'date,'+Object.keys(view.rows[0].value))
   }
 }
 
