@@ -50,7 +50,7 @@ exports.lib = {
 
   //No checkmark
   isDisposed(doc) {
-    return ! doc.verifiedAt
+    return ! doc.verifiedAt && require('isReceived')
   },
 
   dateKey(doc) {
