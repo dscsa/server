@@ -57,37 +57,15 @@ exports.lib = {
     return [doc.shipment._id.slice(0, 10)].concat(doc._id.slice(0, 10).split('-'))
   },
 
-  metric(type) {
-    var metric = {}
-    metric[type+'.count'] = 1
-    metric[type+'.qty'] = require('qty')(doc)
-    metric[type+'.value'] = require('value')(doc)
-    return metric
-  },
-
   metrics(doc, val) {
-    var metric = {}
-
-    if (require('isReceived')(doc))
-      metric['received'] = val
-
-    if (require('isAccepted')(doc))
-      metric['accepted'] = val
-
-    if (require('isDisposed')(doc))
-      metric['disposed'] = val
-
-    if (require('isInventory')(doc))
-      metric['inventory'] = val
-
-    if (require('isPending')(doc))
-      metric['pending'] = val
-
-    if (require('isRepacked')(doc))
-      metric['repacked'] = val
-
-    if (require('isDispensed')(doc))
-      metric['dispensed'] = val
+    var metric = {
+      received:require('isReceived')(doc) ? val : 0,
+      accepted:require('isAccepted')(doc) ? val : 0,
+      disposed:require('isDisposed')(doc) ? val : 0,
+      inventory:require('isInventory')(doc) || require('isPending')(doc) ? val : 0,
+      repacked:require('isRepacked')(doc) ? val : 0,
+      dispensed:require('isDispensed')(doc) ? val : 0
+    }
 
     metric[doc.user._id] = val
 
@@ -189,45 +167,6 @@ exports.views = {
   value:{
     map(doc) {
       emit(require('dateKey')(doc), require('metrics')(doc, require('value')(doc)))
-    },
-    reduce
-  },
-
-  'received':{
-    map(doc) {
-      if (require('isReceived')(doc))
-        emit(require('dateKey')(doc), require('metric')('received'))
-    },
-    reduce
-  },
-
-  'repacked':{
-    map(doc) {
-      if (require('isRepacked')(doc))
-        emit(require('dateKey')(doc), require('metric')('repacked'))
-    },
-    reduce
-  },
-
-  'accepted':{
-    map(doc) {
-      if (require('isAccepted')(doc))
-        emit(require('dateKey')(doc), require('metric')('accepted'))
-    },
-    reduce
-  },
-
-  'disposed':{
-    map(doc) {
-      if (require('isDisposed')(doc))
-        emit(require('dateKey')(doc), require('metric')('disposed'))
-    },
-    reduce
-  },
-
-  'user':{
-    map(doc) {
-      emit(require('dateKey')(doc), require('metric')(doc.user._id))
     },
     reduce
   }
