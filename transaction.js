@@ -45,12 +45,12 @@ exports.lib = {
 
   //Checkmark sets verifiedAt
   isAccepted(doc) {
-    return doc.verifiedAt && require('isReceived')
+    return require('isReceived') && doc.verifiedAt 
   },
 
   //No checkmark
   isDisposed(doc) {
-    return ! doc.verifiedAt && require('isReceived')
+    return require('isReceived') && ! doc.verifiedAt
   },
 
   dateKey(doc) {
