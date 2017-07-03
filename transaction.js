@@ -135,6 +135,14 @@ exports.views = {
     reduce
   },
 
+  debug(doc) {
+    if (require('isAccepted')(doc) && ! (require('isInventory')(doc) || require('isPending')(doc)))
+      emit(require('dateKey')(doc), 'accepted not inventory')
+
+    if ( ! require('isAccepted')(doc) && (require('isInventory')(doc) || require('isPending')(doc)))
+      emit(require('dateKey')(doc), 'inventory not accepted')
+  }
+
   count:{
     map(doc) {
       emit(require('dateKey')(doc), require('metrics')(doc, 1))
