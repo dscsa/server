@@ -108,11 +108,11 @@ exports.views = {
   },
 
   'inventory.drug.generic':function(doc) {
-    require('isInventory')(doc) && doc.drug && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
+    require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
   },
 
   'dispensed.drug.generic':function(doc) {
-    require('isDispensed')(doc) && doc.drug && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
+    require('isDispensed')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
   },
 
   inventory:{
