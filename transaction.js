@@ -35,10 +35,10 @@ exports.lib = {
 
   //It did not come in a shipment
   isRepacked(doc) {
-    return doc.shipment && (doc.shipment._id.indexOf('.') == -1)
+    return doc.bin && doc.bin.length == 3
   },
 
-  //It came in a shipment
+  //It came in a shipment, not restocked or repacked which both have shipment._id == account._id
   isReceived(doc) {
     return doc.shipment._id.indexOf('.') != -1
   },
