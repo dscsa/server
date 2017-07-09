@@ -1,6 +1,6 @@
 "use strict"
 //defaults
-module.exports = exports = Object.create(require('./model'))
+module.exports = exports = Object.create(require('../helpers/model'))
 
 exports.views = {
   authorized(doc) {

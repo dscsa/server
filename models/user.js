@@ -1,9 +1,9 @@
 "use strict"
 
 //defaults
-module.exports = exports = Object.create(require('./model'))
+module.exports = exports = Object.create(require('../helpers/model'))
 
-let admin = {ajax:{auth:require('../../keys/dev')}}
+let admin = {ajax:{auth:require('../../../keys/dev')}}
 
 exports.views = {
   'account._id':function(doc) {
@@ -36,7 +36,7 @@ function deleteLogin(doc) {
 function saveLogin(doc, val, key, opts) {
   if ( ! doc._rev || (doc._rev.split('-')[0] == 1 && opts.new_edits === false)) {
     //User ._id not .phone since _id has had all extraneous characters removed
-    let _user = {name:doc._id, password:doc.password, roles:[doc.account._id]}
+    let _user = {name:doc._id, password:doc.password, roles:['allAccounts', doc.account._id]}
     console.log('saveLogin', _user, doc)
     delete doc.password //we don't want to save this in the user table
     return this.db._users.put(_user, admin).then(_ => session.call(this, _user)).catch(err => console.log('new session err', err))
@@ -54,7 +54,7 @@ function session(_user) {
 
     //this.status = 201
     this.set(res.headers)
-    const cookie = JSON.stringify({_id:res.body.name, account:{_id:res.body.roles[0]}})
+    const cookie = JSON.stringify({_id:res.body.name, account:{_id:res.body.roles[1]}})
     this.cookies.set('AuthUser', cookie, {httpOnly:false})
     return cookie
   })

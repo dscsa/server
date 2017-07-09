@@ -6,5 +6,5 @@ exports.validate = function(model) {
    .ensure('_id').set(doc => 'org.couchdb.user:'+doc.name)
    .ensure('name').required().typeTel()
    .ensure('type').set(doc => 'user')
-   .ensure('roles').typeArray().minLength(1).maxLength(1)
+   .ensure('roles').typeArray().minLength(2).maxLength(2) //allAccounts, and account._id
 }

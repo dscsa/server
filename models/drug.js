@@ -1,9 +1,9 @@
 "use strict"
 //defaults
-module.exports = exports = Object.create(require('./model'))
+module.exports = exports = Object.create(require('../helpers/model'))
 
 let crypto = require('crypto')
-let admin  = {ajax:{auth:require('../../keys/dev.js')}}
+let admin  = {ajax:{auth:require('../../../keys/dev.js')}}
 
 //Drugs
 exports.views = {

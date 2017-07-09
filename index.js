@@ -1,25 +1,25 @@
 "use strict"
 
-let keys    = require('./keys')
 let fs      = require('fs')
 let baseUrl = 'http://localhost:5984/'
 let app     = require('koa')()
-let r       = require('./router')(app)
-let body    = require('./body')
+let keys    = require('./helpers/keys')
+let r       = require('./helpers/router')(app)
+let body    = require('./helpers/body')
 let pouchdb = require('../pouch/pouchdb-server')
 let models  = {
-  drug        : require('./drug'),
-  account     : require('./account'),
-  user        : require('./user'),
-  shipment    : require('./shipment'),
-  transaction : require('./transaction'),
+  drug        : require('./models/drug'),
+  account     : require('./models/account'),
+  user        : require('./models/user'),
+  shipment    : require('./models/shipment'),
+  transaction : require('./models/transaction'),
 }
 
 keys(function() {
   //Parse our manual cookie so we know account _ids without relying on couchdb
   //Collect the request body so that we can use it with pouch
   app.use(function*(next) {
-    this.db = pouchdb
+    this.db   = pouchdb
     //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
     this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
     this.set('access-control-allow-headers', 'accept, accept-encoding, accept-language, cache-control, connection, if-none-match, authorization, content-type, host, origin, pragma, referer, x-csrf-token, user-agent')
@@ -128,6 +128,9 @@ keys(function() {
     .get(get_asset)
 
   r('/csv/:file', {end:false})
+    .get(get_asset)
+
+  r('/favicon.ico', {end:false})
     .get(get_asset)
 
   r('/:db/', {strict:true}) //Shows DB info including update_seq#

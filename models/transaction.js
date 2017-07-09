@@ -1,6 +1,6 @@
 "use strict"
 //defaults
-module.exports = exports = Object.create(require('./model'))
+module.exports = exports = Object.create(require('../helpers/model'))
 
 let drug     = require('./drug')
 let shipment = require('./shipment')
@@ -50,7 +50,7 @@ exports.lib = {
 
   //No checkmark
   isDisposed(doc) {
-    return  ! doc.verifiedAt && require('isReceived')(doc)
+    return ! doc.verifiedAt && require('isReceived')(doc)
   },
 
   dateKey(doc) {
