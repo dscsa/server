@@ -1,11 +1,11 @@
 "use strict"
 
 let fs      = require('fs')
-let baseUrl = 'http://localhost:5984/'
 let app     = require('koa')()
 let keys    = require('./helpers/keys')
 let r       = require('./helpers/router')(app)
 let body    = require('./helpers/body')
+let ajax    = require('./helpers/ajax')
 let pouchdb = require('../pouch/pouchdb-server')
 let models  = {
   drug        : require('./models/drug'),
@@ -20,6 +20,7 @@ keys(function() {
   //Collect the request body so that we can use it with pouch
   app.use(function*(next) {
     this.db   = pouchdb
+    this.ajax = ajax({baseUrl:'http://localhost:5984'})
     //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
     this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
     this.set('access-control-allow-headers', 'accept, accept-encoding, accept-language, cache-control, connection, if-none-match, authorization, content-type, host, origin, pragma, referer, x-csrf-token, user-agent')
@@ -40,46 +41,6 @@ keys(function() {
 
     this.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
     this.set('transfer-encoding', 'chunked') //This was sometimes causing errors when Jess/Adam logged in with a PC ERR: Content Length Mismatch
-  })
-
-  app.use(function*(next) {
-    //TODO should we be relying on a private method here?
-    //maybe use node's native http library or require "request"?
-    this.ajax = opts => {
-      let options  = {
-        baseUrl,
-        url:opts.url,
-        headers:opts.headers,
-        method:opts.method,
-        timeout:opts.timeout,
-        body:opts.pipe && ! opts.body ? opts : opts.body
-      }
-
-      //TODO share this code with client?
-      //Promisify request object but don't lose ability to stream it
-      //PouchDB's ajaxCore makes there be a callback even if not needed
-      //this means that request collects the body and adds to response
-      let request = this.db.user._ajax(options, _ => null)
-      let promise = new Promise((resolve, reject) => {
-        request.on('response', response => {
-          delete response.headers['access-control-expose-headers'] //this was overriding our index.js default CORS headers.
-          setTimeout(_ => resolve(response), 20) //is there a better way to 1) return stream 2) but wait for body property to be set
-        })
-        const stack = new Error().stack
-        request.on('error', err => {
-          err.stack += '\n'+stack
-          console.log('err', err)
-          reject(err)
-        })
-      })
-
-      request.then = promise.then.bind(promise)
-      request.catch = promise.catch.bind(promise)
-
-      return request
-    }
-
-    yield next
   })
 
   app.use(function *(next) {
