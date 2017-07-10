@@ -99,12 +99,8 @@ function nested2flat(obj) {
   var flat = {}
   for (let i in obj) {
 
-    if (obj[i] === null || typeof obj[i] != 'object') {
+    if (obj[i] === null || Array.isArray(obj[i]) || typeof obj[i] != 'object') {
       flat[i] = '"'+obj[i]+'"'; continue
-    }
-
-    if (Array.isArray(obj[i])) {
-      flat[i] = obj[i].toString(); continue
     }
 
     let flatObject = nested2flat(obj[i])
