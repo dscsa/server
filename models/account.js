@@ -40,7 +40,7 @@ exports.inventory = function* (id) { //account._id will not be set because googl
   for (let generic in account.ordered)
     rows.push({key:[id, generic], value:{ordered:true, order:account.ordered[generic]}})
 
-  this.body = view2csv({rows}, ["bins","repack","pending","ordered","order.maxInventory", "order.minQty", "order.minDays","order.verifiedMessage","order.destroyedMessage", "order.defaultBin","order.price30","order.price90","order.vialQty","order.vialSize"])
+  this.body = view2csv({rows}, ["group","bins","repack","pending","ordered","order.maxInventory", "order.minQty", "order.minDays","order.verifiedMessage","order.destroyedMessage", "order.defaultBin","order.price30","order.price90","order.vialQty","order.vialSize"])
 }
 
 exports.count = function* (id) { //account._id will not be set because google does not send cookie
@@ -70,9 +70,11 @@ function opts(group_level, id) {
 //If worried about headers being dynamic you can optional pass array
 function view2csv(view, fixedHeader) {
 
-  let rows = [], group_level = view.rows[0].key.slice(1)
+  let rows = []
   //Collect and get union of all row headers
   const header = view.rows.reduce((header, row) => {
+    row.value.group = row.key.slice(1)
+
     let flat = nested2flat(row.value)
 
     rows.push(flat)
@@ -86,28 +88,29 @@ function view2csv(view, fixedHeader) {
         header.push(field)
 
     return header
-  }, [])
+  }, ['group'])
 
   return rows.reduce((csv, row) => {
-    console.log('row', row)
-    return csv+`\n"${group_level}",`+header.map(i => row[i]) //map handles differences in property ordering
-  }, 'group_level,'+header)
+    return csv+'\n'+header.map(i => row[i]) //map handles differences in property ordering
+  }, header)
 }
 
 function nested2flat(obj) {
   var flat = {}
   for (let i in obj) {
+
     if (obj[i] === null || typeof obj[i] != 'object') {
       flat[i] = '"'+obj[i]+'"'; continue
     }
-    let flatObject = nested2flat(obj[i])
-    let delimited = i && !Array.isArray(obj)
-    for (let j in flatObject) {
-      let key = delimited ? i + '.' + j : j
 
-      flat[key]
-        ? flat[key] += '","'+flatObject[j]
-        : flat[key] = flatObject[j]
+    if (Array.isArray(obj[i])) {
+      flat[i] = obj[i].toString(); continue
+    }
+
+    let flatObject = nested2flat(obj[i])
+
+    for (let j in flatObject) {
+      flat[i+'.'+j] = flatObject[j]
     }
   }
   return flat
