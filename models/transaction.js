@@ -6,6 +6,11 @@ let drug     = require('./drug')
 let shipment = require('./shipment')
 
 exports.lib = {
+
+  count(doc) { //silly but used by metric lib
+    return 1
+  },
+
   qty(doc) {
     return doc.qty.to || doc.qty.from || 0
   },
@@ -57,21 +62,28 @@ exports.lib = {
     return [doc.shipment._id.slice(0, 10)].concat(doc._id.slice(0, 10).split('-'))
   },
 
-  metrics(doc, val) {
-    var metric = {
-      received:require('isReceived')(doc) ? val : 0,
-      accepted:require('isAccepted')(doc) ? val : 0,
-      disposed:require('isDisposed')(doc) ? val : 0,
-      inventory:require('isInventory')(doc) || require('isPending')(doc) ? val : 0,
-      repacked:require('isRepacked')(doc) ? val : 0,
-      dispensed:require('isDispensed')(doc) ? val : 0
-    }
-
-    metric['user '+doc.user._id] = val
+  metrics(doc, type) {
+    var val = require(type)(doc)
+  
+    var metric = {}
+    metric[type+'.received'] = require('isReceived')(doc) ? val : 0,
+    metric[type+'.accepted'] = require('isAccepted')(doc) ? val : 0,
+    metric[type+'.disposed'] = require('isDisposed')(doc) ? val : 0,
+    metric[type+'.inventory'] = require('isInventory')(doc) || require('isPending')(doc) ? val : 0,
+    metric[type+'.repacked'] = require('isRepacked')(doc) ? val : 0,
+    metric[type+'.dispensed'] = require('isDispensed')(doc) ? val : 0
+    metric[type+'.user '+doc.user._id] = val
 
     return metric
   }
 }
+
+// if (type == 'qty')
+//   var val = require('qty')(doc)
+// if (type == 'value')
+//   var val = require('value')(doc)
+// if (type == 'count')
+//   var val = require('count')(doc)
 
 //Transactions
 exports.views = {
@@ -145,21 +157,21 @@ exports.views = {
 
   count:{
     map(doc) {
-      emit(require('dateKey')(doc), require('metrics')(doc, 1))
+      emit(require('dateKey')(doc), require('metrics')(doc, 'count'))
     },
     reduce
   },
 
   qty:{
     map(doc) {
-      emit(require('dateKey')(doc), require('metrics')(doc, require('qty')(doc)))
+      emit(require('dateKey')(doc), require('metrics')(doc, 'qty'))
     },
     reduce
   },
 
   value:{
     map(doc) {
-      emit(require('dateKey')(doc), require('metrics')(doc, require('value')(doc)))
+      emit(require('dateKey')(doc), require('metrics')(doc, 'value'))
     },
     reduce
   },
@@ -167,7 +179,7 @@ exports.views = {
   record:{
     map(doc) {
       var date = doc._id.slice(0, 10).split('-')
-      emit([doc.shipment._id.slice(0, 10), doc.drug.generic, date[0], date[1], date[2], doc._id], require('metrics')(doc, require('qty')(doc)))
+      emit([doc.shipment._id.slice(0, 10), doc.drug.generic, date[0], date[1], date[2], doc._id], require('metrics')(doc, 'qty'))
     },
     reduce
   }
