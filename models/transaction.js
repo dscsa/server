@@ -67,7 +67,7 @@ exports.lib = {
       dispensed:require('isDispensed')(doc) ? val : 0
     }
 
-    metric[doc.user._id] = val
+    metric['user '+doc.user._id] = val
 
     return metric
   }
@@ -160,6 +160,14 @@ exports.views = {
   value:{
     map(doc) {
       emit(require('dateKey')(doc), require('metrics')(doc, require('value')(doc)))
+    },
+    reduce
+  },
+
+  record:{
+    map(doc) {
+      var date = doc._id.slice(0, 10).split('-')
+      emit([doc.shipment._id.slice(0, 10), doc.drug.generic, date[0], date[1], date[2], doc._id], require('metrics')(doc, require('qty')(doc)))
     },
     reduce
   }

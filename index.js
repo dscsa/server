@@ -147,32 +147,20 @@ keys(function() {
   r('/transaction/:id/history')
     .get(models.transaction.history)
 
-  r('/account/:id/inventory')     //Allow user to get, modify, & delete docs
+  r('/account/:id/inventory.csv')     //Allow user to get, modify, & delete docs
     .get(models.account.inventory)
 
-  r('/account/:id/count')     //Allow user to get, modify, & delete docs
-  .get(models.account.count)
+  r('/account/:id/record.csv')     //Allow user to get, modify, & delete docs
+    .get(models.account.record)
 
-  r('/account/:id/qty')     //Allow user to get, modify, & delete docs
-  .get(models.account.qty)
+  r('/account/:id/count.csv')     //Allow user to get, modify, & delete docs
+    .get(models.account.count)
 
-  r('/account/:id/value')     //Allow user to get, modify, & delete docs
+  r('/account/:id/qty.csv')     //Allow user to get, modify, & delete docs
+    .get(models.account.qty)
+
+  r('/account/:id/value.csv')     //Allow user to get, modify, & delete docs
     .get(models.account.value)
-
-  r('/account/:id/received')     //Allow user to get, modify, & delete docs
-    .get(models.account.received)
-
-  r('/account/:id/repacked')     //Allow user to get, modify, & delete docs
-  .get(models.account.repacked)
-
-  r('/account/:id/accepted')     //Allow user to get, modify, & delete docs
-  .get(models.account.accepted)
-
-  r('/account/:id/disposed')     //Allow user to get, modify, & delete docs
-  .get(models.account.disposed)
-
-  r('/account/:id/user')     //Allow user to get, modify, & delete docs
-  .get(models.account.user)
 
   r('/:db/:id')
     .get(function*(db, id) {

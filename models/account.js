@@ -3,6 +3,8 @@
 module.exports = exports = Object.create(require('../helpers/model'))
 
 exports.views = {
+  //Use _bulk_get here instead? Not supported in 1.6
+  //this.db.account.get({_id:{$gt:null, $in:accounts[0].authorized}}),
   authorized(doc) {
     for (var i in doc.authorized) {
       emit(doc.authorized[i])
@@ -12,45 +14,103 @@ exports.views = {
   state(doc) {
     emit(doc.state)
   }
-  //Use _bulk_get here instead? Not supported in 1.6
-  //this.db.account.get({_id:{$gt:null, $in:accounts[0].authorized}}),
 }
 
+//Shows everything in inventory AND all ordered items not in inventory
 exports.inventory = function* (id) { //account._id will not be set because google does not send cookie
-  let view  = this.db.transaction.query('inventory', {group_level:2, startkey:[id], endkey:[id, {}]})
-  let all   = yield [view, this.db.account.get(id)]
-  let order = all[1].ordered
+  const [inventory, account] = yield [
+    this.db.transaction.query('inventory', opts(2, id)),
+    this.db.account.get(id)
+  ]
 
-  view = all[0].rows.map(row => {
+  //Match inventory with ordered when applicable
+  let rows = inventory.rows.map(row => {
     let generic = row.key[1]
-    let o = order[generic]
-    delete order[generic]
-    return '"'+generic+'","'+Object.values(row.value).join('","')+'",'+!!o+','+orderCSV(o)
+
+    if (account.ordered[generic]) {
+      row.value.ordered = true
+      row.value.order = account.ordered[generic]
+      delete account.ordered[generic]
+    }
+
+    return row
   })
 
-  order = Object.keys(order).map(generic => '"'+generic+'"'+',0,0,0,'+true+','+orderCSV(order[generic]))
+  //Add unmatched orders to the end of array
+  for (let generic in account.ordered)
+    rows.push({key:[id, generic], value:{ordered:true, order:account.ordered[generic]}})
 
-  this.body = ['Generic Drug,Bin Qty,Repack Qty,Pending Qty,Ordered,Max Inventory,Min Qty,Min Days,Verified Message,Destroyed Message,Default Location,30 day price,90 day price,Vial Qty,Vial Size']
-  .concat(view.concat(order).sort())
-  .join('\n')
-  .replace(/undefined/g, '')
-
-  function orderCSV(o = {}) {
-    return '"'+o.maxInventory+'","'+o.minQty+'","'+o.minDays+'","'+o.verifiedMessage+'","'+o.destroyedMessage+'","'+o.defaultLocation+'","'+o.price30+'","'+o.price90+'","'+o.vialQty+'","'+o.vialSize+'"'
-  }
+  this.body = view2csv({rows}, ["bins","repack","pending","ordered","order.maxInventory", "order.minQty", "order.minDays","order.verifiedMessage","order.destroyedMessage", "order.defaultBin","order.price30","order.price90","order.vialQty","order.vialSize"])
 }
-exports.count = csv('count')
-exports.qty = csv('qty')
-exports.value = csv('value')
 
-function csv(metric) {
-  return function* (id) { //account._id will not be set because google does not send cookie
-    let view = yield this.db.transaction.query(metric, {group_level:this.query.group_level, startkey:[id], endkey:[id, {}]})
-    this.body = view.rows.reduce((csv, row) => {
-      const date = row.key && row.key.slice(1).join('-')
-      return csv+'\n'+date+','+Object.values(row.value)
-    }, 'date,'+Object.keys(view.rows[0].value))
+exports.count = function* (id) { //account._id will not be set because google does not send cookie
+  const view = yield this.db.transaction.query('count', opts(this.query.group_level, id))
+  this.body  = view2csv(view)
+}
+
+exports.qty = function* (id) { //account._id will not be set because google does not send cookie
+  const view = yield this.db.transaction.query('qty', opts(this.query.group_level, id))
+  this.body  = view2csv(view)
+}
+
+exports.value = function* (id) { //account._id will not be set because google does not send cookie
+  const view = yield this.db.transaction.query('value', opts(this.query.group_level, id))
+  this.body  = view2csv(view)
+}
+
+exports.record = function* (id) { //account._id will not be set because google does not send cookie
+  const view = yield this.db.transaction.query('record', opts(this.query.group_level, id))
+  this.body  = view2csv(view)
+}
+
+function opts(group_level, id) {
+   return {group_level:group_level || 1, startkey:[id], endkey:[id, {}]}
+}
+
+//If worried about headers being dynamic you can optional pass array
+function view2csv(view, fixedHeader) {
+
+  let rows = [], group_level = view.rows[0].key.slice(1)
+  //Collect and get union of all row headers
+  const header = view.rows.reduce((header, row) => {
+    let flat = nested2flat(row.value)
+
+    rows.push(flat)
+
+    if (fixedHeader)
+      return fixedHeader
+
+    //If no fixed header, get union of the headers for every row
+    for (let field in flat)
+      if ( ! ~ header.indexOf(field))
+        header.push(field)
+
+    return header
+  }, [])
+
+  return rows.reduce((csv, row) => {
+    console.log('row', row)
+    return csv+`\n"${group_level}",`+header.map(i => row[i]) //map handles differences in property ordering
+  }, 'group_level,'+header)
+}
+
+function nested2flat(obj) {
+  var flat = {}
+  for (let i in obj) {
+    if (obj[i] === null || typeof obj[i] != 'object') {
+      flat[i] = '"'+obj[i]+'"'; continue
+    }
+    let flatObject = nested2flat(obj[i])
+    let delimited = i && !Array.isArray(obj)
+    for (let j in flatObject) {
+      let key = delimited ? i + '.' + j : j
+
+      flat[key]
+        ? flat[key] += '","'+flatObject[j]
+        : flat[key] = flatObject[j]
+    }
   }
+  return flat
 }
 
 exports.validate = function(model) {
