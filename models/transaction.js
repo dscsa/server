@@ -64,7 +64,7 @@ exports.lib = {
 
   metrics(doc, type) {
     var val = require(type)(doc)
-  
+
     var metric = {}
     metric[type+'.received'] = require('isReceived')(doc) ? val : 0,
     metric[type+'.accepted'] = require('isAccepted')(doc) ? val : 0,
@@ -72,7 +72,6 @@ exports.lib = {
     metric[type+'.inventory'] = require('isInventory')(doc) || require('isPending')(doc) ? val : 0,
     metric[type+'.repacked'] = require('isRepacked')(doc) ? val : 0,
     metric[type+'.dispensed'] = require('isDispensed')(doc) ? val : 0
-    metric[type+'.user '+doc.user._id] = val
 
     return metric
   }
@@ -180,6 +179,14 @@ exports.views = {
     map(doc) {
       var date = doc._id.slice(0, 10).split('-')
       emit([doc.shipment._id.slice(0, 10), doc.drug.generic, date[0], date[1], date[2], doc._id], require('metrics')(doc, 'qty'))
+    },
+    reduce
+  },
+
+  users:{
+    map(doc) {
+      var date = doc._id.slice(0, 10).split('-')
+      emit([doc.shipment._id.slice(0, 10), doc.user._id, date[0], date[1], date[2]], require('metrics')(doc, 'count'))
     },
     reduce
   }

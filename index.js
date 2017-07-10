@@ -153,14 +153,11 @@ keys(function() {
   r('/account/:id/record.csv')     //Allow user to get, modify, & delete docs
     .get(models.account.record)
 
-  r('/account/:id/count.csv')     //Allow user to get, modify, & delete docs
-    .get(models.account.count)
+  r('/account/:id/metrics.csv')     //Allow user to get, modify, & delete docs
+    .get(models.account.metrics)
 
-  r('/account/:id/qty.csv')     //Allow user to get, modify, & delete docs
-    .get(models.account.qty)
-
-  r('/account/:id/value.csv')     //Allow user to get, modify, & delete docs
-    .get(models.account.value)
+  r('/account/:id/users.csv')     //Allow user to get, modify, & delete docs
+    .get(models.account.users)
 
   r('/:db/:id')
     .get(function*(db, id) {

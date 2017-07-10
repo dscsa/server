@@ -43,23 +43,28 @@ exports.inventory = function* (id) { //account._id will not be set because googl
   this.body = view2csv({rows}, ["group","bins","repack","pending","ordered","order.maxInventory", "order.minQty", "order.minDays","order.verifiedMessage","order.destroyedMessage", "order.defaultBin","order.price30","order.price90","order.vialQty","order.vialSize"])
 }
 
-exports.count = function* (id) { //account._id will not be set because google does not send cookie
-  const view = yield this.db.transaction.query('count', opts(this.query.group_level, id))
-  this.body  = view2csv(view)
-}
+exports.metrics = function* (id) { //account._id will not be set because google does not send cookie
+  opts = opts(this.query.group_level, id)
+  const [qty, value, count] = yield [
+    this.db.transaction.query('qty', opts),
+    this.db.transaction.query('value', opts),
+    this.db.transaction.query('count', opts)
+  ]
 
-exports.qty = function* (id) { //account._id will not be set because google does not send cookie
-  const view = yield this.db.transaction.query('qty', opts(this.query.group_level, id))
-  this.body  = view2csv(view)
-}
+  let rows = qty.rows.map((row, i) => {
+    return {key:row.key, value:Object.assign(row.value, value.rows[i].value, count.rows[i].value)}
+  })
 
-exports.value = function* (id) { //account._id will not be set because google does not send cookie
-  const view = yield this.db.transaction.query('value', opts(this.query.group_level, id))
-  this.body  = view2csv(view)
+  this.body = view2csv({rows})
 }
 
 exports.record = function* (id) { //account._id will not be set because google does not send cookie
   const view = yield this.db.transaction.query('record', opts(this.query.group_level, id))
+  this.body  = view2csv(view)
+}
+
+exports.users = function* (id) { //account._id will not be set because google does not send cookie
+  const view = yield this.db.transaction.query('users', opts(this.query.group_level, id))
   this.body  = view2csv(view)
 }
 
