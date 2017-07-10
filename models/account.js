@@ -44,11 +44,11 @@ exports.inventory = function* (id) { //account._id will not be set because googl
 }
 
 exports.metrics = function* (id) { //account._id will not be set because google does not send cookie
-  opts = opts(this.query.group_level, id)
+  let options = opts(this.query.group_level, id)
   const [qty, value, count] = yield [
-    this.db.transaction.query('qty', opts),
-    this.db.transaction.query('value', opts),
-    this.db.transaction.query('count', opts)
+    this.db.transaction.query('qty', options),
+    this.db.transaction.query('value', options),
+    this.db.transaction.query('count', options)
   ]
 
   let rows = qty.rows.map((row, i) => {
