@@ -61,6 +61,7 @@ function updateTransactions(drug, rev) {
   })
   .then(puts => {
     console.log(`updated ${puts.length} transactions to have drug name ${drug.generic}`) //err.errors['shipment._id'].rules
+    return true //make sure validation passes
   })
   .catch(err => {
     console.log('updateTransactions err', err.errors) //err.errors['shipment._id'].rules
