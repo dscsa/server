@@ -5,7 +5,6 @@
     "client":"https://github.com/dscsa/client",
     "csv":"https://github.com/dscsa/csv",
     "koa":"^0.21.0",
-    "koa-body":"@1",
     "koa-route":"^2.4.2",
     "pouchdb-core":"*",
     "pouchdb-mapreduce":"*",
