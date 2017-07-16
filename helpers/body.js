@@ -1,5 +1,7 @@
 "use strict"
 
+let csv = require('csv/server')
+
 module.exports = function(stream) {
 
   if (stream.body) //maybe this stream has already been collected.
@@ -16,13 +18,22 @@ module.exports = function(stream) {
     stream.on('error', err => reject(err))
     stream.on('data', data => stream.body += data)
     stream.on('end', _ => {
-      try {
-         //default to {} this is what other body parsers do in strict mode.  Not sure what we want to do here.
-        stream.body = JSON.parse(stream.body || '{}')
+
+        if (stream.url && stream.url.endsWith('.csv')) {
+          try {
+            stream.body = csv.toJSON(stream.body)
+          } catch (err) {
+            reject('Error: Invalid CSV\n'+err.stack+'\n'+stream.body)
+          }
+        }
+        else {//default to {} this is what other body parsers do in strict mode.  Not sure what we want to do here.
+          try {
+            stream.body = JSON.parse(stream.body || '{}')
+          } catch (err) {
+            reject('Error: Invalid JSON\n'+err.stack+'\n'+stream.body)
+          }
+        }
         resolve(stream.body)
-      } catch (err) {
-        reject('Error: Invalid JSON '+stream.body)
-      }
     })
   })
 }

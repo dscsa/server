@@ -2,20 +2,24 @@
 //defaults
 module.exports = exports = Object.create(require('../helpers/model'))
 
+let csv = require('csv/server')
+
 //Shipments
 exports.views = {
   tracking(doc) {
     emit(doc.tracking)
   },
 
-  //This is currently handled by allDocs since _id leads with recipient
-  // 'account.to._id':function(doc) {
-  //   emit(doc.account.to._id)
-  // },
-
   'account.from._id':function(doc) {
     emit(doc.account.from._id)
   }
+}
+
+exports.get_csv = function*(db) {
+  const opts = {startkey:this.account._id, endkey:this.account._id+'\uffff', include_docs:true}
+  let view = yield this.db.shipment.allDocs(opts)
+  this.body = csv.fromJSON(view.rows)
+  this.type = 'text/csv'
 }
 
 //Server-side validation methods to supplement shared ones.

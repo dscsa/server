@@ -2,6 +2,8 @@
 //defaults
 module.exports = exports = Object.create(require('../helpers/model'))
 
+let csv = require('csv/server')
+
 exports.views = {
   //Use _bulk_get here instead? Not supported in 1.6
   //this.db.account.get({_id:{$gt:null, $in:accounts[0].authorized}}),
@@ -14,6 +16,12 @@ exports.views = {
   state(doc) {
     emit(doc.state)
   }
+}
+
+exports.get_csv = function*(db) {
+  let view = yield this.db.account.allDocs({endkey:'_design', include_docs:true})
+  this.body = csv.fromJSON(view.rows)
+  this.type = 'text/csv'
 }
 
 //Shows everything in inventory AND all ordered items not in inventory
@@ -40,7 +48,7 @@ exports.inventory = function* (id) { //account._id will not be set because googl
   for (let generic in account.ordered)
     rows.push({key:[id, generic], value:{ordered:true, order:account.ordered[generic]}})
 
-  this.body = view2csv({rows}, ["group","bins","repack","pending","ordered","order.maxInventory", "order.minQty", "order.minDays","order.verifiedMessage","order.destroyedMessage", "order.defaultBin","order.price30","order.price90","order.vialQty","order.vialSize"])
+  this.body = csv.fromJSON(rows, ["group","bins","repack","pending","ordered","order.maxInventory", "order.minQty", "order.minDays","order.verifiedMessage","order.destroyedMessage", "order.defaultBin","order.price30","order.price90","order.vialQty","order.vialSize"])
 }
 
 exports.metrics = function* (id) { //account._id will not be set because google does not send cookie
@@ -55,66 +63,21 @@ exports.metrics = function* (id) { //account._id will not be set because google 
     return {key:row.key, value:Object.assign(row.value, value.rows[i].value, count.rows[i].value)}
   })
 
-  this.body = view2csv({rows})
+  this.body = csv.fromJSON(rows)
 }
 
 exports.record = function* (id) { //account._id will not be set because google does not send cookie
   const view = yield this.db.transaction.query('record', opts(this.query.group_level, id))
-  this.body  = view2csv(view)
+  this.body  = csv.fromJSON(view.rows)
 }
 
 exports.users = function* (id) { //account._id will not be set because google does not send cookie
   const view = yield this.db.transaction.query('users', opts(this.query.group_level, id))
-  this.body  = view2csv(view)
+  this.body  = csv.fromJSON(view.rows)
 }
 
 function opts(group_level, id) {
    return {group_level:group_level || 1, startkey:[id], endkey:[id, {}]}
-}
-
-//If worried about headers being dynamic you can optional pass array
-function view2csv(view, fixedHeader) {
-
-  let rows = []
-  //Collect and get union of all row headers
-  const header = view.rows.reduce((header, row) => {
-    row.value.group = row.key.slice(1)
-
-    let flat = nested2flat(row.value)
-
-    rows.push(flat)
-
-    if (fixedHeader)
-      return fixedHeader
-
-    //If no fixed header, get union of the headers for every row
-    for (let field in flat)
-      if ( ! ~ header.indexOf(field))
-        header.push(field)
-
-    return header
-  }, ['group'])
-
-  return rows.reduce((csv, row) => {
-    return csv+'\n'+header.map(i => row[i]) //map handles differences in property ordering
-  }, header)
-}
-
-function nested2flat(obj) {
-  var flat = {}
-  for (let i in obj) {
-
-    if (obj[i] === null || Array.isArray(obj[i]) || typeof obj[i] != 'object') {
-      flat[i] = '"'+obj[i]+'"'; continue
-    }
-
-    let flatObject = nested2flat(obj[i])
-
-    for (let j in flatObject) {
-      flat[i+'.'+j] = flatObject[j]
-    }
-  }
-  return flat
 }
 
 exports.validate = function(model) {
@@ -123,8 +86,8 @@ exports.validate = function(model) {
 }
 
 //Context-specific - options MUST have 'this' property in order to work.
-function authorized(doc) {
-  return doc._rev.split('-')[0] == 1 || doc._id == this.account._id
+function authorized(doc, val, key, opts) {
+  return exports.isNew(doc, opts) || doc._id == this.account._id
 }
 
 exports.authorized = {
@@ -133,6 +96,7 @@ exports.authorized = {
     //shortcut to /accounts?selector={"authorized":{"$elemMatch":"${session.account}"}}
     this.status = 501 //not implemented
   },
+
   *post() {
     //Authorize a sender
     console.log(this.account._id, this.req.body)
@@ -167,9 +131,4 @@ exports.authorized = {
       this.body.authorized = account.authorized
     }
   }
-}
-
-function authorized(doc, account_id) {
-  //doc._rev.split('-')[0] == 1 allows for new users to be added
-  return ~ doc._id.indexOf('_design/') ? false : doc._rev.split('-')[0] == 1 || doc._id == account_id
 }

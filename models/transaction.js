@@ -4,6 +4,7 @@ module.exports = exports = Object.create(require('../helpers/model'))
 
 let drug     = require('./drug')
 let shipment = require('./shipment')
+let csv = require('csv/server')
 
 exports.lib = {
 
@@ -93,39 +94,41 @@ exports.views = {
   },
 
   //used by drug endpoint to update transactions on drug name/form updates
-  'createdAt':function(doc) {
-    emit([doc.shipment._id.slice(0, 10), doc._id])
-  },
-
-  //used by drug endpoint to update transactions on drug name/form updates
   'drug._id':function(doc) {
     emit([doc.shipment._id.slice(0, 10), doc.drug._id])
   },
 
+  //Client shipments page
   'shipment._id':function(doc) {
     emit([doc.shipment._id.slice(0, 10), doc.shipment._id])
   },
 
+  //Client pending drawer
   'inventory.pendingAt':function(doc) {
     require('isPending')(doc) && emit([doc.shipment._id.slice(0, 10), doc.next[0].createdAt])
   },
 
+  //Client bin checking and reorganizatoin
   'inventory.bin':function(doc) {
     require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.bin])
   },
 
+  //Client expiration removal
   'inventory.exp':function(doc) {
     require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.exp.to || doc.exp.from])
   },
 
+  //Client shopping
   'inventory.drug.generic':function(doc) {
     require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
   },
 
+  //Backend to help if someone accidentally dispenses a drug
   'dispensed.drug.generic':function(doc) {
     require('isDispensed')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
   },
 
+  //Live inventory
   inventory:{
     map(doc) {
       var qty = require('qty')(doc)
@@ -135,17 +138,18 @@ exports.views = {
       var key         = [doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id]
 
       if (isInventory && isRepacked)
-        emit(key, {bins:0, pending:0, repack:qty})
+        emit(key, {"qty.bins":0, "qty.pending":0, "qty.repack":qty})
 
       if (isInventory && ! isRepacked)
-        emit(key, {bins:qty, pending:0, repack:0})
+        emit(key, {"qty.bins":qty, "qty.pending":0, "qty.repack":0})
 
       if (isPending)
-        emit(key, {bins:0, pending:qty, repack:0})
+        emit(key, {"qty.bins":0, "qty.pending":qty, "qty.repack":0})
     },
     reduce
   },
 
+  //Admin backend to see if I understand the difference between accepted and current inventory
   debug(doc) {
     if (require('isAccepted')(doc) && ! (require('isInventory')(doc) || require('isPending')(doc)))
       emit(require('dateKey')(doc), 'accepted not inventory')
@@ -154,6 +158,7 @@ exports.views = {
       emit(require('dateKey')(doc), 'inventory not accepted')
   },
 
+  //Used by account/:id/metrics.csv
   count:{
     map(doc) {
       emit(require('dateKey')(doc), require('metrics')(doc, 'count'))
@@ -161,6 +166,7 @@ exports.views = {
     reduce
   },
 
+  //Used by account/:id/metrics.csv
   qty:{
     map(doc) {
       emit(require('dateKey')(doc), require('metrics')(doc, 'qty'))
@@ -168,6 +174,7 @@ exports.views = {
     reduce
   },
 
+  //Used by account/:id/metrics.csv
   value:{
     map(doc) {
       emit(require('dateKey')(doc), require('metrics')(doc, 'value'))
@@ -175,6 +182,7 @@ exports.views = {
     reduce
   },
 
+  //Used by account/:id/record.csv
   record:{
     map(doc) {
       var date = doc._id.slice(0, 10).split('-')
@@ -183,6 +191,7 @@ exports.views = {
     reduce
   },
 
+  //Used to track user based activity
   users:{
     map(doc) {
       var date = doc._id.slice(0, 10).split('-')
@@ -203,6 +212,13 @@ function reduce(ids, vals, rereduce) {
   return result
 }
 
+exports.get_csv = function*(db) {
+  const opts = {startkey:[this.account._id], endkey:[this.account._id, {}], include_docs:true}
+  let view = yield this.db.transaction.query('shipment._id', opts)
+  this.body = csv.fromJSON(view.rows)
+  this.type = 'text/csv'
+}
+
 //Server-side validation methods to supplement shared ones.
 exports.validate = function(model) {
   return model
@@ -218,10 +234,10 @@ function authorized(doc, shipment_id) {
 }
 
 //Context-specific - options MUST have 'this' property in order to work.
-function updateDrug(doc) {
+function updateDrug(doc, key, val, opts) {
   //Making sure drug property is accurate and upto date is
   //too costly to do on every save so just do it on creation
-  if (doc._rev && doc._rev.split('-')[0] != 1)
+  if ( ! exports.isNew(doc, opts))
     return doc.drug
 
   return this.db.drug.get(doc.drug._id).then(drug => {

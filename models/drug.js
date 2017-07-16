@@ -3,6 +3,7 @@
 module.exports = exports = Object.create(require('../helpers/model'))
 
 let crypto = require('crypto')
+let csv = require('csv/server')
 let admin  = {ajax:{auth:require('../../../keys/dev.js')}}
 
 //Drugs
@@ -23,6 +24,12 @@ exports.views = {
   upc(doc) {
     emit(doc.upc)
   }
+}
+
+exports.get_csv = function*(db) {
+  let view = yield this.db.drug.query({endkey:'_design', include_docs:true})
+  this.body = csv.fromJSON(view.rows)
+  this.type = 'text/csv'
 }
 
 //Server-side validation methods to supplement shared ones.

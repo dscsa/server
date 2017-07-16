@@ -4,11 +4,19 @@
 module.exports = exports = Object.create(require('../helpers/model'))
 
 let admin = {ajax:{auth:require('../../../keys/dev')}}
+let csv = require('csv/server')
 
 exports.views = {
   'account._id':function(doc) {
     emit(doc.account._id)
   }
+}
+
+exports.get_csv = function*(db) {
+  const opts = {startkey:this.account._id, endkey:this.account._id+'\uffff', include_docs:true}
+  let view = yield this.db.user.query('account._id', opts)
+  this.body = csv.fromJSON(view.rows)
+  this.type = 'text/csv'
 }
 
 //Server-side validation methods to supplement shared ones.
@@ -20,8 +28,8 @@ exports.validate = function(model) {
 }
 
 //Context-specific - options MUST have 'this' property in order to work.
-function authorized(doc) {
-  return doc._rev.split('-')[0] == 1 || doc.account._id == this.account._id
+function authorized(doc, val, key, opts) {
+  return this.account._id ? doc.account._id == this.account._id : exports.isNew(doc, opts)
 }
 
 //Context-specific - options MUST have 'this' property in order to work.
@@ -34,7 +42,8 @@ function deleteLogin(doc) {
 //to the server so you don't know when to POST user/session.  Save the hassle
 //and when creating a user just log them in automatically
 function saveLogin(doc, val, key, opts) {
-  if ( ! doc._rev || (doc._rev.split('-')[0] == 1 && opts.new_edits === false)) {
+
+  if (exports.isNew(doc, opts)) {
     //User ._id not .phone since _id has had all extraneous characters removed
     let _user = {name:doc._id, password:doc.password, roles:['allAccounts', doc.account._id]}
     console.log('saveLogin', _user, doc)

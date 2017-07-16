@@ -134,6 +134,10 @@ keys(function() {
   //User API Endpoints
   //
 
+  r('/:model.csv')
+    .get(model('get_csv'))
+    .post(model('bulk_docs'))
+
   r('/:model', {strict:true})
     .get(model('get'))
     .post(model('post'))
