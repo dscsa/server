@@ -48,7 +48,7 @@ exports.inventory = function* (id) { //account._id will not be set because googl
   for (let generic in account.ordered)
     rows.push({key:[id, generic], value:{ordered:true, order:account.ordered[generic]}})
 
-  this.body = csv.fromJSON(rows, ["_id.0","qty.bins","qty.repack","qty.pending","ordered","order.maxInventory", "order.minQty", "order.minDays","order.verifiedMessage","order.destroyedMessage", "order.defaultBin","order.price30","order.price90","order.vialQty","order.vialSize"])
+  this.body = csv.fromJSON(rows, ["key.0","qty.bins","qty.repack","qty.pending","ordered","order.maxInventory", "order.minQty", "order.minDays","order.verifiedMessage","order.destroyedMessage", "order.defaultBin","order.price30","order.price90","order.vialQty","order.vialSize"])
 }
 
 exports.metrics = function* (id) { //account._id will not be set because google does not send cookie
@@ -77,7 +77,7 @@ exports.users = function* (id) { //account._id will not be set because google do
 }
 
 function opts(group_level, id) {
-   return {group_level:group_level || 1, startkey:[id], endkey:[id, {}]}
+   return {group_level:+group_level+1, startkey:[id], endkey:[id, {}]}
 }
 
 exports.validate = function(model) {
