@@ -27,7 +27,7 @@ exports.get_csv = function*(db) {
 //Shows everything in inventory AND all ordered items not in inventory
 exports.inventory = function* (id) { //account._id will not be set because google does not send cookie
   const [inventory, account] = yield [
-    this.db.transaction.query('inventory', opts(2, id)),
+    this.db.transaction.query('inventory', opts(1, id)),
     this.db.account.get(id)
   ]
 
@@ -76,7 +76,7 @@ exports.users = function* (id) { //account._id will not be set because google do
   this.body  = csv.fromJSON(view.rows)
 }
 
-function opts(group_level, id) {
+function opts(group_level = 0, id) {
    return {group_level:+group_level+1, startkey:[id], endkey:[id, {}]}
 }
 
