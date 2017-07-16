@@ -26,24 +26,6 @@ exports.lib = {
     return price * qty
   },
 
-  isInventory(doc) {
-    //verifiedAt is the checkmark, next can have pending, dispensed, or a transaction meaning this transaction has been used for something else
-    return doc.verifiedAt && doc.next && doc.next.length == 0
-  },
-
-  isPending(doc) {
-    return doc.next && doc.next[0] && doc.next[0].pending
-  },
-
-  isDispensed(doc) {
-    return doc.next && doc.next[0] && doc.next[0].dispensed
-  },
-
-  //It did not come in a shipment
-  isRepacked(doc) {
-    return doc.bin && doc.bin.length == 3
-  },
-
   //It came in a shipment, not restocked or repacked which both have shipment._id == account._id
   isReceived(doc) {
     return doc.shipment._id.indexOf('.') != -1
@@ -59,6 +41,29 @@ exports.lib = {
     return ! doc.verifiedAt && require('isReceived')(doc)
   },
 
+  isInventory(doc) {
+    //verifiedAt is the checkmark, next can have pending, dispensed, or a transaction meaning this transaction has been used for something else
+    return require('isBinned')(doc) || require('isRepacked')(doc)
+  },
+
+  //Ensure that it is still verified and not unchecked after bin was set
+  isBinned(doc) {
+    return ! doc.next[0] && doc.bin && doc.bin.length == 4 && doc.verifiedAt
+  },
+
+  //It is on a repacked shelf
+  isRepacked(doc) {
+    return ! doc.next[0] && doc.bin && doc.bin.length == 3
+  },
+
+  isPending(doc) {
+    return doc.next[0] && doc.next[0].pending
+  },
+
+  isDispensed(doc) {
+    return doc.next[0] && doc.next[0].dispensed
+  },
+
   dateKey(doc) {
     return [doc.shipment._id.slice(0, 10)].concat(doc._id.slice(0, 10).split('-'))
   },
@@ -70,20 +75,15 @@ exports.lib = {
     metric[type+'.received'] = require('isReceived')(doc) ? val : 0,
     metric[type+'.accepted'] = require('isAccepted')(doc) ? val : 0,
     metric[type+'.disposed'] = require('isDisposed')(doc) ? val : 0,
-    metric[type+'.inventory'] = require('isInventory')(doc) || require('isPending')(doc) ? val : 0,
+    metric[type+'.binned'] = require('isBinned')(doc) ? val : 0,
+    metric[type+'.repacked'] = require('isRepacked')(doc) ? val : 0,
+    metric[type+'.pending'] = require('isPending')(doc) ? val : 0,
     metric[type+'.repacked'] = require('isRepacked')(doc) ? val : 0,
     metric[type+'.dispensed'] = require('isDispensed')(doc) ? val : 0
 
     return metric
   }
 }
-
-// if (type == 'qty')
-//   var val = require('qty')(doc)
-// if (type == 'value')
-//   var val = require('value')(doc)
-// if (type == 'count')
-//   var val = require('count')(doc)
 
 //Transactions
 exports.views = {
@@ -132,25 +132,28 @@ exports.views = {
   inventory:{
     map(doc) {
       var qty = require('qty')(doc)
-      var isInventory = require('isInventory')(doc)
+      var isBinned    = require('isBinned')(doc)
       var isPending   = require('isPending')(doc)
       var isRepacked  = require('isRepacked')(doc)
       var key         = [doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id]
 
-      if (isInventory && isRepacked)
-        emit(key, {"qty.bins":0, "qty.pending":0, "qty.repack":qty})
+      if (isRepacked)
+        emit(key, {"qty.binned":0, "qty.pending":0, "qty.repacked":qty})
 
-      if (isInventory && ! isRepacked)
-        emit(key, {"qty.bins":qty, "qty.pending":0, "qty.repack":0})
+      if (isBinned)
+        emit(key, {"qty.binned":qty, "qty.pending":0, "qty.repacked":0})
 
       if (isPending)
-        emit(key, {"qty.bins":0, "qty.pending":qty, "qty.repack":0})
+        emit(key, {"qty.binned":0, "qty.pending":qty, "qty.repacked":0})
     },
     reduce
   },
 
   //Admin backend to see if I understand the difference between accepted and current inventory
   debug(doc) {
+    if (doc.verifiedAt && ( ! doc.bin || (doc.bin.length != 3 && doc.bin.length != 4)))
+      emit(require('dateKey')(doc), 'accepted but no bin')
+
     if (require('isAccepted')(doc) && ! (require('isInventory')(doc) || require('isPending')(doc)))
       emit(require('dateKey')(doc), 'accepted not inventory')
 
