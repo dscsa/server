@@ -48,9 +48,7 @@ exports.inventory = function* (id) { //account._id will not be set because googl
   for (let generic in account.ordered)
     rows.push({key:[id, generic], value:{ordered:true, order:account.ordered[generic]}})
 
-  let fields = this.query.fields ? this.query.fields.split(',') : ["key.0","qty.bins","qty.repack","qty.pending","ordered","order.maxInventory", "order.minQty", "order.minDays","order.verifiedMessage","order.destroyedMessage", "order.defaultBin","order.price30","order.price90","order.vialQty","order.vialSize"]
-
-  this.body = csv.fromJSON(rows, fields)
+  this.body = csv.fromJSON(rows, this.query.fields && this.query.fields.split(','))
 }
 
 exports.metrics = function* (id) { //account._id will not be set because google does not send cookie
@@ -65,17 +63,17 @@ exports.metrics = function* (id) { //account._id will not be set because google 
     return {key:row.key, value:Object.assign(row.value, value.rows[i].value, count.rows[i].value)}
   })
 
-  this.body = csv.fromJSON(rows)
+  this.body = csv.fromJSON(rows, this.query.fields && this.query.fields.split(','))
 }
 
 exports.record = function* (id) { //account._id will not be set because google does not send cookie
   const view = yield this.db.transaction.query('record', opts(this.query.group_level, id))
-  this.body  = csv.fromJSON(view.rows)
+  this.body  = csv.fromJSON(view.rows, this.query.fields && this.query.fields.split(','))
 }
 
 exports.users = function* (id) { //account._id will not be set because google does not send cookie
   const view = yield this.db.transaction.query('users', opts(this.query.group_level, id))
-  this.body  = csv.fromJSON(view.rows)
+  this.body  = csv.fromJSON(view.rows, this.query.fields && this.query.fields.split(','))
 }
 
 function opts(group_level = 0, id) {
