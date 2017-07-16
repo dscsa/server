@@ -2,9 +2,9 @@
 
 let fs      = require('fs')
 let app     = require('koa')()
+let body    = require('./helpers/body')
 let keys    = require('./helpers/keys')
 let r       = require('./helpers/router')(app)
-let body    = require('./helpers/body')
 let ajax    = require('./helpers/ajax')
 let pouchdb = require('../pouch/pouchdb-server')
 let models  = {
@@ -16,9 +16,12 @@ let models  = {
 }
 
 keys(function() {
+
+  //app.use(body({multipart:true}))
   //Parse our manual cookie so we know account _ids without relying on couchdb
   //Collect the request body so that we can use it with pouch
   app.use(function*(next) {
+
     this.db   = pouchdb
     this.ajax = ajax({baseUrl:'http://localhost:5984'})
     //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
@@ -94,44 +97,44 @@ keys(function() {
   r('/favicon.ico', {end:false})
     .get(get_asset)
 
-  r('/:db/', {strict:true}) //Shows DB info including update_seq#
+  r('/:model/', {strict:true}) //Shows DB info including update_seq#
     .get(proxy)
 
-  r('/:db/_revs_diff')      //Not sure why PouchDB needs this
+  r('/:model/_revs_diff')      //Not sure why PouchDB needs this
     .post(proxy)
 
-  r('/:db/_local/:doc')
+  r('/:model/_local/:doc')
     .get(proxy)
     .put(proxy)
 
-  r('/:db/_local%2F:doc')
+  r('/:model/_local%2F:doc')
     .put(proxy)
 
-  r('/:db/_design/:doc')
+  r('/:model/_design/:doc')
     .get(proxy)
     .put(proxy)
 
-  r('/:db/_design/:ddoc/_view/:view')
+  r('/:model/_design/:ddoc/_view/:view')
     .get(proxy)
 
-  r('/:db/_changes')      //Lets PouchDB watch db using longpolling
+  r('/:model/_changes')      //Lets PouchDB watch db using longpolling
     .get(proxy)
 
-  r('/:db/_all_docs')       //Needed if indexedDb cleared on browser
+  r('/:model/_all_docs')       //Needed if indexedDb cleared on browser
     .get(model('all_docs'))
     .post(model('all_docs'))
 
-  r('/:db/_bulk_docs')    //Update denormalized transactions when drug is updated
+  r('/:model/_bulk_docs')    //Update denormalized transactions when drug is updated
     .post(model('bulk_docs'))
 
-  r('/:db/_bulk_get')     //Allow PouchDB to make bulk edits
+  r('/:model/_bulk_get')     //Allow PouchDB to make bulk edits
     .post(model('bulk_get'))
 
   //
   //User API Endpoints
   //
 
-  r('/:db', {strict:true})
+  r('/:model', {strict:true})
     .get(model('get'))
     .post(model('post'))
 
@@ -159,7 +162,7 @@ keys(function() {
   r('/account/:id/users.csv')     //Allow user to get, modify, & delete docs
     .get(models.account.users)
 
-  r('/:db/:id')
+  r('/:model/:id')
     .get(function*(db, id) {
       this.query.selector = `{"id":"${id}"}`
       yield model('get').call(this, db)
@@ -213,6 +216,9 @@ keys(function() {
 
   function model(method) {
     return function*() {
+      if ( ! models[arguments[0]])
+        return this.status = 404
+
       yield models[arguments[0]][method].apply(this, arguments)
     }
   }
