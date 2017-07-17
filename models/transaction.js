@@ -36,9 +36,9 @@ exports.lib = {
     return doc.verifiedAt && require('isReceived')(doc)
   },
 
-  //No checkmark
+  //No checkmark, also includes excess drugs that were repacked but did not go into a vial
   isDisposed(doc) {
-    return ! doc.verifiedAt && require('isReceived')(doc)
+    return ! doc.verifiedAt
   },
 
   isInventory(doc) {
