@@ -151,6 +151,10 @@ exports.views = {
 
   //Admin backend to see if I understand the difference between accepted and current inventory
   debug(doc) {
+
+    if (doc.shipment._id.indexOf('.') == -1 && ! doc.verifiedAt)
+      emit(require('dateKey')(doc), 'repacked or restocked but not verified')
+
     if (doc.verifiedAt && ( ! doc.bin || (doc.bin.length != 3 && doc.bin.length != 4)))
       emit(require('dateKey')(doc), 'accepted but no bin')
 
