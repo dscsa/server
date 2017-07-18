@@ -110,7 +110,7 @@ exports.authorized = {
       this.message = 'This account is already authorized'
     } else {
       account.authorized.push(this.req.body)
-      this.body = yield this.db.account.put(account)
+      this.body = yield this.db.account.put(account, {this:this})
       this.body.authorized = account.authorized
     }
   },
@@ -127,7 +127,7 @@ exports.authorized = {
       this.message = 'This account is already not authorized'
     } else {
       account.authorized.splice(index, 1)
-      this.body = yield this.db.account.put(account)
+      this.body = yield this.db.account.put(account, {this:this})
       this.body.authorized = account.authorized
     }
   }
