@@ -42,14 +42,16 @@ function deleteLogin(doc) {
 //to the server so you don't know when to POST user/session.  Save the hassle
 //and when creating a user just log them in automatically
 function saveLogin(doc, val, key, opts) {
-
-  if (exports.isNew(doc, opts)) {
+  //Check for doc.password just in case we are trying to recreate an existing user
+  if (doc.password) {
     //User ._id not .phone since _id has had all extraneous characters removed
     let _user = {name:doc._id, password:doc.password, roles:['allAccounts', doc.account._id]}
     console.log('saveLogin', _user, doc)
     delete doc.password //we don't want to save this in the user table
+
     return this.db._users.put(_user, admin).then(_ => session.call(this, _user)).catch(err => console.log('new session err', err))
   }
+
   return true
 }
 
