@@ -128,6 +128,11 @@ exports.views = {
     require('isDispensed')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
   },
 
+  //Backend to help if someone accidentally disposes a drug
+  'disposed.drug.generic':function(doc) {
+    require('isDisposed')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
+  },
+
   //Live inventory
   inventory:{
     map(doc) {
