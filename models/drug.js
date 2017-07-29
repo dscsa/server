@@ -27,7 +27,7 @@ exports.views = {
 }
 
 exports.get_csv = function*(db) {
-  let view = yield this.db.drug.query({endkey:'_design', include_docs:true})
+  let view = yield this.db.drug.allDocs({endkey:'_design', include_docs:true})
   this.body = csv.fromJSON(view.rows)
   this.type = 'text/csv'
 }
