@@ -162,6 +162,10 @@ exports.views = {
     // if (doc.shipment._id.indexOf('.') == -1 && ! doc.verifiedAt)
     //   emit(require('dateKey')(doc), 'repacked or restocked but not verified')
 
+    //If not these what is it?
+    if ( ! require('isReceived')(doc) && ! require('isDisposed')(doc) && ! require('isInventory')(doc) && ! require('isPending')(doc) && ! require('isDispensed')(doc))
+      emit(require('dateKey')(doc), 'in == out')
+
     //If it is accepted/repacked, then it is either waiting on a bin or has a bin length of 3 or 4
     if (doc.verifiedAt && ( ! doc.bin || (doc.bin.length != 3 && doc.bin.length != 4)))
       emit(require('dateKey')(doc), 'accepted but no bin')
