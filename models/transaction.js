@@ -157,16 +157,21 @@ exports.views = {
   //Admin backend to see if I understand the difference between accepted and current inventory
   debug(doc) {
 
-    if (doc.shipment._id.indexOf('.') == -1 && ! doc.verifiedAt)
-      emit(require('dateKey')(doc), 'repacked or restocked but not verified')
+    //If it was restocked or repacked, then it must be accepted otherwise why did we log it
+    //Actually this is excess from repackaging.
+    // if (doc.shipment._id.indexOf('.') == -1 && ! doc.verifiedAt)
+    //   emit(require('dateKey')(doc), 'repacked or restocked but not verified')
 
+    //If it is accepted/repacked, then it is either waiting on a bin or has a bin length of 3 or 4
     if (doc.verifiedAt && ( ! doc.bin || (doc.bin.length != 3 && doc.bin.length != 4)))
       emit(require('dateKey')(doc), 'accepted but no bin')
 
-    if (require('isAccepted')(doc) && ! (require('isInventory')(doc) || require('isPending')(doc)))
+    //If it is accepted and not yet repacked/dispensed, then why is it not in inventory or pending?
+    if (require('isAccepted')(doc) && ! next.length && ! (require('isInventory')(doc) || require('isPending')(doc)))
       emit(require('dateKey')(doc), 'accepted not inventory')
 
-    if ( ! require('isAccepted')(doc) && (require('isInventory')(doc) || require('isPending')(doc)))
+    //If not accepted and not repacked, how is it in inventory/pending?
+    if ( ! require('isAccepted')(doc) && ! require('isRepacked')(doc) && (require('isInventory')(doc) || require('isPending')(doc)))
       emit(require('dateKey')(doc), 'inventory not accepted')
   },
 
