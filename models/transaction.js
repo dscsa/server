@@ -120,7 +120,7 @@ exports.views = {
 
   //Client shopping
   'inventory.drug.generic':function(doc) {
-    require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic, require('isRepacked')(doc)])
+    require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic, ! require('isRepacked')(doc)])
   },
 
   //Backend to help if someone accidentally dispenses a drug
