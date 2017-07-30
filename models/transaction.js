@@ -81,6 +81,10 @@ exports.lib = {
     metric[type+'.repacked'] = require('isRepacked')(doc) ? val : 0,
     metric[type+'.dispensed'] = require('isDispensed')(doc) ? val : 0
 
+    //This should be 0 because drugs in should equal drugs out
+    if (type == 'qty')
+      metric['qty.error'] = metric['qty.received'] - metric['qty.disposed'] - metric['qty.binned'] - metric['qty.repacked'] - metric['qty.pending'] - metric['qty.dispensed']
+
     return metric
   }
 }
@@ -207,7 +211,7 @@ exports.views = {
   record:{
     map(doc) {
       var date = doc._id.slice(0, 10).split('-')
-      emit([doc.shipment._id.slice(0, 10), doc.drug.generic, date[0], date[1], date[2], doc._id], require('metrics')(doc, 'qty'))
+      emit([doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id, date[0], date[1], date[2], doc._id], require('metrics')(doc, 'qty'))
     },
     reduce
   },
