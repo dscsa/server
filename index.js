@@ -210,8 +210,11 @@ keys(function() {
   //
 
   function* proxy(db) {
-    //honor the 25 sec timeout
-    if (this.query.timeout)
+
+    if ( ! models[db])
+      return this.status = 404
+
+    if (this.query.timeout) //honor the 25 sec timeout
       this.req.timeout = this.query.timeout //this is not actually a node thing, just a flag for pouchdb-server.ajax
 
     //ajax returns a stream that koa can handle
@@ -219,11 +222,11 @@ keys(function() {
   }
 
   function model(method) {
-    return function*() {
-      if ( ! models[arguments[0]])
+    return function*(db) {
+      if ( ! models[db])
         return this.status = 404
 
-      yield models[arguments[0]][method].apply(this, arguments)
+      yield models[db][method].apply(this, arguments)
     }
   }
 
