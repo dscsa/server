@@ -211,7 +211,7 @@ keys(function() {
 
   function* proxy(db) {
 
-    if ( ! models[db])
+    if (db && ! models[db])
       return this.status = 404
 
     if (this.query.timeout) //honor the 25 sec timeout
