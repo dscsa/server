@@ -5,6 +5,9 @@ module.exports = exports = Object.create(require('../helpers/model'))
 let drug     = require('./drug')
 let shipment = require('./shipment')
 let csv = require('csv/server')
+let crypto = require('crypto')
+let admin  = {ajax:{auth:require('../../../keys/dev.js')}}
+
 
 exports.lib = {
 
@@ -249,7 +252,7 @@ exports.validate = function(model) {
   return model
     .ensure('isChecked').set(doc => undefined) //client sets this but we don't want to save it
     .ensure('shipment._id').custom(authorized).withMessage('You are not authorized to modify this transaction')
-    .ensure('drug').set(updateDrug).withMessage('Could not get drug information')
+    .ensure('drug.price').trigger(checkPrice).withMessage('Could not get drug information')
 }
 
 //Context-specific - options MUST have 'this' property in order to work.
@@ -259,127 +262,141 @@ function authorized(doc, shipment_id) {
 }
 
 //Context-specific - options MUST have 'this' property in order to work.
-function updateDrug(doc, key, val, opts) {
-  //Making sure drug property is accurate and upto date is
-  //too costly to do on every save so just do it on creation
-  if ( ! exports.isNew(doc, opts))
-    return doc.drug
+function checkPrice(doc, price, key, opts) {
+  //TODO One transaction is saved many times when initally entered,
+  //so should we only update price once by checking isNew()??
+  if (price.goodrx || price.nadac)
+    return
 
-  return this.db.drug.get(doc.drug._id).then(drug => {
-    let res = updatePrice.call(this, drug)
-    return res
+  if (new Date() - new Date(price.updatedAt) < 7*24*60*60*1000)
+    return
+
+  //Wait 10 secs before update so pricing data is not overwritten
+  //by next save before the pricing data is synced back to browser
+  console.log('updating drug prices for '+doc.drug._id, price)
+  setTimeout(_ => updatePrice.call(this, doc.drug._id), 10000)
+}
+
+//Look up the goodrx and nadac price of the drug
+//Update the drug with the new price info
+//Update all transactions with 0 price including any that were just entered
+function updatePrice(_id) {
+  //Since we are going to save price info back into drug
+  //we need the full drug, so might as well fetch it now
+  return this.db.drug.get(_id).then(drug => {
+
+    let nadac = getNadac.call(this, drug) //needs ndc9
+    let goodrx = getGoodrx.call(this, drug)
+
+    //TODO destructuring
+    return Promise.all([nadac, goodrx]).then(([nadac, goodrx]) => {
+
+      if ( ! nadac && ! goodrx) return
+
+      drug.price.nadac  = nadac || drug.price.nadac
+      drug.price.goodrx = goodrx || drug.price.goodrx
+      drug.price.updatedAt = new Date().toJSON()
+
+      //Not only will this save the price to the drug but it will activate
+      //drug's updateTransactions which will then update any transaction
+      //containing this drug which does not already have a price
+      this.db.drug.put(drug, {this:this}).then(_ => console.log('saved new price for drug '+_id, drug))
+    })
   })
 }
 
-function updatePrice(drug) {
-  if (drug.price && (new Date() - new Date(drug.price.updatedAt) < 7*24*60*60*1000)) //this has body in {"ok":doc} formate
-    return Promise.resolve(drug)
+function getNadac(drug) {
+  let date = new Date(); date.setMonth(date.getMonth() - 2) //Datbase not always up to date so can't always do last week.  On 2016-06-18 last as_of_date was 2016-05-11, so lets look back two months
+  let url = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date>"${date.toJSON().slice(0, -1)}"`
 
-  return {
-    _id:drug._id,
-    price:drug.price,
-    brand:drug.brand,
-    generic:drug.generic,
-    generics:drug.generics,
-    form:drug.form,
-    pkg:drug.pkg
-  }
+  return this.ajax({url:url+nadacNdcUrl(drug)})
+  .then(nadac => {
 
-  //TODO destructuring
-  return Promise.all([getNadac.call(this, drug), getGoodrx.call(this, drug)]).then(prices => {
-    drug.price        = drug.price || {}
-    drug.price.nadac  = prices[0]  || drug.price.nadac
-    drug.price.goodrx = prices[1]  || drug.price.goodrx
-    drug.price.updatedAt = new Date().toJSON()
+    if (nadac.body.length)
+      return nadacCalculatePrice(nadac.body.pop(), drug)
+
+    console.log('No NADAC price found for an ndc starting with '+drug.ndc9)
+
+    return this.ajax({url:url+nadacNameUrl(drug)})
+    .then(nadac => {
+      if(nadac.body.length)  //When the price is not found but no error is thrown
+        return nadacCalculatePrice(nadac.body.pop(), drug)
+
+      console.log('No NADAC price found for a name like', drug.generics)
+    })
   })
+  .catch(err => console.log('nadac err', err))
 }
 
-function *getNadac(drug) {
-  //Datbase not always up to date so can't always do last week.  On 2016-06-18 last as_of_date was 2016-05-11.
-  let date = new Date(new Date().getFullYear(), 0, 1).toJSON().slice(0, -1)
-  let baseUrl  = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date>"${date}"`
-  let prices = ""
+function nadacNdcUrl(drug) {
+  return `AND starts_with(ndc,"${drug.ndc9}")`
+}
 
-  try {
-    let url1 = `${baseUrl} AND starts_with(ndc,"${drug.ndc9}")`
-    prices = yield this.ajax({url:url1})
-    if ( ! prices.length) //API returns a status of 200 even on failure ;-(
-      throw console.log('No NADAC price found for an ndc starting with '+drug.ndc9)
-  } catch (err1) {
-    let url2 = baseUrl
-    let delimiter = drug.generics.length > 1 ? '%' : ''
-    for (generic of drug.generics) {
-      let str = generic.strength.replace(/[^0-9.]/g, '%')
-      let name = delimiter+generic.name.toUpperCase().slice(0,4)
-      url2 += ` AND ndc_description like "${name}%${str}%"`.replace(/%+/g, '%25') //In order to make sure Chrome recognizes as % symbol, necessary to represent wildcard in api
-    }
+function nadacNameUrl(drug) {
+  //Transform our names and strengths to match NADAC the best we can using wild cards
+  let startsWith = drug.generics.length > 1 ? '%' : ''
+  let names = drug.generics.map(generic => startsWith+generic.name.toUpperCase().slice(0,4))
+  let strengths = drug.generics.map(generic => generic.strength.replace(/[^0-9.]/g, '%'))
 
-    try{
-      prices = yield this.ajax({url:url2})
+  for (let i in names)
+    url += ` AND ndc_description like "${names[i]}%${strengths[i]}%"`.replace(/%+/g, '%25')
 
-      if( ! prices.length)  //When the price is not found but no error is thrown
-        throw console.log('No NADAC price found for an ndc starting with '+err+' or by name '+url)
+  return url
+}
 
-    } catch (err2) {
-      return console.log(url1, err1, url2, err2, drug, prices)
-    }
-  }
+function goodrxUrl(name, dosage) {
+  let qs  =`name=${name}&dosage=${dosage}&api_key=f46cd9446f`.replace(/ /g, '%20')
+  let sig = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
+  return `https://api.goodrx.com/fair-price?${qs}&sig=${sig}`
+}
 
-  let res = prices.pop()
+function nadacCalculatePrice(nadac, drug) {
+
+  let units = 1
 
   //Need to handle case where price is given per ml  or per gm to ensure database integrity
-  if(res.pricing_unit == "ML" || res.pricing_unit == "GM"){ //a component of the NADAC response that described unit of price ("each", "ml", or "gm")
-    let numberOfMLGM = res.ndc_description.match(/\/([0-9.]+)[^\/]*$/) //looks for the denominator in strength to determine per unit cost, not per ml or gm
+  if(nadac.pricing_unit == "ML" || nadac.pricing_unit == "GM") //a component of the NADAC response that described unit of price ("each", "ml", or "gm")
+    units = getNumberOfUnits(nadac, drug) || units
 
-    if( ! numberOfMLGM)  //responds null if there is no denominator value in strength given by NADAC
-      numberOfMLGM = drug.generic.match(/\/([0-9.]+)[^\/]*$/) //in cases where our data contains proper generic and NADAC doesn't, try to check that as wel
-
-    if( ! numberOfMLGM){ //Meaning even our generic data does not have the conversion factor
-      console.log("Drug could not be converted to account for GM or ML") //At this point we have no way of converting
-    } else {
-      let total = +numberOfMLGM[1] * +res.nadac_per_unit //at this point, we have a conversion factor we can use
-      //console.trace("Converted from price/ml or price/gm to price/unit of: ", total)
-      return +total.toFixed(4)
-    }
-  }
-
-  return +(+res.nadac_per_unit).toFixed(4) //In other case where price is found, will return here
+  return formatPrice(units * nadac.nadac_per_unit)
 }
 
-function *getGoodrx(drug) {
+function getNumberOfUnits(nadac, drug) {
+  let demoninator = /\/([0-9.]+)[^\/]*$/
+  let match = nadac.ndc_description.match(demoninator) || drug.generic.match(demoninator)
+  return match ? +match[1] : console.log("Drug could not be converted to account for GM or ML")
+}
 
-  let makeUrl = (name, dosage) => {
-    let qs  =`name=${name}&dosage=${dosage}&api_key=f46cd9446f`.replace(/ /g, '%20')
-    let sig = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
-    return `https://api.goodrx.com/fair-price?${qs}&sig=${sig}`
-  }
-
+function getGoodrx(drug) {
   //Brand better for compound name. Otherwise use first word since, suffixes like hydrochloride sometimes don't match
   let fullName = drug.brand || drug.generics.map(generic => generic.name).join('-') //.split(' ')[0]
   let strength = drug.generics.map(generic => generic.strength.replace(' ', '')).join('-')
-  let price = {data:{}}
-  let candidateUrl, fullNameUrl = makeUrl(fullName, strength)
-  let message = ''
-  try {
-    price = yield this.ajax({url:fullNameUrl})
-  } catch(err) {
-    try {
-      if( ! err.errors || ! err.errors[0].candidates) //then there's no fair price drug so this is undefined
-        return console.trace('GoodRx responded that there is no fair price for', err, drug._id, drug.generic, fullNameUrl)
+  //409 error means qs not properly encoded, 400 means missing drug
+  let url = goodrxUrl(fullName, strength)
+  return this.ajax({url}).then(goodrx => {
 
-      candidateUrl = makeUrl(err.errors[0].candidates[0], strength)
-      price = yield this.ajax({url:candidateUrl})
-      console.trace("GoodRx substituting a candidate", err.errors[0].candidates[0], 'for', drug._id, drug.generic)
-    } catch(err2) {
-      //409 error means qs not properly encoded, 400 means missing drug
-      return console.trace("GoodRx price could not be updated", this.status, this.message, price, drug._id, drug.generics, fullNameUrl, candidateUrl)
-    }
-  }
+    if(goodrx.body.data.price && goodrx.body.data.quantity) //then there's no fair price drug so this is undefined
+      return formatPrice(goodrx.body.data.price/goodrx.body.data.quantity)
 
-  if ( ! price.data.quantity)
-    return console.trace('GoodRx did not return a quantity', price) || null
+    let substitutes = goodrx.body.errors && goodrx.body.errors[0].candidates
+    if ( ! substitutes)
+      return console.log('GoodRx responded that there are no substitutes for', err, drug._id, drug.generic, url)
 
-  return +(price.data.price/price.data.quantity).toFixed(4)
+    console.log(`GoodRx match not found for ${drug._id} ${fullName}. Substituting a candidate ${substitutes[0]}`)
+    url = goodrxUrl(substitutes[0], strength)
+    return this.ajax({url})
+    .then(goodrx => {
+      if (goodrx.body.data.price && goodrx.body.data.quantity)
+        return formatPrice(goodrx.body.data.price/goodrx.body.data.quantity)
+
+      return console.log("GoodRx price could not be updated with substitute either", url, goodrx)
+    })
+  })
+  .catch(err => console.log('goodrx err', err))
+}
+
+function formatPrice(price) {
+  return +price.toFixed(4)
 }
 
 //TODO don't search for shipment if shipment._id doesn't have two periods (inventory)
