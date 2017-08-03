@@ -378,7 +378,7 @@ function getGoodrx(drug) {
   .catch(goodrx =>{
     let substitutes = goodrx.errors && goodrx.errors[0].candidates
     if ( ! substitutes)
-      return console.log('GoodRx responded that there are no substitutes for', err, drug._id, drug.generic, url)
+      return console.log('GoodRx responded that there are no substitutes for', goodrx, drug._id, drug.generic, url)
 
     console.log(`GoodRx match not found for ${drug._id} ${fullName}. Substituting a candidate ${substitutes[0]}`)
     url = goodrxUrl(substitutes[0], strength)
