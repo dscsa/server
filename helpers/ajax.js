@@ -20,18 +20,27 @@ module.exports = defaults => {
     //this means that request collects the body and adds to response
     let resolve
     let reject
+    let status
+    let headers
     const promise = new Promise((res, rej) => { resolve = res, reject = rej })
     const stack = new Error().stack
 
-    const request = ajax(options, (err, body) => {
+    const request = ajax(options, (error, body, res) => {
 
-      if ( ! err) return resolve(body)
+      if (error && error.code == 500) {
+        error.stack += '\n'+stack
+        console.log('error', error.stack)
+        return reject(error)
+      }
 
-      if (err.code != 500) return reject(err)
-
-      err.stack += '\n'+stack
-      console.log('err', err.stack)
+      return resolve({body, error, headers:res && res.headers, status:res ? res.statusCode : error.status})
     })
+
+    // request.on('response', res => {
+    //   headers = res.headers
+    //   statuscode =
+    // })
+
 
     //Do we still need the below?
     //delete stream.headers['access-control-expose-headers'] //this was overriding our index.js default CORS headers.

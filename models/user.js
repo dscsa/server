@@ -58,12 +58,11 @@ function saveLogin(doc, val, key, opts) {
 function session(_user) {
   const body = {name:_user.name, password:_user.password} //including roles with cause a couchdb badarg err
   return this.ajax({url:'/_session', method:'post', body}).then(res => {
-    console.log('body', body, res.statusCode, res.body)
-
-    if (res.statusCode != 200)
-      this.throw(res.statusCode, res.body)//401 status should not log us in
-
+    console.log('body', res.body, res.status)
     //this.status = 201
+    if (res.status !== 200)
+      this.throw(res.status, res.body)//401 status should not log us in
+
     this.set(res.headers)
     const cookie = JSON.stringify({_id:res.body.name, account:{_id:res.body.roles[1]}})
     this.cookies.set('AuthUser', cookie, {httpOnly:false})
@@ -80,9 +79,9 @@ exports.session = {
     }
     const user = yield this.db.user.get(_user.name)
 
-    user
-      ? this.body = yield session.call(this, _user)
-      : this.throw(404, 'No user exists with the phone '+_user.name)
+    user.error
+      ? this.throw(404, 'No user exists with the phone '+_user.name)
+      : this.body = yield session.call(this, _user)
 
       console.log('this.body', this.body)
   },
@@ -90,7 +89,7 @@ exports.session = {
   *delete() {
     console.log('user.session.delete')
     let res = yield this.ajax({url:'/_session',  method:'delete'})
-    this.status = res.statusCode
+    this.status = res.status
     this.body   = res.body
     console.log('user.session.delete', this.body)
     this.cookies.set('AuthUser', '') //This has to be set after the proxy since proxy will overwrite our cookie
