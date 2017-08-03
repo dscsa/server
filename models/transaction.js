@@ -265,12 +265,13 @@ function authorized(doc, shipment_id) {
 function checkPrice(doc, price, key, opts) {
   //TODO One transaction is saved many times when initally entered,
   //so should we only update price once by checking isNew()??
+  console.log('a', price, doc)
   if (price.goodrx || price.nadac)
     return
-
+console.log('b')
   if (new Date() - new Date(price.updatedAt) < 7*24*60*60*1000)
     return
-
+console.log('c')
   //Wait 10 secs before update so pricing data is not overwritten
   //by next save before the pricing data is synced back to browser
   console.log('updating drug prices for '+doc.drug._id, price)
