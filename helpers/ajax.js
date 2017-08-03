@@ -29,7 +29,7 @@ module.exports = defaults => {
 
       err.stack += '\n'+stack
       console.log('err', err.stack)
-      throw err
+      reject(err)
     })
 
     //Do we still need the below?
