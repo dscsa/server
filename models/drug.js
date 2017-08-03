@@ -67,7 +67,7 @@ function updateTransactions(drug, rev) {
       console.log(8, transaction)
       //console.log('updateTransaction', transaction)
       //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
-      return this.db.transaction.put(transaction, {this:this, ajax:admin.ajax})
+      return this.db.transaction.put(transaction, {this:this, ajax:admin.ajax}).catch(err => console.log(9, err))
     }))
   })
   .then(puts => {
