@@ -312,7 +312,6 @@ function getNadac(drug) {
   return this.ajax({url:url+nadacNdcUrl(drug)})
   .then(nadac => {
 
-    console.log('nadac is', nadac)
     if (nadac.length)
       return nadacCalculatePrice(nadac.pop(), drug)
 

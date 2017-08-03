@@ -16,7 +16,7 @@ let models  = {
 }
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.log('unhandledRejection', reason, promise)
+  console.log('unhandledRejection', reason.toString())
 })
 
 keys(function() {
