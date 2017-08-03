@@ -27,9 +27,10 @@ module.exports = defaults => {
 
       if ( ! err) return resolve(body)
 
+      if (err.code != 500) return reject(err)
+
       err.stack += '\n'+stack
       console.log('err', err.stack)
-      reject(err)
     })
 
     //Do we still need the below?

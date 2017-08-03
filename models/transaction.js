@@ -376,26 +376,21 @@ function getGoodrx(drug) {
   let strength = drug.generics.map(generic => generic.strength.replace(' ', '')).join('-')
   //409 error means qs not properly encoded, 400 means missing drug
   let url = goodrxUrl(fullName, strength)
-  return this.ajax({url}).then(goodrx => {
-
-    if(goodrx.data.price && goodrx.data.quantity) //then there's no fair price drug so this is undefined
-      return formatPrice(goodrx.data.price/goodrx.data.quantity)
-
+  return this.ajax({url}).then(goodrx => formatPrice(goodrx.data.price/goodrx.data.quantity))
+  .catch(err =>{
     let substitutes = goodrx.errors && goodrx.errors[0].candidates
     if ( ! substitutes)
       return console.log('GoodRx responded that there are no substitutes for', err, drug._id, drug.generic, url)
 
     console.log(`GoodRx match not found for ${drug._id} ${fullName}. Substituting a candidate ${substitutes[0]}`)
     url = goodrxUrl(substitutes[0], strength)
-    return this.ajax({url})
-    .then(goodrx => {
+    return this.ajax({url}).then(goodrx => {
       if (goodrx.data.price && goodrx.data.quantity)
         return formatPrice(goodrx.data.price/goodrx.data.quantity)
 
       return console.log("GoodRx price could not be updated with substitute either", url, goodrx)
     })
   })
-  .catch(err => console.log('goodrx err', err))
 }
 
 function formatPrice(price) {
