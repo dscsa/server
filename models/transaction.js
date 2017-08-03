@@ -283,24 +283,25 @@ function checkPrice(doc, price, key, opts) {
 function updatePrice(_id) {
   //Since we are going to save price info back into drug
   //we need the full drug, so might as well fetch it now
+  console.log(1)
   return this.db.drug.get(_id).then(drug => {
-
+console.log(2)
     let nadac = getNadac.call(this, drug) //needs ndc9
     let goodrx = getGoodrx.call(this, drug)
-
+console.log(3)
     //TODO destructuring
     return Promise.all([nadac, goodrx]).then(([nadac, goodrx]) => {
-
+console.log(4)
       if ( ! nadac && ! goodrx) return
-
+console.log(5)
       drug.price.nadac  = nadac || drug.price.nadac
       drug.price.goodrx = goodrx || drug.price.goodrx
       drug.price.updatedAt = new Date().toJSON()
-
+console.log(6)
       //Not only will this save the price to the drug but it will activate
       //drug's updateTransactions which will then update any transaction
       //containing this drug which does not already have a price
-      this.db.drug.put(drug, {this:this}).then(_ => console.log('saved new price for drug '+_id, drug))
+      this.db.drug.put(drug, {this:this}).then(_ => console.log('saved new price for drug '+_id, drug)).catch(err => console.log(6, err))
     })
   })
 }
