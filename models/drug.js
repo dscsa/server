@@ -42,8 +42,6 @@ exports.validate = function(model) {
 function updateTransactions(drug, rev) {
   return rev.split('-')[0] == 1 || this.db.transaction.query('drug._id', {key:[this.account._id, drug._id], include_docs:true})
   .then(transactions => {
-
-    console.log('save drug validation', drug)
     //console.log('updateTransactions', transactions)
     return Promise.all(transactions.rows.map(row => {
       let transaction = row.doc

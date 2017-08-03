@@ -18,21 +18,22 @@ module.exports = defaults => {
     //Promisify request object but don't lose ability to stream it
     //PouchDB's ajaxCore makes there be a callback even if not needed
     //this means that request collects the body and adds to response
-    const request = ajax(options, err => { if (err && err.status == 500) throw err })
-    const promise = new Promise((resolve, reject) => {
-      request.on('response', response => {
-        delete response.headers['access-control-expose-headers'] //this was overriding our index.js default CORS headers.
-        setTimeout(_ => resolve(response), 20) //is there a better way to 1) return stream 2) but wait for body property to be set
-      })
-      const stack = new Error().stack
-      //this doesn't get called on an internal error (code 500) such as
-      //Error: options.uri must be a path when using options.baseUrl
-      request.on('error', err => {
-        err.stack += '\n'+stack
-        console.log('err', err)
-        reject(err)
-      })
+    let resolve
+    let reject
+    const promise = new Promise((res, rej) => { resolve = res, reject = rej })
+    const stack = new Error().stack
+
+    const request = ajax(options, (err, body) => {
+
+      if ( ! err) return resolve(body)
+
+      err.stack += '\n'+stack
+      console.log('err', err)
+      reject(err)
     })
+
+    //Do we still need the below?
+    //delete stream.headers['access-control-expose-headers'] //this was overriding our index.js default CORS headers.
 
     request.then = promise.then.bind(promise)
     request.catch = promise.catch.bind(promise)

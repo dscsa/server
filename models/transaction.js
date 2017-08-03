@@ -312,15 +312,17 @@ function getNadac(drug) {
   return this.ajax({url:url+nadacNdcUrl(drug)})
   .then(nadac => {
 
-    if (nadac.body.length)
-      return nadacCalculatePrice(nadac.body.pop(), drug)
+    console.log('nadac is', nadac)
+    if (nadac.length)
+      return nadacCalculatePrice(nadac.pop(), drug)
 
     console.log('No NADAC price found for an ndc starting with '+drug.ndc9)
 
     return this.ajax({url:url+nadacNameUrl(drug)})
     .then(nadac => {
-      if(nadac.body.length)  //When the price is not found but no error is thrown
-        return nadacCalculatePrice(nadac.body.pop(), drug)
+      console.log('nadac is', nadac)
+      if(nadac.length)  //When the price is not found but no error is thrown
+        return nadacCalculatePrice(nadac.pop(), drug)
 
       console.log('No NADAC price found for a name like', drug.generics)
     })
@@ -334,6 +336,7 @@ function nadacNdcUrl(drug) {
 
 function nadacNameUrl(drug) {
   //Transform our names and strengths to match NADAC the best we can using wild cards
+  let url = ''
   let startsWith = drug.generics.length > 1 ? '%' : ''
   let names = drug.generics.map(generic => startsWith+generic.name.toUpperCase().slice(0,4))
   let strengths = drug.generics.map(generic => generic.strength.replace(/[^0-9.]/g, '%'))
@@ -375,10 +378,10 @@ function getGoodrx(drug) {
   let url = goodrxUrl(fullName, strength)
   return this.ajax({url}).then(goodrx => {
 
-    if(goodrx.body.data.price && goodrx.body.data.quantity) //then there's no fair price drug so this is undefined
-      return formatPrice(goodrx.body.data.price/goodrx.body.data.quantity)
+    if(goodrx.data.price && goodrx.data.quantity) //then there's no fair price drug so this is undefined
+      return formatPrice(goodrx.data.price/goodrx.data.quantity)
 
-    let substitutes = goodrx.body.errors && goodrx.body.errors[0].candidates
+    let substitutes = goodrx.errors && goodrx.errors[0].candidates
     if ( ! substitutes)
       return console.log('GoodRx responded that there are no substitutes for', err, drug._id, drug.generic, url)
 
@@ -386,8 +389,8 @@ function getGoodrx(drug) {
     url = goodrxUrl(substitutes[0], strength)
     return this.ajax({url})
     .then(goodrx => {
-      if (goodrx.body.data.price && goodrx.body.data.quantity)
-        return formatPrice(goodrx.body.data.price/goodrx.body.data.quantity)
+      if (goodrx.data.price && goodrx.data.quantity)
+        return formatPrice(goodrx.data.price/goodrx.data.quantity)
 
       return console.log("GoodRx price could not be updated with substitute either", url, goodrx)
     })

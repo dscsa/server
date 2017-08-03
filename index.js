@@ -22,8 +22,14 @@ keys(function() {
   //Collect the request body so that we can use it with pouch
   app.use(function*(next) {
 
+
+
     this.db   = pouchdb
     this.ajax = ajax({baseUrl:'http://localhost:5984'})
+
+    //return this.ajax({url:'http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date%3E%222017-06-02T22:49:03.681%22%20AND%20ndc_description%20like%20%22MEMA%2510%25%22'})
+
+    
     //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
     this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
     this.set('access-control-allow-headers', 'accept, accept-encoding, accept-language, cache-control, connection, if-none-match, authorization, content-type, host, origin, pragma, referer, x-csrf-token, user-agent')
