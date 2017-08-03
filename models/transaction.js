@@ -297,11 +297,11 @@ console.log(5)
       drug.price.nadac  = nadac || drug.price.nadac
       drug.price.goodrx = goodrx || drug.price.goodrx
       drug.price.updatedAt = new Date().toJSON()
-console.log(6)
+console.log(6, drug)
       //Not only will this save the price to the drug but it will activate
       //drug's updateTransactions which will then update any transaction
       //containing this drug which does not already have a price
-      this.db.drug.put(drug, {this:this}).then(_ => console.log('saved new price for drug '+_id, drug)).catch(err => console.log(6, err))
+      this.db.drug.put(drug, {this:this}).then(_ => console.log('saved new price for drug '+_id, drug)).catch(err => console.log(7, err))
     })
   })
 }
