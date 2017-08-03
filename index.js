@@ -18,7 +18,7 @@ let models  = {
 process.on('unhandledRejection', (reason, promise) => {
   console.trace('unhandledRejection', reason instanceof Buffer ? reason.toString() : reason)
   if (promise.then)
-    promise.then(err => console.trace('unhandledRejection promise.then', err)).catch(err => console.trace('unhandledRejection promise.catch', err))
+    promise.then(err => console.trace('unhandledRejection promise.then', reason instanceof Buffer ? reason.toString() : reason)).catch(err => console.trace('unhandledRejection promise.catch', reason instanceof Buffer ? reason.toString() : reason))
 })
 
 keys(function() {
