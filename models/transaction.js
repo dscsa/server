@@ -376,7 +376,7 @@ function getGoodrx(drug) {
   //409 error means qs not properly encoded, 400 means missing drug
   let url = goodrxUrl(fullName, strength)
   return this.ajax({url}).then(goodrx => formatPrice(goodrx.data.price/goodrx.data.quantity))
-  .catch(err =>{
+  .catch(goodrx =>{
     let substitutes = goodrx.errors && goodrx.errors[0].candidates
     if ( ! substitutes)
       return console.log('GoodRx responded that there are no substitutes for', err, drug._id, drug.generic, url)

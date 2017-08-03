@@ -65,8 +65,6 @@ function updateTransactions(drug, rev) {
         transaction.drug.price.updatedAt = drug.price.updatedAt
       }
 
-      console.log('updating transaction', transaction._id, transaction.drug.price)
-
       //console.log('updateTransaction', transaction)
       //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
       return this.db.transaction.put(transaction, {this:this, ajax:admin.ajax})
