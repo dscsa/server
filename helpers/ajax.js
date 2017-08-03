@@ -28,8 +28,8 @@ module.exports = defaults => {
       if ( ! err) return resolve(body)
 
       err.stack += '\n'+stack
-      console.log('err', err)
-      reject(err)
+      console.log('err', err.stack)
+      throw err
     })
 
     //Do we still need the below?
