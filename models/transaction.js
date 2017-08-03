@@ -265,7 +265,7 @@ function authorized(doc, shipment_id) {
 function checkPrice(doc, price, key, opts) {
   //TODO One transaction is saved many times when initally entered,
   //so should we only update price once by checking isNew()??
-  console.log('a', price, doc)
+  console.log('a', price, doc, price.goodrx || price.nadac)
   if (price.goodrx || price.nadac)
     return
 console.log('b')
