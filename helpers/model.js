@@ -4,7 +4,7 @@ let csv = require('csv/server')
 
 exports.get = function* (name) {
   this.query.selector  = JSON.parse(this.query.selector)
-  this.query.open_revs = JSON.parse(this.query.open_revs)
+  this.query.open_revs = JSON.parse(this.query.open_revs || "null")
   this.body = yield this.db[name].get(this.query.selector.id, this.query)
 }
 
