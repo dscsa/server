@@ -59,9 +59,13 @@ function updateTransactions(drug, rev) {
       transaction.drug.brand    = drug.brand
       transaction.drug.generic  = drug.generic
 
-      if ( ! transaction.drug.price.goodrx || ! transaction.drug.price.goodrx) {
-        transaction.drug.price.goodrx = transaction.drug.price.goodrx || drug.price.goodrx
-        transaction.drug.price.nadac = transaction.drug.price.nadac || drug.price.nadac
+      if ( ! transaction.drug.price.goodrx) {
+        transaction.drug.price.goodrx = drug.price.goodrx
+        transaction.drug.price.updatedAt = drug.price.updatedAt
+      }
+
+      if ( ! transaction.drug.price.nadac) {
+        transaction.drug.price.nadac = drug.price.nadac
         transaction.drug.price.updatedAt = drug.price.updatedAt
       }
       //console.log('updateTransaction', transaction)
