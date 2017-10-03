@@ -46,11 +46,13 @@ function saveLogin(doc, val, key, opts) {
   if (doc.password) {
     //User ._id not .phone since _id has had all extraneous characters removed
     let _user = {name:doc._id, password:doc.password, roles:['allAccounts', doc.account._id]}
-    console.log('saveLogin', _user, doc)
+    console.log('saveLogin', _user, doc, admin)
     delete doc.password //we don't want to save this in the user table
 
     return this.db._users.put(_user, admin).then(_ => session.call(this, _user)).catch(err => console.log('new session err', err))
   }
+
+  console.log('saveLogin doc.password not set')
 
   return true
 }
