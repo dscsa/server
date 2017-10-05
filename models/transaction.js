@@ -252,7 +252,7 @@ exports.validate = function(model) {
   return model
     .ensure('isChecked').set(doc => undefined) //client sets this but we don't want to save it
     .ensure('shipment._id').custom(authorized).withMessage('You are not authorized to modify this transaction')
-    .ensure('drug.price').trigger(checkPrice).withMessage('Could not get drug information')
+    .ensure('drug.price').trigger(updatePrice).withMessage("Could not get update the drug's price for this transaction")
 }
 
 //Context-specific - options MUST have 'this' property in order to work.
@@ -261,29 +261,19 @@ function authorized(doc, shipment_id) {
   return id[0] == this.account._id || id[2] == this.account._id
 }
 
-//Context-specific - options MUST have 'this' property in order to work.
-function checkPrice(doc, price, key, opts) {
-  //TODO One transaction is saved many times when initally entered,
-  //so should we only update price once by checking isNew()??
-  console.log('check drug prices for '+doc.drug._id, price)
-  if (price.goodrx || price.nadac)
-    return
+function updatePrice(doc, oldPrice, key, opts) {
 
-  if (new Date() - new Date(price.updatedAt) < 7*24*60*60*1000)
-    return
+  if (oldPrice.goodrx && oldPrice.nadac) return
 
-  //Wait 10 secs before update so pricing data is not overwritten
-  //by next save before the pricing data is synced back to browser
-  console.log('updating drug prices for '+doc.drug._id, price)
-  setTimeout(_ => {
-    return this.db.drug.get(doc.drug._id)
-    .then(doc => drug.setPrice.call(this, doc))
-    //Not only will this save the price to the drug but it will activate
-    //drug's updateTransactions which will then update any transaction
-    //containing this drug which does not already have a price (including this transaction)
-    .then(drug => drug && this.db.drug.put(drug, {this:this}))
-    .then(drug => drug && console.log('saved new price for drug '+drug._id, drug))
-  }, 10000)
+  return drug.updatePrice.call(this, doc.drug)
+  .then(newPrice => {
+
+    if ( ! newPrice) return //price was up-to-date
+    //don't override the prices that are already set
+    oldPrice.nadac = oldPrice.nadac || newPrice.nadac
+    oldPrice.goodrx = oldPrice.goodrx || newPrice.goodrx
+    console.log('Updated the price of the drug '+doc.drug._id+' for this transaction', doc)
+  })
 }
 
 //TODO don't search for shipment if shipment._id doesn't have two periods (inventory)
