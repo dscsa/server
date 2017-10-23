@@ -3,6 +3,7 @@
 module.exports = exports = Object.create(require('../helpers/model'))
 
 let csv = require('csv/server')
+let admin = {ajax:{auth:require('../../../keys/dev')}}
 
 exports.views = {
   //Use _bulk_get here instead? Not supported in 1.6
@@ -87,7 +88,17 @@ exports.validate = function(model) {
 
 //Context-specific - options MUST have 'this' property in order to work.
 function authorized(doc, val, key, opts) {
-  return exports.isNew(doc, opts) || doc._id == this.account._id
+
+  if (this.account._id)
+    return doc._id == this.account._id
+
+  if (exports.isNew(doc, opts)) {
+    console.log('account is new')
+    return this.ajax = admin.ajax, true //enable user to be created even though current user doesn't exist and therefor doesn't have allAccounts role
+  }
+
+  console.log('account is not authorized', doc._rev, opts)
+  return false
 }
 
 exports.authorized = {

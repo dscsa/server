@@ -109,15 +109,15 @@ keys(function() {
   r('/favicon.ico', {end:false})
     .get(get_asset)
 
-  r('/:model/', {strict:true}) //Shows DB info including update_seq#
-    .get(proxy)
+  r('/:model/', {strict:true}) //Shows DB info including update_seq#, needed for replication for new users
+    .get(adminProxy)
 
   r('/:model/_revs_diff')      //Not sure why PouchDB needs this
-    .post(proxy)
+    .post(adminProxy)
 
   r('/:model/_local/:doc')
-    .get(proxy)
-    .put(proxy)
+    .get(adminProxy)
+    .put(adminProxy)
 
   r('/:model/_local%2F:doc')
     .put(proxy)
@@ -220,6 +220,11 @@ keys(function() {
   //
   // Hoisted Helper Functions
   //
+
+  function* adminProxy(db) {
+    this.req.auth = require('../../keys/dev')
+    return yield proxy.call(this, db)
+  }
 
   function* proxy(db) {
 

@@ -29,7 +29,16 @@ exports.validate = function(model) {
 
 //Context-specific - options MUST have 'this' property in order to work.
 function authorized(doc, val, key, opts) {
-  return this.account._id ? doc.account._id == this.account._id : exports.isNew(doc, opts)
+
+  if (this.account._id)
+    return doc.account._id == this.account._id
+
+  if (exports.isNew(doc, opts)) {
+    console.log('user is new')
+    return this.ajax = admin.ajax, true //enable user to be created even though current user doesn't exist and therefor doesn't have allAccounts role
+  }
+
+  return false
 }
 
 //Context-specific - options MUST have 'this' property in order to work.
@@ -49,7 +58,7 @@ function saveLogin(doc, val, key, opts) {
     console.log('saveLogin', _user, doc, admin)
     delete doc.password //we don't want to save this in the user table
 
-    return this.db._users.put(_user, admin).then(_ => session.call(this, _user)).catch(err => console.log('new session err', err))
+    return this.db._users.put(_user, admin).catch(err => console.log('new session err', err))
   }
 
   console.log('saveLogin doc.password not set')
