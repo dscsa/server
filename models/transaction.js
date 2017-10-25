@@ -265,7 +265,10 @@ function updatePrice(doc, oldPrice, key, opts) {
 
   if (oldPrice.goodrx && oldPrice.nadac) return
 
-  return drug.updatePrice.call(this, doc.drug)
+  //This transaction will save, so we can't update this _rev with a price
+  //without causing a discrepancy between the client and server.  Instead, we wait for a
+  //tranaction with any edit to be fully entered and then save the price info to a new _rev which will replicate back to the client
+  return drug.updatePrice.call(this, doc.drug, 15000)
   .then(newPrice => {
 
     if ( ! newPrice) return //price was up-to-date

@@ -112,7 +112,7 @@ exports.authorized = {
     //Authorize a sender
     console.log(this.account._id, this.req.body)
     let account = yield this.db.account.get(this.account._id)
-
+    console.log(account.authorized, account.authorized.indexOf(this.req.body))
     //allow body to be an array of ids to authorize
     let index = account.authorized.indexOf(this.req.body)
 

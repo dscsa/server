@@ -36,11 +36,18 @@ exports.get_csv = function*(db) {
 exports.validate = function(model) {
   return model
     .ensure('_rev').custom(updateTransactions).withMessage('Could not update transactions containing this drug')
-    .ensure('_rev').trigger(exports.updatePrice).withMessage('Could not update the price of this drug')
+    .ensure('_rev').trigger(updatePrice).withMessage('Could not update the price of this drug')
 }
 
 function isUpdated(updatedAt) {
   return new Date() - new Date(updatedAt) < 7*24*60*60*1000
+}
+
+function updatePrice(drug, rev, key, opts) {
+  //This drug rev was saved to pouchdb on client.  We can't update this _rev with a price
+  //without causing a discrepancy between the client and server.  Instead, we wait for a
+  //bit and then save the price info to a new _rev which will replicate back to the client
+  return exports.isNew(drug, opts) && exports.updatePrice.call(this, drug, 500)
 }
 
 //GET the full drug first since want this to work with both drug and transaction.drug
@@ -48,14 +55,11 @@ function isUpdated(updatedAt) {
 //Look up the goodrx and nadac price of the drug
 //Update the drug with the new price info
 //Update all transactions with 0 price including any that were just entered
-exports.updatePrice = function(drug, rev, key, opts) {
+exports.updatePrice = function(drug, delay) {
 
-  return exports.isNew(drug, opts) && getPrice.call(this, drug)
+  return getPrice.call(this, drug)
   .then(price => {
     console.log('drug.updatePrice', price)
-    //This drug rev was saved to pouchdb on client.  We can't update this _rev with a price
-    //without causing a discrepancy between the client and server.  Instead, we wait for a
-    //bit and then save the price info to a new _rev which will replicate back to the client
     if (price)
       setTimeout(_ => {
         this.db.drug.get(drug._id)
@@ -64,7 +68,7 @@ exports.updatePrice = function(drug, rev, key, opts) {
           return this.db.drug.put(drug, {this:this})
         })
         .catch(err => console.log('drug.updatePrice saving err', err))
-      }, 1000)
+      }, delay)
 
     return price
   })
