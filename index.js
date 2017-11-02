@@ -178,6 +178,9 @@ keys(function() {
   r('/account/:id/users.csv')     //Allow user to get, modify, & delete docs
     .get(models.account.users)
 
+  r('/account/:id/bins.csv')     //Allow user to get, modify, & delete docs
+    .get(models.account.bins)
+
   r('/:model/:id')
     .get(function*(db, id) {
       this.query.selector = `{"id":"${id}"}`

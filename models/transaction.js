@@ -115,9 +115,12 @@ exports.views = {
     require('isPending')(doc) && emit([doc.shipment._id.slice(0, 10), doc.next[0].createdAt])
   },
 
-  //Client bin checking and reorganizatoin
-  'inventory.bin':function(doc) {
-    require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.bin])
+  //Client bin checking and reorganizatoin.  Skip reduce with reduce=false
+  'inventory.bin':{
+    map(doc) {
+      require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.bin])
+    },
+    reduce:'_count'
   },
 
   //Client expiration removal

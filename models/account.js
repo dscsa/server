@@ -77,6 +77,12 @@ exports.users = function* (id) { //account._id will not be set because google do
   this.body  = csv.fromJSON(view.rows, this.query.fields && this.query.fields.split(','))
 }
 
+exports.bins = function* (id) { //account._id will not be set because google does not send cookie
+  const view = yield this.db.transaction.query('inventory.bins', opts(this.query.group_level, id))
+  let sortAsc = view.rows.sort((a, b) => a.value - b.value)
+  this.body  = csv.fromJSON(sortAsc, this.query.fields && this.query.fields.split(','))
+}
+
 function opts(group_level = 0, id) {
    return {group_level:+group_level+1, startkey:[id], endkey:[id, {}]}
 }
