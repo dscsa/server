@@ -118,7 +118,7 @@ exports.views = {
   //Client bin checking and reorganizatoin.  Skip reduce with reduce=false
   'inventory.bin':{
     map(doc) {
-      require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.bin])
+      require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.bin.slice(0, 3), doc.bin.slice(3)])
     },
     reduce:'_count'
   },
