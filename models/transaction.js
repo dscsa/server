@@ -147,19 +147,21 @@ exports.views = {
   inventory:{
     map(doc) {
       var qty = require('qty')(doc)
-      var isBinned    = require('isBinned')(doc)
-      var isPending   = require('isPending')(doc)
-      var isRepacked  = require('isRepacked')(doc)
+      var dispensedQty = require('isDispensed')(doc) ? qty : 0
+      var isBinned     = require('isBinned')(doc)
+      var isPending    = require('isPending')(doc)
+      var isRepacked   = require('isRepacked')(doc)
+
       var key         = [doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id]
 
       if (isRepacked)
-        emit(key, {"qty.binned":0, "qty.pending":0, "qty.repacked":qty})
+        emit(key, {"qty.binned":0, "qty.pending":0, "qty.repacked":qty, 'qty.dispensed':dispensedQty})
 
       if (isBinned)
-        emit(key, {"qty.binned":qty, "qty.pending":0, "qty.repacked":0})
+        emit(key, {"qty.binned":qty, "qty.pending":0, "qty.repacked":0, 'qty.dispensed':dispensedQty})
 
       if (isPending)
-        emit(key, {"qty.binned":0, "qty.pending":qty, "qty.repacked":0})
+        emit(key, {"qty.binned":0, "qty.pending":qty, "qty.repacked":0, 'qty.dispensed':dispensedQty})
     },
     reduce
   },
