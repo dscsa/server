@@ -86,7 +86,7 @@ exports.lib = {
 
     //This should be 0 because drugs in should equal drugs out
     if (type == 'qty')
-      metric['qty.error'] = metric['qty.received'] - metric['qty.disposed'] - metric['qty.binned'] - metric['qty.repacked'] - metric['qty.pending'] - metric['qty.dispensed']
+      metric['qty.in-out'] = metric['qty.received'] - metric['qty.disposed'] - metric['qty.binned'] - metric['qty.repacked'] - metric['qty.pending'] - metric['qty.dispensed']
 
     return metric
   }
@@ -147,21 +147,25 @@ exports.views = {
   inventory:{
     map(doc) {
       var qty = require('qty')(doc)
-      var dispensedQty = require('isDispensed')(doc) ? qty : 0
+
       var isBinned     = require('isBinned')(doc)
       var isPending    = require('isPending')(doc)
       var isRepacked   = require('isRepacked')(doc)
+      var isDispensed  = require('isDispensed')(doc)
 
-      var key         = [doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id]
+      var key          = [doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id]
 
       if (isRepacked)
-        emit(key, {"qty.binned":0, "qty.pending":0, "qty.repacked":qty, 'qty.dispensed':dispensedQty})
+        emit(key, {"qty.binned":0, "qty.pending":0, "qty.repacked":qty, 'qty.dispensed':0})
 
       if (isBinned)
-        emit(key, {"qty.binned":qty, "qty.pending":0, "qty.repacked":0, 'qty.dispensed':dispensedQty})
+        emit(key, {"qty.binned":qty, "qty.pending":0, "qty.repacked":0, 'qty.dispensed':0})
 
       if (isPending)
-        emit(key, {"qty.binned":0, "qty.pending":qty, "qty.repacked":0, 'qty.dispensed':dispensedQty})
+        emit(key, {"qty.binned":0, "qty.pending":qty, "qty.repacked":0, 'qty.dispensed':0})
+
+      if (isDispensed)
+        emit(key, {"qty.binned":0, "qty.pending":0, "qty.repacked":0, 'qty.dispensed':qty})
     },
     reduce
   },
