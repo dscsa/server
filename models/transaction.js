@@ -67,27 +67,60 @@ exports.lib = {
     return doc.next[0] && doc.next[0].dispensed
   },
 
-  dateKey(doc) {
-    return [doc.shipment._id.slice(0, 10)].concat(doc._id.slice(0, 10).split('-'))
+  //For authorization purposes.  Only allow recipients to see their own metrics
+  recipient_id(doc) {
+    return doc.shipment._id.slice(0, 10))
   },
 
-  metrics(doc, type) {
+  createdAt(doc) {
+    return doc._id.slice(0, 10).split('-')
+  },
+
+  updatedAt(doc) {
+    return doc.updatedAt.slice(0, 10).split('-')
+  },
+
+  nextAt(doc) {
+    return doc.next[0].createdAt.slice(0, 10).split('-')
+  },
+
+  //Sugar to make a key in the form [recipient_id, (optional) prefix(s), year, month, day]
+  dateKey(doc, dateType, prefix) {
+    return require('flatten')(require('recipient_id')(doc), prefix || [], require(dateType)(doc))
+  },
+
+  flatten() {
+    var flatArray = []
+    for (var i in arguments)
+      flatArray = flatArray.concat(arguments[i])
+    return flatArray
+  },
+
+  createdAtMetrics(doc, type) {
     var val = require(type)(doc)
 
     var metric = {}
-    metric[type+'.received'] = require('isReceived')(doc) ? val : 0,
-    metric[type+'.accepted'] = require('isAccepted')(doc) ? val : 0,
-    metric[type+'.disposed'] = require('isDisposed')(doc) ? val : 0,
-    metric[type+'.binned'] = require('isBinned')(doc) ? val : 0,
-    metric[type+'.repacked'] = require('isRepacked')(doc) ? val : 0,
-    metric[type+'.pending'] = require('isPending')(doc) ? val : 0,
-    metric[type+'.repacked'] = require('isRepacked')(doc) ? val : 0,
+    metric[type+'.received'] = require('isReceived')(doc) ? val : 0
+    metric[type+'.accepted'] = require('isAccepted')(doc) ? val : 0
+    return metric
+  },
+
+  updatedAtMetrics(doc, type) {
+    var val = require(type)(doc)
+
+    var metric = {}
+    metric[type+'.disposed'] = require('isDisposed')(doc) ? val : 0
+    metric[type+'.binned'] = require('isBinned')(doc) ? val : 0
+    metric[type+'.repacked'] = require('isRepacked')(doc) ? val : 0
+    return metric
+  },
+
+  nextAtMetrics(doc, type) {
+    var val = require(type)(doc)
+
+    var metric = {}
+    metric[type+'.pending'] = require('isPending')(doc) ? val : 0
     metric[type+'.dispensed'] = require('isDispensed')(doc) ? val : 0
-
-    //This should be 0 because drugs in should equal drugs out
-    if (type == 'qty')
-      metric['qty.in-out'] = metric['qty.received'] - metric['qty.disposed'] - metric['qty.binned'] - metric['qty.repacked'] - metric['qty.pending'] - metric['qty.dispensed']
-
     return metric
   }
 }
@@ -95,77 +128,72 @@ exports.lib = {
 //Transactions
 exports.views = {
   //Used by history
+
   'next.transaction._id':function(doc) {
     for (var i in doc.next)
-      doc.next[i].transaction && emit([doc.shipment._id.slice(0, 10), doc.next[i].transaction._id])
+      doc.next[i].transaction && emit([require('recipient_id')(doc), doc.next[i].transaction._id])
   },
 
   //used by drug endpoint to update transactions on drug name/form updates
   'drug._id':function(doc) {
-    emit([doc.shipment._id.slice(0, 10), doc.drug._id])
+    emit([require('recipient_id')(doc), doc.drug._id])
   },
 
   //Client shipments page
   'shipment._id':function(doc) {
-    emit([doc.shipment._id.slice(0, 10), doc.shipment._id])
+    emit([require('recipient_id')(doc), doc.shipment._id])
   },
 
   //Client pending drawer
   'inventory.pendingAt':function(doc) {
-    require('isPending')(doc) && emit([doc.shipment._id.slice(0, 10), doc.next[0].createdAt])
+    require('isPending')(doc) && emit([require('recipient_id')(doc), doc.next[0].createdAt])
   },
 
   //Client bin checking and reorganizatoin.  Skip reduce with reduce=false
   'inventory.bin':{
     map(doc) {
-      require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.bin.slice(0, 3), doc.bin.slice(3)])
+      require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.bin.slice(0, 3), doc.bin.slice(3)])
     },
     reduce:'_count'
   },
 
   //Client expiration removal
   'inventory.exp':function(doc) {
-    require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.exp.to || doc.exp.from])
+    require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.exp.to || doc.exp.from])
   },
 
   //Client shopping
   'inventory.drug.generic':function(doc) {
-    require('isInventory')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic, ! require('isRepacked')(doc)])
+    require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.drug.generic, ! require('isRepacked')(doc)])
   },
 
   //Backend to help if someone accidentally dispenses a drug
   'dispensed.drug.generic':function(doc) {
-    require('isDispensed')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
+    require('isDispensed')(doc) && emit([require('recipient_id')(doc), doc.drug.generic])
   },
 
   //Backend to help if someone accidentally disposes a drug
   'disposed.drug.generic':function(doc) {
-    require('isDisposed')(doc) && emit([doc.shipment._id.slice(0, 10), doc.drug.generic])
+    require('isDisposed')(doc) && emit([require('recipient_id')(doc), doc.drug.generic])
   },
 
   //Live inventory
   inventory:{
     map(doc) {
       var qty = require('qty')(doc)
+      var key = [require('recipient_id')(doc), doc.drug.generic, doc.drug._id]
 
-      var isBinned     = require('isBinned')(doc)
-      var isPending    = require('isPending')(doc)
-      var isRepacked   = require('isRepacked')(doc)
-      var isDispensed  = require('isDispensed')(doc)
+      if (require('isBinned')(doc))
+        emit(key, {"qty.binned":qty})
 
-      var key          = [doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id]
+      if (require('isRepacked')(doc))
+        emit(key, {"qty.repacked":qty})
 
-      if (isRepacked)
-        emit(key, {"qty.binned":0, "qty.pending":0, "qty.repacked":qty, 'qty.dispensed':0})
+      if (require('isPending')(doc))
+        emit(key, {"qty.pending":qty})
 
-      if (isBinned)
-        emit(key, {"qty.binned":qty, "qty.pending":0, "qty.repacked":0, 'qty.dispensed':0})
-
-      if (isPending)
-        emit(key, {"qty.binned":0, "qty.pending":qty, "qty.repacked":0, 'qty.dispensed':0})
-
-      if (isDispensed)
-        emit(key, {"qty.binned":0, "qty.pending":0, "qty.repacked":0, 'qty.dispensed':qty})
+      if (require('isDispensed')(doc))
+        emit(key, {"qty.dispensed":qty})
     },
     reduce
   },
@@ -180,25 +208,27 @@ exports.views = {
 
     //If not these what is it?
     if ( ! require('isReceived')(doc) && ! require('isDisposed')(doc) && ! require('isInventory')(doc) && ! require('isPending')(doc) && ! require('isDispensed')(doc))
-      emit(require('dateKey')(doc), 'in == out')
+      emit(require('createdAt')(doc), 'in == out')
 
     //If it is accepted/repacked, then it is either waiting on a bin or has a bin length of 3 or 4
     if (doc.verifiedAt && ( ! doc.bin || (doc.bin.length != 3 && doc.bin.length != 4)))
-      emit(require('dateKey')(doc), 'accepted but no bin')
+      emit(require('createdAt')(doc), 'accepted but no bin')
 
     //If it is accepted and not yet repacked/dispensed, then why is it not in inventory or pending?
     if (require('isAccepted')(doc) && ! next.length && ! (require('isInventory')(doc) || require('isPending')(doc)))
-      emit(require('dateKey')(doc), 'accepted not inventory')
+      emit(require('createdAt')(doc), 'accepted not inventory')
 
     //If not accepted and not repacked, how is it in inventory/pending?
     if ( ! require('isAccepted')(doc) && ! require('isRepacked')(doc) && (require('isInventory')(doc) || require('isPending')(doc)))
-      emit(require('dateKey')(doc), 'inventory not accepted')
+      emit(require('createdAt')(doc), 'inventory not accepted')
   },
 
   //Used by account/:id/metrics.csv
   count:{
     map(doc) {
-      emit(require('dateKey')(doc), require('metrics')(doc, 'count'))
+      emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'count'))
+      emit(require('dateKey')(doc, 'updatedAt')), require('updatedAtMetrics')(doc, 'count'))
+      doc.next[0] && emit(require('dateKey')(doc, 'nextAt')), require('nextAtMetrics')(doc, 'count'))
     },
     reduce
   },
@@ -206,7 +236,16 @@ exports.views = {
   //Used by account/:id/metrics.csv
   qty:{
     map(doc) {
-      emit(require('dateKey')(doc), require('metrics')(doc, 'qty'))
+      var createdAtMetrics = require('createdAtMetrics')(doc, 'qty')
+      var updatedAtMetrics = require('updatedAtMetrics')(doc, 'qty')
+      var nextAtMetrics = require('nextAtMetrics')(doc, 'qty')
+
+      //In aggregate, this should be 0 because drugs in should equal drugs out
+      nextAtMetrics['qty.in-out'] = createdAtMetrics['qty.received'] - updatedAtMetrics['qty.disposed'] - updatedAtMetrics['qty.binned'] - updatedAtMetrics['qty.repacked'] - nextAtMetrics['qty.pending'] - nextAtMetrics['qty.dispensed']
+
+      emit(require('dateKey')(doc, 'createdAt'), createdAtMetrics)
+      emit(require('dateKey')(doc, 'updatedAt'), updatedAtMetrics)
+      doc.next[0] && emit(require('dateKey')(doc, 'nextAt'), nextAtMetrics)
     },
     reduce
   },
@@ -214,7 +253,9 @@ exports.views = {
   //Used by account/:id/metrics.csv
   value:{
     map(doc) {
-      emit(require('dateKey')(doc), require('metrics')(doc, 'value'))
+      emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'value'))
+      emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'value'))
+      doc.next[0] && emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'value'))
     },
     reduce
   },
@@ -222,8 +263,9 @@ exports.views = {
   //Used by account/:id/record.csv
   record:{
     map(doc) {
-      var date = doc._id.slice(0, 10).split('-')
-      emit([doc.shipment._id.slice(0, 10), doc.drug.generic, doc.drug._id, date[0], date[1], date[2], doc._id], require('metrics')(doc, 'qty'))
+      emit(require('dateKey')(doc, 'createdAt', [doc.drug.generic, doc.drug._id]), require('createdAtMetrics')(doc, 'qty'))
+      emit(require('dateKey')(doc, 'updatedAt', [doc.drug.generic, doc.drug._id]), require('updatedAtMetrics')(doc, 'qty'))
+      doc.next[0] && emit(require('dateKey')(doc, 'nextAt', [doc.drug.generic, doc.drug._id]), require('nextAtMetrics')(doc, 'qty'))
     },
     reduce
   },
@@ -231,8 +273,9 @@ exports.views = {
   //Used to track user based activity
   users:{
     map(doc) {
-      var date = doc._id.slice(0, 10).split('-')
-      emit([doc.shipment._id.slice(0, 10), doc.user._id, date[0], date[1], date[2]], require('metrics')(doc, 'count'))
+      emit(require('dateKey')(doc, 'createdAt', [doc.user._id]), require('createdAtMetrics')(doc, 'count'))
+      emit(require('dateKey')(doc, 'updatedAt', [doc.user._id]), require('updatedAtMetrics')(doc, 'count'))
+      doc.next[0] && emit(require('dateKey')(doc, 'nextAt', [doc.user._id]), require('nextAtMetrics')(doc, 'count'))
     },
     reduce
   }
