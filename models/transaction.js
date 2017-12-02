@@ -69,7 +69,7 @@ exports.lib = {
 
   //For authorization purposes.  Only allow recipients to see their own metrics
   recipient_id(doc) {
-    return doc.shipment._id.slice(0, 10))
+    return doc.shipment._id.slice(0, 10)
   },
 
   createdAt(doc) {
@@ -227,8 +227,8 @@ exports.views = {
   count:{
     map(doc) {
       emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'count'))
-      emit(require('dateKey')(doc, 'updatedAt')), require('updatedAtMetrics')(doc, 'count'))
-      doc.next[0] && emit(require('dateKey')(doc, 'nextAt')), require('nextAtMetrics')(doc, 'count'))
+      emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'count'))
+      doc.next[0] && emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'count'))
     },
     reduce
   },
