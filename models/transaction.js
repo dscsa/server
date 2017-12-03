@@ -80,8 +80,9 @@ exports.lib = {
     return doc.updatedAt.slice(0, 10).split('-')
   },
 
+  //when next[0] is undefined, rather than stopping emit() lets just emit the updatedAt key
   nextAt(doc) {
-    return doc.next[0].createdAt.slice(0, 10).split('-')
+    return doc.next[0] ? doc.next[0].createdAt.slice(0, 10).split('-') : require('updatedAt')(doc)
   },
 
   //Sugar to make a key in the form [recipient_id, (optional) prefix(s), year, month, day]
@@ -100,18 +101,37 @@ exports.lib = {
     var val = require(type)(doc)
 
     var metric = {}
-    metric[type+'.received'] = require('isReceived')(doc) ? val : 0
-    metric[type+'.accepted'] = require('isAccepted')(doc) ? val : 0
+    //Setting these as 0 keeps a consistent property order in couchdb
+    metric[type+'.received']  = require('isReceived')(doc) ? val : 0
+    metric[type+'.accepted']  = require('isAccepted')(doc) ? val : 0
+    metric[type+'.disposed']  = 0
+    metric[type+'.binned']    = 0
+    metric[type+'.repacked']  = 0
+    metric[type+'.pending']   = 0
+    metric[type+'.dispensed'] = 0
+
+    if (type == 'qty')
+      metric['qty.in-out'] = metric['qty.received'] //In aggregate, this should be 0 because drugs in should equal drugs out
+
     return metric
   },
-
+createdAtMetrics['qty.received'] - updatedAtMetrics['qty.disposed'] - updatedAtMetrics['qty.binned'] - updatedAtMetrics['qty.repacked'] - nextAtMetrics['qty.pending'] - nextAtMetrics['qty.dispensed']
   updatedAtMetrics(doc, type) {
     var val = require(type)(doc)
 
     var metric = {}
-    metric[type+'.disposed'] = require('isDisposed')(doc) ? val : 0
-    metric[type+'.binned'] = require('isBinned')(doc) ? val : 0
-    metric[type+'.repacked'] = require('isRepacked')(doc) ? val : 0
+    //Setting these as 0 keeps a consistent property order in couchdb
+    metric[type+'.received']  = 0
+    metric[type+'.accepted']  = 0
+    metric[type+'.disposed']  = require('isDisposed')(doc) ? val : 0
+    metric[type+'.binned']    = require('isBinned')(doc) ? val : 0
+    metric[type+'.repacked']  = require('isRepacked')(doc) ? val : 0
+    metric[type+'.pending']   = 0
+    metric[type+'.dispensed'] = 0
+
+    if (type == 'qty')
+      metric['qty.in-out'] = - metric['qty.disposed'] - metric['qty.binned'] - metric['qty.repacked'] //In aggregate, this should be 0 because drugs in should equal drugs out
+
     return metric
   },
 
@@ -119,8 +139,18 @@ exports.lib = {
     var val = require(type)(doc)
 
     var metric = {}
-    metric[type+'.pending'] = require('isPending')(doc) ? val : 0
+    //Setting these as 0 keeps a consistent property order in couchdb
+    metric[type+'.received']  = 0
+    metric[type+'.accepted']  = 0
+    metric[type+'.disposed']  = 0
+    metric[type+'.binned']    = 0
+    metric[type+'.repacked']  = 0
+    metric[type+'.pending']   = require('isPending')(doc) ? val : 0
     metric[type+'.dispensed'] = require('isDispensed')(doc) ? val : 0
+
+    if (type == 'qty')
+      metric['qty.in-out'] = - metric['qty.pending'] - metric['qty.dispensed'] //In aggregate, this should be 0 because drugs in should equal drugs out
+
     return metric
   }
 }
@@ -228,7 +258,7 @@ exports.views = {
     map(doc) {
       emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'count'))
       emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'count'))
-      doc.next[0] && emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'count'))
+      emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'count'))
     },
     reduce
   },
@@ -236,16 +266,9 @@ exports.views = {
   //Used by account/:id/metrics.csv
   qty:{
     map(doc) {
-      var createdAtMetrics = require('createdAtMetrics')(doc, 'qty')
-      var updatedAtMetrics = require('updatedAtMetrics')(doc, 'qty')
-      var nextAtMetrics = require('nextAtMetrics')(doc, 'qty')
-
-      //In aggregate, this should be 0 because drugs in should equal drugs out
-      nextAtMetrics['qty.in-out'] = createdAtMetrics['qty.received'] - updatedAtMetrics['qty.disposed'] - updatedAtMetrics['qty.binned'] - updatedAtMetrics['qty.repacked'] - nextAtMetrics['qty.pending'] - nextAtMetrics['qty.dispensed']
-
-      emit(require('dateKey')(doc, 'createdAt'), createdAtMetrics)
-      emit(require('dateKey')(doc, 'updatedAt'), updatedAtMetrics)
-      doc.next[0] && emit(require('dateKey')(doc, 'nextAt'), nextAtMetrics)
+      emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'qty'))
+      emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'qty'))
+      emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'qty'))
     },
     reduce
   },
@@ -255,7 +278,7 @@ exports.views = {
     map(doc) {
       emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'value'))
       emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'value'))
-      doc.next[0] && emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'value'))
+      emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'value'))
     },
     reduce
   },
@@ -265,7 +288,7 @@ exports.views = {
     map(doc) {
       emit(require('dateKey')(doc, 'createdAt', [doc.drug.generic, doc.drug._id]), require('createdAtMetrics')(doc, 'qty'))
       emit(require('dateKey')(doc, 'updatedAt', [doc.drug.generic, doc.drug._id]), require('updatedAtMetrics')(doc, 'qty'))
-      doc.next[0] && emit(require('dateKey')(doc, 'nextAt', [doc.drug.generic, doc.drug._id]), require('nextAtMetrics')(doc, 'qty'))
+      emit(require('dateKey')(doc, 'nextAt', [doc.drug.generic, doc.drug._id]), require('nextAtMetrics')(doc, 'qty'))
     },
     reduce
   },
@@ -275,7 +298,7 @@ exports.views = {
     map(doc) {
       emit(require('dateKey')(doc, 'createdAt', [doc.user._id]), require('createdAtMetrics')(doc, 'count'))
       emit(require('dateKey')(doc, 'updatedAt', [doc.user._id]), require('updatedAtMetrics')(doc, 'count'))
-      doc.next[0] && emit(require('dateKey')(doc, 'nextAt', [doc.user._id]), require('nextAtMetrics')(doc, 'count'))
+      emit(require('dateKey')(doc, 'nextAt', [doc.user._id]), require('nextAtMetrics')(doc, 'count'))
     },
     reduce
   }
