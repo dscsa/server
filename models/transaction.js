@@ -115,7 +115,7 @@ exports.lib = {
 
     return metric
   },
-createdAtMetrics['qty.received'] - updatedAtMetrics['qty.disposed'] - updatedAtMetrics['qty.binned'] - updatedAtMetrics['qty.repacked'] - nextAtMetrics['qty.pending'] - nextAtMetrics['qty.dispensed']
+
   updatedAtMetrics(doc, type) {
     var val = require(type)(doc)
 
