@@ -85,6 +85,10 @@ exports.lib = {
     return doc.next[0] ? doc.next[0].createdAt.slice(0, 10).split('-') : require('updatedAt')(doc)
   },
 
+  shippedAt(doc) {
+    return require('isReceived')(doc) ? doc.shipment._id.slice(11, 21).split('-') : require('createdAt')(doc) //createdAt is a pretty good proxy.  Only different if it takes more than one day to log the shipment
+  },
+
   //Sugar to make a key in the form [recipient_id, (optional) prefix(s), year, month, day]
   dateKey(doc, dateType, prefix) {
     return require('flatten')(require('recipient_id')(doc), prefix || [], require(dateType)(doc))
@@ -299,6 +303,18 @@ exports.views = {
       emit(require('dateKey')(doc, 'createdAt', [doc.user._id]), require('createdAtMetrics')(doc, 'count'))
       emit(require('dateKey')(doc, 'updatedAt', [doc.user._id]), require('updatedAtMetrics')(doc, 'count'))
       emit(require('dateKey')(doc, 'nextAt', [doc.user._id]), require('nextAtMetrics')(doc, 'count'))
+    },
+    reduce
+  },
+
+  //Used by account/:id/from.csv to track metrics by state and donor
+  from:{
+    map(doc) {
+      var from = doc.shipment._id.split('.')[2]
+      var key  = require('dateKey')(doc, 'shippedAt', [from])
+      emit(key, require('createdAtMetrics')(doc, 'qty'))
+      emit(key, require('createdAtMetrics')(doc, 'value'))
+      emit(key, require('createdAtMetrics')(doc, 'count'))
     },
     reduce
   }

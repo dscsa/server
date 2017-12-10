@@ -77,6 +77,26 @@ exports.users = function* (id) { //account._id will not be set because google do
   this.body  = csv.fromJSON(view.rows, this.query.fields && this.query.fields.split(','))
 }
 
+exports.from = function* (id) { //account._id will not be set because google does not send cookie
+
+  const [transactions, allAccounts] = yield [
+    this.db.transaction.query('from', opts(this.query.group_level, id)),
+    this.db.account.allDocs({endkey:'_design', include_docs:true})
+  ]
+
+  //Turn into object for quicker repetitive lookups
+  var accounts = {}
+  for (let row of allAccounts.rows)
+    accounts[row.id] = row.doc
+
+  //Denormalize from-account data into our transactions.
+  for (let row of transactions.rows)
+    row.value.shipment = {from:accounts[row.key[1]]}
+
+  this.body = csv.fromJSON(transactions.rows, this.query.fields && this.query.fields.split(','))
+}
+
+//This is to find the emptiest bins
 exports.bins = function* (id) { //account._id will not be set because google does not send cookie
   const view = yield this.db.transaction.query('inventory.bin', opts(this.query.group_level || 1, id))
   let sortAsc = view.rows.sort((a, b) => a.value - b.value)
