@@ -308,13 +308,29 @@ exports.views = {
   },
 
   //Used by account/:id/from.csv to track metrics by state and donor
-  from:{
+  'from.count':{
+    map(doc) {
+      var from = doc.shipment._id.split('.')[2]
+      var key  = require('dateKey')(doc, 'shippedAt', [from])
+      emit(key, require('createdAtMetrics')(doc, 'count'))
+    },
+    reduce
+  },
+
+  'from.qty':{
     map(doc) {
       var from = doc.shipment._id.split('.')[2]
       var key  = require('dateKey')(doc, 'shippedAt', [from])
       emit(key, require('createdAtMetrics')(doc, 'qty'))
+    },
+    reduce
+  },
+
+  'from.value':{
+    map(doc) {
+      var from = doc.shipment._id.split('.')[2]
+      var key  = require('dateKey')(doc, 'shippedAt', [from])
       emit(key, require('createdAtMetrics')(doc, 'value'))
-      emit(key, require('createdAtMetrics')(doc, 'count'))
     },
     reduce
   }

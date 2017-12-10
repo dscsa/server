@@ -79,21 +79,26 @@ exports.users = function* (id) { //account._id will not be set because google do
 
 exports.from = function* (id) { //account._id will not be set because google does not send cookie
 
-  const [transactions, allAccounts] = yield [
-    this.db.transaction.query('from', opts(this.query.group_level, id)),
+  let options = opts(this.query.group_level, id)
+
+  const [qty, value, count, accounts] = yield [
+    this.db.transaction.query('from.qty', options),
+    this.db.transaction.query('from.value', options),
+    this.db.transaction.query('from.count', options),
     this.db.account.allDocs({endkey:'_design', include_docs:true})
   ]
 
   //Turn into object for quicker repetitive lookups
-  var accounts = {}
-  for (let row of allAccounts.rows)
-    accounts[row.id] = row.doc
+  var accountMap = {}
+  for (let row of accounts.rows)
+    accountMap[row.id] = row.doc
 
-  //Denormalize from-account data into our transactions.
-  for (let row of transactions.rows)
-    row.value.shipment = {from:accounts[row.key[1]]}
+  //Combine qty, value, and account.  Then denormalize from-account data into our transactions.
+  let rows = qty.rows.map((row, i) => {
+    return {key:row.key, value:Object.assign(row.value, value.rows[i].value, count.rows[i].value, {'shipment.from':accountMap[row.key[1]]})}
+  })
 
-  this.body = csv.fromJSON(transactions.rows, this.query.fields && this.query.fields.split(','))
+  this.body = csv.fromJSON(rows, this.query.fields && this.query.fields.split(','))
 }
 
 //This is to find the emptiest bins
