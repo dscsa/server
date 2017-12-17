@@ -78,7 +78,7 @@ function getPrice(drug) {
 
   let nadac     = getNadac.call(this, drug) //needs ndc9
   let goodrx    = getGoodrx.call(this, drug)
-  let invalidAt = new Date(Date.now()+7*24*60*60*1000).toJSON() //Auto-filled prices expire in one week
+  let invalidAt = new Date(Date.now()+7*24*60*60*1000).toJSON().slice(0, 10) //Auto-filled prices expire in one week
 
   return Promise.all([nadac, goodrx]).then(all => {
     return {nadac:all[0], goodrx:all[1], invalidAt}
