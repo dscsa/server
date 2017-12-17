@@ -39,10 +39,6 @@ exports.validate = function(model) {
     .ensure('_rev').trigger(updatePrice).withMessage('Could not update the price of this drug')
 }
 
-function isUpdated(updatedAt) {
-  return new Date() - new Date(updatedAt) < 7*24*60*60*1000
-}
-
 function updatePrice(drug, rev, key, opts) {
   //This drug rev was saved to pouchdb on client.  We can't update this _rev with a price
   //without causing a discrepancy between the client and server.  Instead, we wait for a
@@ -77,14 +73,15 @@ exports.updatePrice = function(drug, delay) {
 
 function getPrice(drug) {
 
-  if (isUpdated(drug.price.updatedAt))
+  if (new Date() < new Date(drug.price.invalidAt) )
     return Promise.resolve(false)
 
-  let nadac = getNadac.call(this, drug) //needs ndc9
-  let goodrx = getGoodrx.call(this, drug)
+  let nadac     = getNadac.call(this, drug) //needs ndc9
+  let goodrx    = getGoodrx.call(this, drug)
+  let invalidAt = new Date(Date.now()+7*24*60*60*1000).toJSON() //Auto-filled prices expire in one week
 
   return Promise.all([nadac, goodrx]).then(all => {
-    return {nadac:all[0], goodrx:all[1], updatedAt:new Date().toJSON()}
+    return {nadac:all[0], goodrx:all[1], invalidAt}
   })
 }
 
