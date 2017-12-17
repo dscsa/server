@@ -43,7 +43,7 @@ function updatePrice(drug, rev, key, opts) {
   //This drug rev was saved to pouchdb on client.  We can't update this _rev with a price
   //without causing a discrepancy between the client and server.  Instead, we wait for a
   //bit and then save the price info to a new _rev which will replicate back to the client
-  return exports.isNew(drug, opts) && exports.updatePrice.call(this, drug, 500)
+  return exports.updatePrice.call(this, drug, 500)
 }
 
 //GET the full drug first since want this to work with both drug and transaction.drug
