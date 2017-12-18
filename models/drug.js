@@ -89,53 +89,55 @@ function getPrice(drug) {
 //Context-specific - options MUST have 'this' property in order to work.
 //Get all transactins using this drug so we can update denormalized database
 function updateTransactions(drug, rev, key, opts) {
-  return exports.isNew(drug, opts) || this.db.transaction.query('drug._id', {key:[this.account._id, drug._id], include_docs:true})
-  .then(transactions => {
-    //console.log('updateTransactions', transactions)
-    return Promise.all(transactions.rows.map(row => {
-      let transaction = row.doc
-      if(
-          transaction.drug.generic == drug.generic &&
-          transaction.drug.form == drug.form &&
-          transaction.drug.brand == drug.brand &&
-          transaction.drug.price &&
-          transaction.drug.price.goodrx &&
-          transaction.drug.price.nadac &&
-          transaction.drug.price.retail
-        )
-        return
+  return exports.isNew(drug, opts) || setTimeout(_ => {
+    this.db.transaction.query('drug._id', {key:[this.account._id, drug._id], include_docs:true})
+    .then(transactions => {
+      //console.log('updateTransactions', transactions)
+      return Promise.all(transactions.rows.map(row => {
+        let transaction = row.doc
+        if(
+            transaction.drug.generic == drug.generic &&
+            transaction.drug.form == drug.form &&
+            transaction.drug.brand == drug.brand &&
+            transaction.drug.price &&
+            (transaction.drug.price.goodrx || ! drug.price.goodrx) &&
+            (transaction.drug.price.nadac || ! drug.price.nadac) &&
+            (transaction.drug.price.retail || ! drug.price.retail) &&
+          )
+          return
 
-      transaction.drug.generics = drug.generics
-      transaction.drug.form     = drug.form
-      transaction.drug.brand    = drug.brand
-      transaction.drug.generic  = drug.generic
+        transaction.drug.generics = drug.generics
+        transaction.drug.form     = drug.form
+        transaction.drug.brand    = drug.brand
+        transaction.drug.generic  = drug.generic
 
-      if ( ! transaction.drug.price.goodrx) {
-        transaction.drug.price.goodrx = drug.price.goodrx
-        transaction.drug.price.invalidAt = drug.price.invalidAt
-      }
+        if ( ! transaction.drug.price.goodrx) {
+          transaction.drug.price.goodrx = drug.price.goodrx
+          transaction.drug.price.invalidAt = drug.price.invalidAt
+        }
 
-      if ( ! transaction.drug.price.nadac) {
-        transaction.drug.price.nadac = drug.price.nadac
-        transaction.drug.price.invalidAt = drug.price.invalidAt
-      }
+        if ( ! transaction.drug.price.nadac) {
+          transaction.drug.price.nadac = drug.price.nadac
+          transaction.drug.price.invalidAt = drug.price.invalidAt
+        }
 
-      if ( ! transaction.drug.price.retail) {
-        transaction.drug.price.retail = drug.price.retail
-        transaction.drug.price.invalidAt = drug.price.invalidAt
-      }
-      //console.log('updateTransaction', transaction)
-      //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
-      return this.db.transaction.put(transaction, {this:this, ajax:admin.ajax})
-    }))
-  })
-  .then(puts => {
-    console.log(`updated ${puts.length} transactions to have drug name ${drug.generic}`) //err.errors['shipment._id'].rules
-    return true //make sure validation passes
-  })
-  .catch(err => {
-    console.log('updateTransactions err', err) //err.errors['shipment._id'].rules
-  })
+        if ( ! transaction.drug.price.retail) {
+          transaction.drug.price.retail = drug.price.retail
+          transaction.drug.price.invalidAt = drug.price.invalidAt
+        }
+        //console.log('updateTransaction', transaction)
+        //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
+        return this.db.transaction.put(transaction, {this:this, ajax:admin.ajax})
+      }))
+    })
+    .then(puts => {
+      console.log(`updated ${puts.filter(put => !!put).length} transactions to have drug name ${drug.generic}`) //err.errors['shipment._id'].rules
+      return true //make sure validation passes
+    })
+    .catch(err => {
+      console.log('updateTransactions err', err) //err.errors['shipment._id'].rules
+    })
+  }, 1000) //this needs to happen after update drug otherwise conflicts when saving drug can occur
 }
 
 function getNadac(drug) {
