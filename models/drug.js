@@ -142,21 +142,22 @@ function getNadac(drug) {
   let date = new Date(); date.setMonth(date.getMonth() - 2) //Datbase not always up to date so can't always do last week.  On 2016-06-18 last as_of_date was 2016-05-11, so lets look back two months
   let url = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date>"${date.toJSON().slice(0, -1)}"`
 
-  return this.ajax({url:url+nadacNdcUrl(drug)})
+  let nadacNdcUrl = url+nadacNdcUrl(drug)
+  return this.ajax({url:nadacNdcUrl})
   .then(nadac => {
 
     if (nadac.body && nadac.body.length)
       return nadacCalculatePrice(nadac.body.pop(), drug)
 
-    console.log('No NADAC price found for an ndc starting with '+drug.ndc9)
-
-    return this.ajax({url:url+nadacNameUrl(drug)})
+    console.log('No NADAC price found for an ndc starting with '+drug.ndc9, nadacNdcUrl)
+    let nadacNameUrl = url+nadacNameUrl(drug)
+    return this.ajax({url:nadacNameUrl})
     .then(nadac => {
 
       if(nadac.body && nadac.body.length)  //When the price is not found but no error is thrown
         return nadacCalculatePrice(nadac.body.pop(), drug)
 
-      console.log('No NADAC price found for a name like', drug.generics)
+      console.log('No NADAC price found for a name like', drug.generics, nadacNameUrl)
     })
   })
   .catch(err => console.log('nadac err', err))
