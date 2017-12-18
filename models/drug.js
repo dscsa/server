@@ -268,7 +268,7 @@ function goodrxApi(endpoint, drug, strength) {
 
 //Brand better for compound name. Otherwise use first word since, suffixes like hydrochloride sometimes don't match
 function formatDrugName(drug) {
-  return drug.brand || drug.generics.map(generic => generic.name).join('-')
+  return drug.brand || drug.generics.map(generic => generic.name).join('-')+' '+drug.form
 }
 
 function formatDrugStrength(drug) {
