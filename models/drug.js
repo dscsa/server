@@ -166,7 +166,7 @@ function getNadac(drug) {
 //drug may be transaction.drug which doesn't have drug.ndc9
 function nadacNdcUrl(drug) {
   drug.ndc9 = drug.ndc9 || ndc9(drug)
-  return `AND starts_with(ndc,"${ndc9}")`
+  return `AND starts_with(ndc,"${drug.ndc9}")`
 }
 
 function ndc9(drug) {
