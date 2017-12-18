@@ -287,7 +287,7 @@ function formatPrice(price) {
 function averagePrice(goodrx) {
   let sum = goodrx.prices.reduce((a, b, i) => {
     let savings = parseFloat(goodrx.price_detail.savings[i]) || 0
-    return a + b*savings/100
+    return a + b/(1-savings/100)
   })
   let avg = sum / goodrx.prices.length
   return formatPrice(avg/goodrx.quantity)
