@@ -214,7 +214,7 @@ function getGoodrx(drug) {
   let fullName = formatDrugName(drug)
   let strength = formatDrugStrength(drug)
 
-  return goodrxApi('fair-price', fullName, strength).then(nameSearch => {
+  return goodrxApi.call(this, 'fair-price', fullName, strength).then(nameSearch => {
 
     if (nameSearch.price)
       return formatPrice(nameSearch.price/nameSearch.quantity)
@@ -222,7 +222,7 @@ function getGoodrx(drug) {
     if ( ! nameSearch.candidate)
       return console.log('No GoodRx price or candidate found for the name '+fullName+' '+strength, nameSearch.url)
 
-    return goodrxApi('fair-price', nameSearch.candidate, strength).then(candidateSearch => {
+    return goodrxApi.call(this, 'fair-price', nameSearch.candidate, strength).then(candidateSearch => {
 
       if (candidateSearch.price)
         return formatPrice(candidateSearch.price/candidateSearch.quantity)
@@ -237,7 +237,7 @@ function getRetail(drug) {
   let fullName = formatDrugName(drug)
   let strength = formatDrugStrength(drug)
 
-  return goodrxApi('compare-price', fullName, strength).then(nameSearch => {
+  return goodrxApi.call(this, 'compare-price', fullName, strength).then(nameSearch => {
 
     if (nameSearch.prices)
       return averagePrice(nameSearch)
@@ -245,7 +245,7 @@ function getRetail(drug) {
     if ( ! nameSearch.candidate)
       return console.log('No GoodRx price or candidate found for the name '+fullName+' '+strength, nameSearch.url)
 
-    return goodrxApi('compare-price', nameSearch.candidate, strength).then(candidateSearch => {
+    return goodrxApi.call(this, 'compare-price', nameSearch.candidate, strength).then(candidateSearch => {
 
       if (candidateSearch.prices)
         return averagePrice(candidateSearch)
