@@ -134,7 +134,7 @@ function updateTransactions(drug, rev, key, opts) {
     return true //make sure validation passes
   })
   .catch(err => {
-    console.log('updateTransactions err', err.errors) //err.errors['shipment._id'].rules
+    console.log('updateTransactions err', err) //err.errors['shipment._id'].rules
   })
 }
 
