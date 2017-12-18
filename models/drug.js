@@ -240,6 +240,8 @@ function getRetail(drug) {
 
   return goodrxApi.call(this, 'compare-price', fullName, strength).then(nameSearch => {
 
+    console.log('Retail price results '+fullName+' '+strength, nameSearch)
+
     if (nameSearch.prices)
       return averagePrice(nameSearch)
 
