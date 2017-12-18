@@ -257,7 +257,7 @@ function getRetail(drug) {
 
 //409 error means qs not properly encoded, 400 means missing drug
 function goodrxApi(endpoint, drug, strength) {
-  url = goodrxUrl(endpoint, substitute, strength)
+  url = goodrxUrl(endpoint, drug, strength)
   return this.ajax({url}).then(goodrx => {
      if (goodrx.body) return goodrx.body.data
      let candidate = goodrx.error.errors && goodrx.error.errors[0].candidates && goodrx.error.errors[0].candidates[0]
