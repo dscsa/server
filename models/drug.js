@@ -240,7 +240,7 @@ function getRetail(drug) {
 
   return goodrxApi.call(this, 'compare-price', fullName, strength).then(nameSearch => {
 
-    console.log('Retail price results '+fullName+' '+strength, nameSearch)
+    //console.log('Retail price results '+fullName+' '+strength, nameSearch)
 
     if (nameSearch.prices)
       return averagePrice(nameSearch)
@@ -249,6 +249,8 @@ function getRetail(drug) {
       return console.log('No GoodRx price or candidate found for the name '+fullName+' '+strength, nameSearch.url)
 
     return goodrxApi.call(this, 'compare-price', nameSearch.candidate, strength).then(candidateSearch => {
+
+      console.log('Retail price results for candidate '+nameSearch.candidate+' '+strength, candidateSearch)
 
       if (candidateSearch.prices)
         return averagePrice(candidateSearch)
