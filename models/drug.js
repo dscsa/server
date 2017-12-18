@@ -78,10 +78,11 @@ function getPrice(drug) {
 
   let nadac     = getNadac.call(this, drug) //needs ndc9
   let goodrx    = getGoodrx.call(this, drug)
+  let retail    = getRetail.call(this, drug)
   let invalidAt = new Date(Date.now()+7*24*60*60*1000).toJSON().slice(0, 10) //Auto-filled prices expire in one week
 
-  return Promise.all([nadac, goodrx]).then(all => {
-    return {nadac:all[0], goodrx:all[1], invalidAt}
+  return Promise.all([nadac, goodrx, retail]).then(all => {
+    return {nadac:all[0], goodrx:all[1], retail:all[2], invalidAt}
   })
 }
 
@@ -99,7 +100,8 @@ function updateTransactions(drug, rev, key, opts) {
           transaction.drug.brand == drug.brand &&
           transaction.drug.price &&
           transaction.drug.price.goodrx &&
-          transaction.drug.price.nadac
+          transaction.drug.price.nadac &&
+          transaction.drug.price.retail
         )
         return
 
@@ -110,12 +112,17 @@ function updateTransactions(drug, rev, key, opts) {
 
       if ( ! transaction.drug.price.goodrx) {
         transaction.drug.price.goodrx = drug.price.goodrx
-        transaction.drug.price.updatedAt = drug.price.updatedAt
+        transaction.drug.price.invalidAt = drug.price.invalidAt
       }
 
       if ( ! transaction.drug.price.nadac) {
         transaction.drug.price.nadac = drug.price.nadac
-        transaction.drug.price.updatedAt = drug.price.updatedAt
+        transaction.drug.price.invalidAt = drug.price.invalidAt
+      }
+
+      if ( ! transaction.drug.price.retail) {
+        transaction.drug.price.retail = drug.price.retail
+        transaction.drug.price.invalidAt = drug.price.invalidAt
       }
       //console.log('updateTransaction', transaction)
       //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
@@ -179,10 +186,10 @@ function nadacNameUrl(drug) {
   return url
 }
 
-function goodrxUrl(name, dosage) {
+function goodrxUrl(endpoint, name, dosage) {
   let qs  =`name=${name}&dosage=${dosage}&api_key=f46cd9446f`.replace(/ /g, '%20')
   let sig = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
-  return `https://api.goodrx.com/fair-price?${qs}&sig=${sig}`
+  return `https://api.goodrx.com/${endpoint}?${qs}&sig=${sig}`
 }
 
 function nadacCalculatePrice(nadac, drug) {
@@ -203,33 +210,76 @@ function getNumberOfUnits(nadac, drug) {
 }
 
 function getGoodrx(drug) {
-  //Brand better for compound name. Otherwise use first word since, suffixes like hydrochloride sometimes don't match
-  let fullName = drug.brand || drug.generics.map(generic => generic.name).join('-') //.split(' ')[0]
-  let strength = drug.generics.map(generic => generic.strength.replace(' ', '')).join('-')
-  //409 error means qs not properly encoded, 400 means missing drug
-  let url = goodrxUrl(fullName, strength)
-  return this.ajax({url}).then(goodrx => {
 
-    if (goodrx.body)
-      return formatPrice(goodrx.body.data.price/goodrx.body.data.quantity)
+  let fullName = formatDrugName(drug)
+  let strength = formatDrugStrength(drug)
 
-    console.log('No GoodRx price found for the name '+fullName+' '+strength, url)
+  return goodrxApi('fair-price', fullName, strength).then(nameSearch => {
 
-    let substitutes = goodrx.error.errors && goodrx.error.errors[0].candidates
-    if ( ! substitutes)
-      return console.log('GoodRx has no substitutes for drug', drug._id, drug.generic, goodrx.error.errors, url)
+    if (nameSearch.price)
+      return formatPrice(nameSearch.price/nameSearch.quantity)
 
-    console.log(`GoodRx using price of an alternative match for ${substitutes[0]}`)
-    url = goodrxUrl(substitutes[0], strength)
-    return this.ajax({url}).then(goodrx => {
-      if (goodrx.body)
-        return formatPrice(goodrx.body.data.price/goodrx.body.data.quantity)
+    if ( ! nameSearch.candidate)
+      return console.log('No GoodRx price or candidate found for the name '+fullName+' '+strength, nameSearch.url)
 
-      return console.log("GoodRx price could not be updated with substitute either", url, goodrx)
+    return goodrxApi('fair-price', nameSearch.candidate, strength).then(candidateSearch => {
+
+      if (candidateSearch.price)
+        return formatPrice(candidateSearch.price/candidateSearch.quantity)
+
+      console.log('No GoodRx price found for the candidate '+nameSearch.candidate+' '+strength, candidateSearch.url)
     })
   })
 }
 
+function getRetail(drug) {
+
+  let fullName = formatDrugName(drug)
+  let strength = formatDrugStrength(drug)
+
+  return goodrxApi('compare-price', fullName, strength).then(nameSearch => {
+
+    if (nameSearch.prices)
+      return averagePrice(nameSearch)
+
+    if ( ! nameSearch.candidate)
+      return console.log('No GoodRx price or candidate found for the name '+fullName+' '+strength, nameSearch.url)
+
+    return goodrxApi('compare-price', nameSearch.candidate, strength).then(candidateSearch => {
+
+      if (candidateSearch.prices)
+        return averagePrice(candidateSearch)
+
+      console.log('No GoodRx price found for the candidate '+nameSearch.candidate+' '+strength, candidateSearch.url)
+    })
+  })
+}
+
+//409 error means qs not properly encoded, 400 means missing drug
+function goodrxApi(endpoint, drug, strength) {
+  url = goodrxUrl(endpoint, substitute, strength)
+  return this.ajax({url}).then(goodrx => {
+     if (goodrx.body) return goodrx.body.data
+     let candidate = goodrx.error.errors && goodrx.error.errors[0].candidates && goodrx.error.errors[0].candidates[0]
+     return {url, candidate, error:goodrx.error}
+  })
+}
+
+//Brand better for compound name. Otherwise use first word since, suffixes like hydrochloride sometimes don't match
+function formatDrugName(drug) {
+  return drug.brand || drug.generics.map(generic => generic.name).join('-')
+}
+
+function formatDrugStrength(drug) {
+  return drug.generics.map(generic => generic.strength.replace(' ', '')).join('-')
+}
+
 function formatPrice(price) {
   return +price.toFixed(4)
+}
+
+function averagePrice(goodrx) {
+  let sum = goodrx.prices.reduce((a, b) => a + b)
+  let avg = sum / goodrx.prices.length
+  return formatPrice(avg/goodrx.quantity)
 }
