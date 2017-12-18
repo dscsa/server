@@ -283,8 +283,12 @@ function formatPrice(price) {
   return +price.toFixed(4)
 }
 
+//Need to divide price array by savings array and then average them
 function averagePrice(goodrx) {
-  let sum = goodrx.prices.reduce((a, b) => a + b)
+  let sum = goodrx.prices.reduce((a, b, i) => {
+    let savings = parseFloat(goodrx.price_detail.savings[i]) || 0
+    return a + b*savings/100
+  })
   let avg = sum / goodrx.prices.length
   return formatPrice(avg/goodrx.quantity)
 }
