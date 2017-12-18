@@ -102,7 +102,7 @@ function updateTransactions(drug, rev, key, opts) {
             transaction.drug.price &&
             (transaction.drug.price.goodrx || ! drug.price.goodrx) &&
             (transaction.drug.price.nadac || ! drug.price.nadac) &&
-            (transaction.drug.price.retail || ! drug.price.retail) &&
+            (transaction.drug.price.retail || ! drug.price.retail)
           )
           return
 
