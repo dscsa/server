@@ -391,15 +391,15 @@ function updatePrice(doc, oldPrice, key, opts) {
 exports.history = function *history(id) {
   let $this = this
   let result = []
-  console.log('recurse 0', id)
+  //console.log('recurse 0', id)
   this.body = yield recurse(id, result)
   function *recurse (_id, list) {
-    console.log('recurse 1', _id, list, $this.account)
+    //console.log('recurse 1', _id, list, $this.account)
     let [trans, {rows:prevs}] = yield [
       $this.db.transaction.get(_id), //don't use show function because we might need to see transactions not directly authorized
       $this.db.transaction.query('next.transaction._id', {key:_id})
     ]
-    console.log('recurse 2', prevs)
+    //console.log('recurse 2', prevs)
 
     list.push(trans)
     let indentedList = []
@@ -413,16 +413,16 @@ exports.history = function *history(id) {
 
     let all = [exports.lib.isReceived(trans) ? $this.db.shipment.get(trans.shipment._id) : {account:{from:$this.account}}]
 
-    console.log('recurse 3', all)
+    //console.log('recurse 3', all)
     //Recursive call!
     for (let prev of prevs) {
-      console.log('recurse 4', prev.id, prev._id, prev)
+      //console.log('recurse 4', prev.id, prev._id, prev)
       all.push(recurse(prev.id, prevs.length == 1 ? list : indentedList))
     }
     //Search for transaction's ancestors and shipment in parallel
     all = yield all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
     //Now we just fill in full shipment and account info into the transaction
-    console.log('recurse 5', all)
+    //console.log('recurse 5', all)
     trans.shipment = all[0]
     let account    = all[0].account
     //TODO this call is serial. Can we do in parallel with next async call?
@@ -433,7 +433,7 @@ exports.history = function *history(id) {
     ]
     account.from = accounts[0]
     account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
-    console.log('recurse 6', result)
+    //console.log('recurse 6', result)
     return result
   }
 }
