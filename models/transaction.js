@@ -400,7 +400,7 @@ exports.history = function *history(id) {
       $this.db.transaction.query('next.transaction._id', {key:_id})
     ]
     console.log('recurse 2', trans, prevs)
-    let all = [$this.db.shipment.get(trans.shipment._id)]
+
     list.push(trans)
     let indentedList = []
 
@@ -410,9 +410,11 @@ exports.history = function *history(id) {
     } else {
       trans.type = 'Transaction'
     }
+
+    let all = [exports.lib.isReceived(trans) ? $this.db.shipment.get(trans.shipment._id) : null]
     //Recursive call!
     for (let prev of prevs)
-      all.push(recurse(prev._id, prevs.length == 1 ? list : indentedList))
+      all.push(recurse(prev.id, prevs.length == 1 ? list : indentedList))
     //Search for transaction's ancestors and shipment in parallel
     all = yield all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
     //Now we just fill in full shipment and account info into the transaction
@@ -426,7 +428,7 @@ exports.history = function *history(id) {
     ]
     account.from = accounts[0]
     account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
-    console.log('recurse 3', list)
-    return list
+    console.log('recurse 3', result)
+    return result
   }
 }
