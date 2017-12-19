@@ -411,7 +411,7 @@ exports.history = function *history(id) {
       trans.type = 'Transaction'
     }
 
-    let all = [exports.lib.isReceived(trans) ? $this.db.shipment.get(trans.shipment._id) : {account:$this.account}]
+    let all = [exports.lib.isReceived(trans) ? $this.db.shipment.get(trans.shipment._id) : {account:{from:$this.account}}]
     //Recursive call!
     for (let prev of prevs) {
       console.log('recurse 3', prev.id, prev._id, prev)
@@ -426,7 +426,7 @@ exports.history = function *history(id) {
     //TODO this is co specific won't work when upgrading to async/await which need Promise.all
     let accounts = yield [
       $this.db.account.get(account.from._id),
-      account.to && $this.db.account.get(account.from._id)
+      account.to && $this.db.account.get(account.to._id)
     ]
     account.from = accounts[0]
     account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
