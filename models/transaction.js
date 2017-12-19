@@ -391,13 +391,15 @@ function updatePrice(doc, oldPrice, key, opts) {
 exports.history = function *history(id) {
   let $this = this
   let result = []
-
+  console.log('recurse 0', id)
   this.body = yield recurse(id, result)
   function *recurse (_id, list) {
+    console.log('recurse 1', _id, list)
     let [trans, {rows:prevs}] = yield [
       $this.db.transaction.get(_id), //don't use show function because we might need to see transactions not directly authorized
       $this.db.transaction.query('next.transaction._id', {key:_id})
     ]
+    console.log('recurse 2', trans, prevs)
     let all = [$this.db.shipment.get(trans.shipment._id)]
     list.push(trans)
     let indentedList = []
@@ -424,6 +426,7 @@ exports.history = function *history(id) {
     ]
     account.from = accounts[0]
     account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
-    return result
+    console.log('recurse 3', list)
+    return list
   }
 }
