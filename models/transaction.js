@@ -435,8 +435,11 @@ exports.history = function *history(id) {
     account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
 
     delete account.from.ordered
-    account.to && delete account.to.ordered
-
+    delete account.from.authorized
+    if (account.to) {
+      delete account.to.ordered
+      delete account.to.authorized
+    }
     //console.log('recurse 6', result)
     return result
   }
