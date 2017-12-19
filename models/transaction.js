@@ -165,7 +165,7 @@ exports.views = {
 
   'next.transaction._id':function(doc) {
     for (var i in doc.next)
-      doc.next[i].transaction && emit([require('recipient_id')(doc), doc.next[i].transaction._id])
+      doc.next[i].transaction && emit(doc.next[i].transaction._id)
   },
 
   //used by drug endpoint to update transactions on drug name/form updates
