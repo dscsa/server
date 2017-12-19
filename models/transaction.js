@@ -399,7 +399,7 @@ exports.history = function *history(id) {
       $this.db.transaction.get(_id), //don't use show function because we might need to see transactions not directly authorized
       $this.db.transaction.query('next.transaction._id', {key:_id})
     ]
-    console.log('recurse 2' prevs)
+    console.log('recurse 2', prevs)
 
     list.push(trans)
     let indentedList = []
@@ -414,7 +414,7 @@ exports.history = function *history(id) {
     let all = [exports.lib.isReceived(trans) ? $this.db.shipment.get(trans.shipment._id) : null]
     //Recursive call!
     for (let prev of prevs) {
-      console.log('recurse 3' prev.id, prev._id, prev)
+      console.log('recurse 3', prev.id, prev._id, prev)
       all.push(recurse(prev.id, prevs.length == 1 ? list : indentedList))
     }
     //Search for transaction's ancestors and shipment in parallel
