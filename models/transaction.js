@@ -411,7 +411,7 @@ exports.history = function *history(id) {
       trans.type = 'Transaction'
     }
 
-    let all = [exports.lib.isReceived(trans) ? $this.db.shipment.get(trans.shipment._id) : null]
+    let all = [exports.lib.isReceived(trans) ? $this.db.shipment.get(trans.shipment._id) : {account:$this.account}]
     //Recursive call!
     for (let prev of prevs) {
       console.log('recurse 3', prev.id, prev._id, prev)
