@@ -54,14 +54,15 @@ exports.inventory = function* (id) { //account._id will not be set because googl
 
 exports.metrics = function* (id) { //account._id will not be set because google does not send cookie
   let options = opts(this.query.group_level, id)
-  const [qty, value, count] = yield [
+  const [qty, value, retail, count] = yield [
     this.db.transaction.query('qty', options),
     this.db.transaction.query('value', options),
+    this.db.transaction.query('retail', options),
     this.db.transaction.query('count', options)
   ]
 
   let rows = qty.rows.map((row, i) => {
-    return {key:row.key, value:Object.assign(row.value, value.rows[i].value, count.rows[i].value)}
+    return {key:row.key, value:Object.assign(row.value, value.rows[i].value, retail.rows[i].value, count.rows[i].value)}
   })
 
   this.body = csv.fromJSON(rows, this.query.fields && this.query.fields.split(','))

@@ -29,6 +29,12 @@ exports.lib = {
     return price * qty
   },
 
+  retail(doc) {
+    var qty   = require('qty')(doc)
+    var price = doc.drug.price ? doc.drug.price.retail || require('price')(doc) : 0
+    return price * qty
+  },
+
   //It came in a shipment, not restocked or repacked which both have shipment._id == account._id
   isReceived(doc) {
     return doc.shipment._id.indexOf('.') != -1
@@ -283,6 +289,16 @@ exports.views = {
       emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'value'))
       emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'value'))
       emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'value'))
+    },
+    reduce
+  },
+
+  //Used by account/:id/metrics.csv
+  retail:{
+    map(doc) {
+      emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'retail'))
+      emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'retail'))
+      emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'retail'))
     },
     reduce
   },
