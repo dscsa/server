@@ -202,9 +202,9 @@ exports.views = {
     require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.exp.to || doc.exp.from])
   },
 
-  //Client shopping
+  //Client shopping.  Geneic name is most Important, then expiration so we can make shopping lists via API, then repack since physically separate from other bins, and then switch bin's columns and rows to minimize walking
   'inventory.drug.generic':function(doc) {
-    require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.drug.generic, ! require('isRepacked')(doc)])
+    require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.drug.generic, doc.exp.to || doc.exp.from, ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
   },
 
   //Backend to help if someone accidentally dispenses a drug
