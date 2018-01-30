@@ -460,3 +460,43 @@ exports.history = function *history(id) {
     return result
   }
 }
+
+exports.pend = {
+
+  *post() {
+    this.body = yield updateNext([{pending:{}, createdAt:new Date().toJSON()}])
+  },
+
+  *delete() {
+    this.body = yield updateNext([])
+  }
+}
+
+exports.dispense = {
+
+  *post() {
+    this.body = yield updateNext([{dispensed:{}, createdAt:new Date().toJSON()}])
+  },
+
+  // *delete() {
+  //   this.body = yield patchNext([])
+  // }
+}
+
+exports.dispense = {
+
+  *post() {
+    this.body = yield updateNext([{dispose:{}, createdAt:new Date().toJSON()}])
+  },
+
+  // *delete() {
+  //   this.body = yield patchNext([])
+  // }
+}
+
+function updateNext(next) {
+  for (let transaction of this.req.body) {
+    transaction.next = next
+  }
+  return this.db.transaction.bulkDocs(this.req.body)
+}

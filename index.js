@@ -158,13 +158,23 @@ keys(function() {
     .post(models.user.session.post)  //Login
     .del(models.user.session.delete) //Logout
 
+  r('/transaction/:id/history')
+    .get(models.transaction.history)
+
+  r('/transaction/pend')
+    .post(models.transaction.pend.post)
+    .del(models.transaction.pend.delete)
+
+  r('/transaction/:id/dispense')
+    .get(models.transaction.dispense)
+
+  r('/transaction/:id/dispose')
+    .get(models.transaction.dispose)
+
   r('/account/authorized')     //Allow user to get, modify, & delete docs
     .get(models.account.authorized.get)
     .post(models.account.authorized.post)
     .del(models.account.authorized.delete)
-
-  r('/transaction/:id/history')
-    .get(models.transaction.history)
 
   r('/account/:id/inventory.csv')     //Allow user to get, modify, & delete docs
     .get(models.account.inventory)
