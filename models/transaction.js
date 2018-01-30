@@ -464,39 +464,39 @@ exports.history = function *history(id) {
 exports.pend = {
 
   *post() {
-    this.body = yield updateNext(this.req.body, [{pending:{}, createdAt:new Date().toJSON()}])
+    this.body = yield updateNext(this, [{pending:{}, createdAt:new Date().toJSON()}])
   },
 
   *delete() {
-    this.body = yield updateNext(this.req.body, [])
+    this.body = yield updateNext(this, [])
   }
 }
 
 exports.dispense = {
 
   *post() {
-    this.body = yield updateNext(this.req.body, [{dispensed:{}, createdAt:new Date().toJSON()}])
+    this.body = yield updateNext(this, [{dispensed:{}, createdAt:new Date().toJSON()}])
   },
 
   // *delete() {
-  //   this.body = yield patchNext(this.req.body, [])
+  //   this.body = yield patchNext(this, [])
   // }
 }
 
 exports.dispense = {
 
   *post() {
-    this.body = yield updateNext(this.req.body, [{dispose:{}, createdAt:new Date().toJSON()}])
+    this.body = yield updateNext(this, [{dispose:{}, createdAt:new Date().toJSON()}])
   },
 
   // *delete() {
-  //   this.body = yield patchNext(this.req.body, [])
+  //   this.body = yield patchNext(this, [])
   // }
 }
 
-function updateNext(transactions, next) {
-  for (let transaction of transactions) {
+function updateNext($this, next) {
+  for (let transaction of $this.req.body) {
     transaction.next = next
   }
-  return this.db.transaction.bulkDocs(this.req.body)
+  return $this.db.transaction.bulkDocs($this.req.body)
 }
