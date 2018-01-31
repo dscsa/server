@@ -161,20 +161,20 @@ keys(function() {
   r('/transaction/:id/history')
     .get(models.transaction.history)
 
-  r('/transaction/pend')
-    .post(models.transaction.pend.post)
-    .del(models.transaction.pend.delete)
-
-  r('/transaction/:id/dispense')
-    .get(models.transaction.dispense)
-
-  r('/transaction/:id/dispose')
-    .get(models.transaction.dispose)
-
   r('/account/authorized')     //Allow user to get, modify, & delete docs
     .get(models.account.authorized.get)
     .post(models.account.authorized.post)
     .del(models.account.authorized.delete)
+
+  r('/account/:id/pend')
+    .post(models.account.pend.post)
+    .del(models.account.pend.delete)
+
+  r('/account/:id/dispense')
+    .get(models.account.dispense)
+
+  r('/account/:id/dispose')
+    .get(models.account.dispose)
 
   r('/account/:id/inventory.csv')     //Allow user to get, modify, & delete docs
     .get(models.account.inventory)

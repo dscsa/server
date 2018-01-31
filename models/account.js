@@ -175,3 +175,49 @@ exports.authorized = {
     }
   }
 }
+
+exports.pend = {
+
+  *post(_id) {
+    this.account = {_id}
+    this.body = yield updateNext(this, [{pending:{}, createdAt:new Date().toJSON()}])
+  },
+
+  *delete(_id) {
+    this.account = {_id}
+    this.body = yield updateNext(this, [])
+  }
+}
+
+exports.dispense = {
+
+  *post(_id) {
+    this.account = {_id}
+    this.body = yield updateNext(this, [{dispensed:{}, createdAt:new Date().toJSON()}])
+  },
+
+  // *delete(_id) {
+  //   this.account = {_id}
+  //   this.body = yield patchNext(this, [])
+  // }
+}
+
+exports.dispense = {
+
+  *post(_id) {
+    this.account = {_id}
+    this.body = yield updateNext(this, [{dispose:{}, createdAt:new Date().toJSON()}])
+  },
+
+  // *delete(_id) {
+  //   this.account = {_id}
+  //   this.body = yield patchNext(this, [])
+  // }
+}
+
+function updateNext($this, next) {
+  for (let transaction of $this.req.body) {
+    transaction.next = next
+  }
+  return $this.db.transaction.bulkDocs($this.req.body, {this:$this})
+}

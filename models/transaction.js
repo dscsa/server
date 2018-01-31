@@ -189,10 +189,10 @@ exports.views = {
     require('isPending')(doc) && emit([require('recipient_id')(doc), doc.next[0].createdAt])
   },
 
-  //Client bin checking and reorganizatoin.  Skip reduce with reduce=false
+  //Client bin checking and reorganizatoin.  Skip reduce with reduce=false.  Alphabatize within bin
   'inventory.bin':{
     map(doc) {
-      require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.bin.slice(0, 3), doc.bin.slice(3)])
+      require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.bin.slice(0, 3), doc.bin.slice(3), doc.drug.generic])
     },
     reduce:'_count'
   },
@@ -459,44 +459,4 @@ exports.history = function *history(id) {
     //console.log('recurse 6', result)
     return result
   }
-}
-
-exports.pend = {
-
-  *post() {
-    this.body = yield updateNext(this, [{pending:{}, createdAt:new Date().toJSON()}])
-  },
-
-  *delete() {
-    this.body = yield updateNext(this, [])
-  }
-}
-
-exports.dispense = {
-
-  *post() {
-    this.body = yield updateNext(this, [{dispensed:{}, createdAt:new Date().toJSON()}])
-  },
-
-  // *delete() {
-  //   this.body = yield patchNext(this, [])
-  // }
-}
-
-exports.dispense = {
-
-  *post() {
-    this.body = yield updateNext(this, [{dispose:{}, createdAt:new Date().toJSON()}])
-  },
-
-  // *delete() {
-  //   this.body = yield patchNext(this, [])
-  // }
-}
-
-function updateNext($this, next) {
-  for (let transaction of $this.req.body) {
-    transaction.next = next
-  }
-  return $this.db.transaction.bulkDocs($this.req.body)
 }
