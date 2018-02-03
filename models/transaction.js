@@ -186,7 +186,7 @@ exports.views = {
 
   //Client pending drawer
   'inventory.pendingAt':function(doc) {
-    require('isPending')(doc) && emit([require('recipient_id')(doc), doc.next[0].createdAt, ! require('isRepacked')(doc), doc.bin.slice(0, 3), doc.bin.slice(3), doc.drug.generic])
+    require('isPending')(doc) && emit([require('recipient_id')(doc), doc.next[0].createdAt, ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
   },
 
   //Client bin checking and reorganizatoin.  Skip reduce with reduce=false.  Alphabatize within bin
