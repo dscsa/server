@@ -61,8 +61,8 @@ exports.lib = {
   },
 
   //It is on a repacked shelf
-  isRepacked(doc) {
-    return ! doc.next[0] && doc.bin && doc.bin.length == 3
+  isRepacked(doc, includePending) {
+    return (includePending || ! doc.next[0]) && doc.bin && doc.bin.length == 3
   },
 
   isPending(doc) {
@@ -186,7 +186,7 @@ exports.views = {
 
   //Client pending drawer
   'inventory.pendingAt':function(doc) {
-    require('isPending')(doc) && emit([require('recipient_id')(doc), doc.next[0].createdAt, ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
+    require('isPending')(doc) && emit([require('recipient_id')(doc), doc.next[0].createdAt, ! require('isRepacked')(doc, true), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
   },
 
   //Client bin checking and reorganizatoin.  Skip reduce with reduce=false.  Alphabatize within bin
@@ -204,7 +204,7 @@ exports.views = {
 
   //Client shopping.  Geneic name is most Important, then expiration so we can make shopping lists via API, then repack since physically separate from other bins, and then switch bin's columns and rows to minimize walking
   'inventory.drug.generic':function(doc) {
-    require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.drug.generic, doc.exp.to || doc.exp.from, ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
+    require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.drug.generic, doc.exp.to || doc.exp.from, doc.drug._id, ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
   },
 
   //Backend to help if someone accidentally dispenses a drug
