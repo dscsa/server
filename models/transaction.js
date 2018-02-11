@@ -221,7 +221,7 @@ exports.views = {
   inventory:{
     map(doc) {
       var qty = require('qty')(doc)
-      var key = [require('recipient_id')(doc), doc.drug.generic, doc.drug._id]
+      var key = [require('recipient_id')(doc), doc.drug.generic, doc.exp.to || doc.exp.from, doc.drug._id]
 
       if (require('isBinned')(doc))
         emit(key, {"qty.binned":qty})
