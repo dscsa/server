@@ -178,12 +178,12 @@ exports.authorized = {
 
 exports.pend = {
 
-  *post(_id) {
+  *post(_id, name) {
     this.account = {_id}
-    this.body = yield updateNext(this, [{pending:{}, createdAt:new Date().toJSON()}])
+    this.body = yield updateNext(this, [{pending:{_id:name}, createdAt:new Date().toJSON()}])
   },
 
-  *delete(_id) {
+  *delete(_id, name) {
     this.account = {_id}
     this.body = yield updateNext(this, [])
   }

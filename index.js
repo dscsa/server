@@ -166,7 +166,7 @@ keys(function() {
     .post(models.account.authorized.post)
     .del(models.account.authorized.delete)
 
-  r('/account/:id/pend')
+  r('/account/:id/pend/:name?')
     .post(models.account.pend.post)
     .del(models.account.pend.delete)
 
