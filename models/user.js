@@ -46,10 +46,6 @@ function deleteLogin(doc) {
   return this.db._users.delete('org.couchdb.user:'+doc.phone, doc._rev, admin)
 }
 
-//Context-specific - options MUST have 'this' property in order to work.
-//When creating user locally you don't know how long it will take to replicate
-//to the server so you don't know when to POST user/session.  Save the hassle
-//and when creating a user just log them in automatically
 function saveLogin(doc, val, key, opts) {
   //Check for doc.password just in case we are trying to recreate an existing user
   if (doc.password) {
