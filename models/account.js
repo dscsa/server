@@ -104,7 +104,7 @@ exports.from = function* (id) { //account._id will not be set because google doe
 
 //This is to find the emptiest bins
 exports.bins = function* (id) { //account._id will not be set because google does not send cookie
-  const view = yield this.db.transaction.query('inventory.bin', opts(this.query.group_level || 1, id))
+  const view = yield this.db.transaction.query('inventory.bin', {group_level:3, startkey:[id, false], endkey:[id, false, {}]}) //exclude repack bins from empty bins
   let sortAsc = view.rows.sort((a, b) => a.value - b.value)
   this.body  = csv.fromJSON(sortAsc, this.query.fields && this.query.fields.split(','))
 }
