@@ -6,8 +6,8 @@
     "csv":"https://github.com/dscsa/csv",
     "koa":"^0.21.0",
     "koa-route":"^2.4.2",
-    "pouchdb-core":"*",
-    "pouchdb-mapreduce":"*",
-    "pouchdb-adapter-http":"*"
+    "pouchdb-core":"6.4.3",
+    "pouchdb-mapreduce":"6.4.3",
+    "pouchdb-adapter-http":"6.4.3"
   }
 }
