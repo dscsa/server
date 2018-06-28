@@ -192,7 +192,7 @@ exports.views = {
   //Client bin checking and reorganizatoin.  Skip reduce with reduce=false.  Alphabatize within bin
   'inventory.bin':{
     map(doc) {
-      require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.bin.slice(0, 3), doc.bin.slice(3), doc.drug.generic])
+      require('isBinned')(doc) && emit([require('recipient_id')(doc), doc.bin.slice(0, 3), doc.bin.slice(3), doc.drug.generic])
     },
     reduce:'_count'
   },
