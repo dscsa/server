@@ -189,10 +189,10 @@ exports.views = {
     require('isPending')(doc) && emit([require('recipient_id')(doc), doc.next[0].pending._id || doc.next[0].createdAt, ! require('isRepacked')(doc, true), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
   },
 
-  //Client bin checking and reorganizatoin.  Skip reduce with reduce=false.  Alphabatize within bin
+  //Client bin checking and reorganization, ( & eventually account/bins.csv for use by data loggers needing to pick empty boxes).  Skip reduce with reduce=false.  Alphabatize within bin
   'inventory.bin':{
     map(doc) {
-      require('isBinned')(doc) && emit([require('recipient_id')(doc), doc.bin.slice(0, 3), doc.bin.slice(3), doc.drug.generic])
+      require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.bin.slice(0, 3), doc.bin.slice(3), doc.drug.generic])
     },
     reduce:'_count'
   },
