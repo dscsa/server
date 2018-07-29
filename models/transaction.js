@@ -197,9 +197,19 @@ exports.views = {
     reduce:'_count'
   },
 
-  //Client expiration removal
+  //Client expiration == 2018-05
   'inventory.exp':function(doc) {
     require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.exp.to || doc.exp.from, ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
+  },
+
+  //Client expiration <= 2018-05 (Year to Date e.g, Jan - May 2018 but nothing in 2017 or earlier)
+  'inventory.exp.ytd':function(doc) {
+    if ( ! require('isInventory')(doc)) return
+    var exp = (doc.exp.to || doc.exp.from).split('-')
+    for (i = +exp[1]; i <= 12; i++) {
+      exp[1] = ('0'+i).slice(-2)
+      emit([require('recipient_id')(doc), exp.join('-'), ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
+    }
   },
 
   //Client shopping.  Geneic name is most Important, then expiration so we can make shopping lists via API, then repack since physically separate from other bins, and then switch bin's columns and rows to minimize walking
