@@ -74,8 +74,18 @@ exports.lib = {
   },
 
   //For authorization purposes.  Only allow recipients to see their own metrics
+  //TODO for naming consistency replace with to_id
   recipient_id(doc) {
     return doc.shipment._id.slice(0, 10)
+  },
+
+  //For authorization purposes.  Only allow recipients to see their own metrics
+  to_id(doc) {
+    return doc.shipment._id.slice(0, 10)
+  },
+
+  from_id(doc) {
+    return doc.shipment._id.slice(-10)
   },
 
   createdAt(doc) {
@@ -93,6 +103,14 @@ exports.lib = {
 
   shippedAt(doc) {
     return require('isReceived')(doc) ? doc.shipment._id.slice(11, 21).split('-') : require('createdAt')(doc) //createdAt is a pretty good proxy.  Only different if it takes more than one day to log the shipment
+  },
+
+  expAt(doc) {
+    return (doc.exp.to || doc.exp.from).slice(0, 10).split('-')
+  },
+
+  inventoryUntil(doc) { //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pending, etc)
+    return require(doc.next[0] ? 'nextAt' : 'expAt')(doc)
   },
 
   //Sugar to make a key in the form [recipient_id, (optional) prefix(s), year, month, day]
@@ -206,7 +224,7 @@ exports.views = {
   'inventory.exp.ytd':function(doc) {
     if ( ! require('isInventory')(doc)) return
     var exp = (doc.exp.to || doc.exp.from).split('-')
-    for (i = +exp[1]; i <= 12; i++) {
+    for (var i = +exp[1]; i <= 12; i++) {
       exp[1] = ('0'+i).slice(-2)
       emit([require('recipient_id')(doc), exp.join('-'), ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
     }
@@ -244,6 +262,53 @@ exports.views = {
 
       if (require('isDispensed')(doc))
         emit(key, {"qty.dispensed":qty})
+    },
+    reduce
+  },
+
+  'inventory.indate':{
+    map(doc) {
+
+      var inventoryUntil  = require('inventoryUntil')(doc)
+      var updatedAt       = require('updatedAt')(doc)
+      var from_id         = require('from_id')(doc)
+      var qty             = require('qty')(doc)
+      var val             = require('value')(doc)
+      var to_id           = require('to_id')(doc)
+      var isBinned        = require('isBinned')(doc) && {"qty.binned":qty}
+      var isRepacked      = require('isRepacked')(doc) && {"qty.repacked":qty}
+      var isPending       = require('isPending')(doc) && {"qty.pending":qty}
+      var isDispensed     = require('isDispensed')(doc) && {"qty.dispensed":qty}
+
+      for (var y = +updatedAt[0], m = +updatedAt[1]; y <= inventoryUntil[0] || m <= inventoryUntil[1]; m++) {
+
+        if (m == 13) {
+          y++
+          m = 1
+        }
+
+        updatedAt[1] = ('0'+m).slice(-2) //convert month # back to a two character string
+
+        var key = [to_id, updatedAt[0], updatedAt[1], doc.drug.generic, doc.drug._id, from_id]
+
+        if (isBinned)
+          emit(key, isBinned)
+
+        if (isRepacked)
+          emit(key, isBinned)
+
+        if (isPending)
+          emit(key, isPending)
+
+        if (isDispensed)
+          emit(key, isDispensed)
+      }
+
+
+
+
+
+
     },
     reduce
   },
