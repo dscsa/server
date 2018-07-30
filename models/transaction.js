@@ -266,11 +266,17 @@ exports.views = {
     reduce
   },
 
+  //An item is in inventory from the moment it is created until the moment it is removed (next poperty is set) or until it expires
+  //We do a loop because couchdb cannot filter and group on different fields.  Emitting [exp, drug] would filter and group on exp.
+  //Emitting [drug, exp] would filter and group by drug.  We want to group by drug and filter by exp.  To achieve this we emit
+  //every month between the item being added and when it leaves inventory (see above).  This way search for [2018, 06] doesn't just
+  //give us 2018-06 items but all items before that too e.g 2018-05, 2018-04 .... until createdAt date.  In this way the Exp filter
+  //is built into the view itself and doesn't require us to use start and end keys to filter by exp, and in this way we can group by drug
   'inventory.indate':{
     map(doc) {
 
       var inventoryUntil  = require('inventoryUntil')(doc)
-      var updatedAt       = require('updatedAt')(doc)
+      var createdAt       = require('createdAt')(doc)
       var from_id         = require('from_id')(doc)
       var qty             = require('qty')(doc)
       var val             = require('value')(doc)
@@ -281,12 +287,12 @@ exports.views = {
       var isPending       = require('isPending')(doc) && {"qty.pending":qty, "value.pending":val, "count.pending":count}
       var isDispensed     = require('isDispensed')(doc) && {"qty.dispensed":qty, "value.dispensed":val, "count.dispensed":count}
 
-      for (var y = +updatedAt[0], m = +updatedAt[1]; y < inventoryUntil[0] || m <= inventoryUntil[1]; m++) {
+      for (var y = +createdAt[0], m = +createdAt[1]; y < inventoryUntil[0] || m <= inventoryUntil[1]; m++) {
 
         if (m == 13) {
+          log('inventory.indate year change '+doc._id+' '+createdAt[0]+'-'+createdAt[1]+' '+y+' '+inventoryUntil[0]+'-'+inventoryUntil[1]);
           y++
           m = 1
-          log("inventory.indate year change" +  y+'-'+('0'+m).slice(-2) + " " + inventoryUntil[0]+'-'+inventoryUntil[1]);
         }
 
         //convert month # back to a two character string
