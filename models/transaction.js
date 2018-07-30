@@ -110,7 +110,15 @@ exports.lib = {
   },
 
   inventoryUntil(doc) { //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pending, etc)
-    return require(doc.next[0] ? 'nextAt' : 'expAt')(doc)
+
+    var date = 'expAt'
+
+    if (require('isDisposed')(doc))
+      date = 'updatedAt'
+    else if (doc.next[0])
+      date = 'nextAt'
+
+    return require(date)(doc)
   },
 
   //Sugar to make a key in the form [recipient_id, (optional) prefix(s), year, month, day]
@@ -287,7 +295,8 @@ exports.views = {
       var isPending       = require('isPending')(doc) && {"qty.pending":qty, "value.pending":val, "count.pending":count}
       var isDispensed     = require('isDispensed')(doc) && {"qty.dispensed":qty, "value.dispensed":val, "count.dispensed":count}
 
-      for (var y = +createdAt[0], m = +createdAt[1]; y < inventoryUntil[0] || m <= inventoryUntil[1]; m++) {
+      //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
+      for (var y = +createdAt[0], m = +createdAt[1]; y < inventoryUntil[0] || m < inventoryUntil[1]; m++) {
 
         if (m == 13) {
           log('inventory.indate year change '+doc._id+' '+createdAt[0]+'-'+createdAt[1]+' '+y+' '+inventoryUntil[0]+'-'+inventoryUntil[1]);
