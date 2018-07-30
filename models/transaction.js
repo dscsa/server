@@ -281,13 +281,12 @@ exports.views = {
       var isPending       = require('isPending')(doc) && {"qty.pending":qty, "value.pending":val, "count.pending":count}
       var isDispensed     = require('isDispensed')(doc) && {"qty.dispensed":qty, "value.dispensed":val, "count.dispensed":count}
 
-      if ( ! +updatedAt[0] || ! +updatedAt[1]) return //Prevent an infinite loop of nulls
-
-      for (var y = +updatedAt[0], m = +updatedAt[1]; y <= inventoryUntil[0] || m <= inventoryUntil[1]; m++) {
+      for (var y = +updatedAt[0], m = +updatedAt[1]; y < inventoryUntil[0] || m <= inventoryUntil[1]; m++) {
 
         if (m == 13) {
           y++
           m = 1
+          log("inventory.indate year change" +  y+'-'+('0'+m).slice(-2) + " " + inventoryUntil[0]+'-'+inventoryUntil[1]);
         }
 
         //convert month # back to a two character string
