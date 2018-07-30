@@ -274,11 +274,14 @@ exports.views = {
       var from_id         = require('from_id')(doc)
       var qty             = require('qty')(doc)
       var val             = require('value')(doc)
+      var count           = require('count')(doc)
       var to_id           = require('to_id')(doc)
-      var isBinned        = require('isBinned')(doc) && {"qty.binned":qty}
-      var isRepacked      = require('isRepacked')(doc) && {"qty.repacked":qty}
-      var isPending       = require('isPending')(doc) && {"qty.pending":qty}
-      var isDispensed     = require('isDispensed')(doc) && {"qty.dispensed":qty}
+      var isBinned        = require('isBinned')(doc) && {"qty.binned":qty, "value.binned":val, "count.binned":count}
+      var isRepacked      = require('isRepacked')(doc) && {"qty.repacked":qty, "value.repacked":val, "count.repacked":count}
+      var isPending       = require('isPending')(doc) && {"qty.pending":qty, "value.pending":val, "count.pending":count}
+      var isDispensed     = require('isDispensed')(doc) && {"qty.dispensed":qty, "value.dispensed":val, "count.dispensed":count}
+
+      if ( ! +updatedAt[0] || ! +updatedAt[1]) return //Prevent an infinite loop of nulls
 
       for (var y = +updatedAt[0], m = +updatedAt[1]; y <= inventoryUntil[0] || m <= inventoryUntil[1]; m++) {
 
@@ -287,9 +290,8 @@ exports.views = {
           m = 1
         }
 
-        updatedAt[1] = ('0'+m).slice(-2) //convert month # back to a two character string
-
-        var key = [to_id, updatedAt[0], updatedAt[1], doc.drug.generic, doc.drug._id, from_id]
+        //convert month # back to a two character string
+        var key = [to_id, y, ('0'+m).slice(-2), doc.drug.generic, doc.drug._id, from_id]
 
         if (isBinned)
           emit(key, isBinned)
@@ -303,12 +305,6 @@ exports.views = {
         if (isDispensed)
           emit(key, isDispensed)
       }
-
-
-
-
-
-
     },
     reduce
   },
