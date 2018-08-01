@@ -308,7 +308,7 @@ exports.views = {
     map(doc) { //new inventory
       require('wasInventory')(doc) && require('inventory')(doc, emit, require('qty')(doc))
     },
-    '_stats'
+    reduce:'_stats'
   },
 
   'inventory.indate':{
