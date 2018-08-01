@@ -137,6 +137,26 @@ exports.lib = {
     return doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')
   },
 
+  //fromDate, toDate must be date arrays.
+  //Inclusive, Callback(yyyy<string>, mm<string>, isLastMonth)
+  eachMonth(fromDate, toDate, callback) {
+
+    ///If toDate is not provided goto end of from date's year
+    if ( ! callback) {
+      callback = toDate
+      toDate[0] = fromDate[0]
+      toDate[1] = 12
+    }
+
+    //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
+    for (var y = +fromDate[0], m = +fromDate[1]; y < toDate[0] || m < toDate[1]; m++) {
+      if (m == 13) { y++; m = 1 }
+      callback(''+y, ('0'+m).slice(-2))
+    }
+    callback(''+y, ('0'+m).slice(-2), true)
+  },
+
+  //Inventory at the end of each month (so we do not count the last month)
   inventory(doc, emit, val) {
 
     var createdAt = require('createdAt')(doc)
