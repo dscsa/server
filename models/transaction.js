@@ -146,6 +146,7 @@ exports.lib = {
     var sortedBin = require('sortedBin')(doc)
 
     require('eachMonth')(createdAt, removedAt, function(year, month, last) {
+      if (last) log('inventory.eachMonth '+doc.drug.generic+' '+doc._id+' '+sortedBin+' '+createdAt[0]+'-'+createdAt[1]+' '+year+' '+month+' '+removedAt[0]+'-'+removedAt[1]+' '+to_id);
       if ( ! last) emit([to_id, year, month, doc.drug.generic, doc.drug._id, ! repacked, sortedBin], val)
     })
   },
@@ -312,17 +313,41 @@ exports.views = {
 
   'inventory.indate':{
     map(doc) {
-       var inventoryUntil  = require('inventoryUntil')(doc)
-       var createdAt       = require('createdAt')(doc)
-       var from_id         = require('from_id')(doc)
-       var qty             = require('qty')(doc)
-       var val             = require('value')(doc)
-       var count           = require('count')(doc)
-       var to_id           = require('to_id')(doc)
-       var isBinned        = require('isBinned')(doc) && {"qty.binned":qty, "value.binned":val, "count.binned":count}
-       var isRepacked      = require('isRepacked')(doc) && {"qty.repacked":qty, "value.repacked":val, "count.repacked":count}
-       var isPending       = require('isPending')(doc) && {"qty.pending":qty, "value.pending":val, "count.pending":count}
-       var isDispe
+     var inventoryUntil  = require('inventoryUntil')(doc)
+     var createdAt       = require('createdAt')(doc)
+     var from_id         = require('from_id')(doc)
+     var qty             = require('qty')(doc)
+     var val             = require('value')(doc)
+     var count           = require('count')(doc)
+     var to_id           = require('to_id')(doc)
+     var isBinned        = require('isBinned')(doc) && {"qty.binned":qty, "value.binned":val, "count.binned":count}
+     var isRepacked      = require('isRepacked')(doc) && {"qty.repacked":qty, "value.repacked":val, "count.repacked":count}
+     var isPending       = require('isPending')(doc) && {"qty.pending":qty, "value.pending":val, "count.pending":count}
+     var isDispensed     = require('isDispensed')(doc) && {"qty.dispensed":qty, "value.dispensed":val, "count.dispensed":count}
+     log('#1 inventory.indate '+doc._id);
+     //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
+     for (var y = +createdAt[0], m = +createdAt[1]; y < inventoryUntil[0] || m < inventoryUntil[1]; m++) {
+       if (m == 13) {
+         y++
+         m = 1
+       }
+
+       log('inventory.indate '+doc._id+' '+createdAt[0]+'-'+createdAt[1]+' '+y+' '+inventoryUntil[0]+'-'+inventoryUntil[1]+' '+to_id+'-'+from_id);
+       //convert month # back to a two character string
+       var key = [to_id, y, ('0'+m).slice(-2), doc.drug.generic, doc.drug._id, from_id]
+
+       if (isBinned)
+        emit(key, isBinned)
+
+       if (isRepacked)
+        emit(key, isBinned)
+
+       if (isPending)
+        emit(key, isPending)
+
+       if (isDispensed)
+        emit(key, isDispensed)
+      }
     },
     reduce
   },
