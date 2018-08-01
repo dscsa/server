@@ -203,6 +203,17 @@ exports.views = {
   //used by drug endpoint to update transactions on drug name/form updates
   'drug._id':function(doc) {
     emit([require('recipient_id')(doc), doc.drug._id])
+  wasInventory(doc) {
+    return require('wasBinned')(doc) || require('wasRepacked')(doc)
+  },
+  //Ensure that it is still verified and not unchecked after bin was set
+  wasBinned(doc) {
+    return doc.bin && doc.bin.length == 4
+  },
+  //It is on a repacked shelf
+  wasRepacked(doc) {
+    return doc.bin && doc.bin.length != 4
+  },
   },
 
   //Client shipments page
@@ -272,56 +283,39 @@ exports.views = {
         emit(key, {"qty.dispensed":qty})
     },
     reduce
+  'inventory.new':{
+    map(doc) { //new inventory
+      require('wasInventory')(doc) && require('inventory')(doc, emit, require('qty')(doc))
+    },
+    '_stats'
   },
 
-  //An item is in inventory from the moment it is created until the moment it is removed (next poperty is set) or until it expires
-  //We do a loop because couchdb cannot filter and group on different fields.  Emitting [exp, drug] would filter and group on exp.
-  //Emitting [drug, exp] would filter and group by drug.  We want to group by drug and filter by exp.  To achieve this we emit
-  //every month between the item being added and when it leaves inventory (see above).  This way search for [2018, 06] doesn't just
-  //give us 2018-06 items but all items before that too e.g 2018-05, 2018-04 .... until createdAt date.  In this way the Exp filter
-  //is built into the view itself and doesn't require us to use start and end keys to filter by exp, and in this way we can group by drug
   'inventory.indate':{
     map(doc) {
+       var inventoryUntil  = require('inventoryUntil')(doc)
+       var createdAt       = require('createdAt')(doc)
+       var from_id         = require('from_id')(doc)
+       var qty             = require('qty')(doc)
+       var val             = require('value')(doc)
+       var count           = require('count')(doc)
+       var to_id           = require('to_id')(doc)
+       var isBinned        = require('isBinned')(doc) && {"qty.binned":qty, "value.binned":val, "count.binned":count}
+       var isRepacked      = require('isRepacked')(doc) && {"qty.repacked":qty, "value.repacked":val, "count.repacked":count}
+       var isPending       = require('isPending')(doc) && {"qty.pending":qty, "value.pending":val, "count.pending":count}
+       var isDispe
+    },
+    reduce
+  },
 
-      var inventoryUntil  = require('inventoryUntil')(doc)
-      var createdAt       = require('createdAt')(doc)
-      var from_id         = require('from_id')(doc)
-      var qty             = require('qty')(doc)
-      var val             = require('value')(doc)
-      var count           = require('count')(doc)
-      var to_id           = require('to_id')(doc)
-      var isBinned        = require('isBinned')(doc) && {"qty.binned":qty, "value.binned":val, "count.binned":count}
-      var isRepacked      = require('isRepacked')(doc) && {"qty.repacked":qty, "value.repacked":val, "count.repacked":count}
-      var isPending       = require('isPending')(doc) && {"qty.pending":qty, "value.pending":val, "count.pending":count}
-      var isDispensed     = require('isDispensed')(doc) && {"qty.dispensed":qty, "value.dispensed":val, "count.dispensed":count}
 
-      log('#1 inventory.indate '+doc._id);
 
-      //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
-      for (var y = +createdAt[0], m = +createdAt[1]; y < inventoryUntil[0] || m < inventoryUntil[1]; m++) {
 
-        if (m == 13) {
-          y++
-          m = 1
-        }
 
-        log('#1 inventory.indate '+doc._id+' '+createdAt[0]+'-'+createdAt[1]+' '+y+' '+inventoryUntil[0]+'-'+inventoryUntil[1]+' '+to_id+'-'+from_id);
 
-        //convert month # back to a two character string
-        var key = [to_id, y, ('0'+m).slice(-2), doc.drug.generic, doc.drug._id, from_id]
 
-        if (isBinned)
-          emit(key, isBinned)
 
-        if (isRepacked)
-          emit(key, isBinned)
 
-        if (isPending)
-          emit(key, isPending)
 
-        if (isDispensed)
-          emit(key, isDispensed)
-      }
     },
     reduce
   },
