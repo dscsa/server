@@ -73,6 +73,18 @@ exports.lib = {
     return doc.next[0] && doc.next[0].dispensed
   },
 
+  wasInventory(doc) {
+    return require('wasBinned')(doc) || require('wasRepacked')(doc)
+  },
+  //Ensure that it is still verified and not unchecked after bin was set
+  wasBinned(doc) {
+    return doc.bin && doc.bin.length == 4
+  },
+  //It is on a repacked shelf
+  wasRepacked(doc) {
+    return doc.bin && doc.bin.length != 4
+  },
+
   //For authorization purposes.  Only allow recipients to see their own metrics
   //TODO for naming consistency replace with to_id
   recipient_id(doc) {
@@ -203,17 +215,6 @@ exports.views = {
   //used by drug endpoint to update transactions on drug name/form updates
   'drug._id':function(doc) {
     emit([require('recipient_id')(doc), doc.drug._id])
-  wasInventory(doc) {
-    return require('wasBinned')(doc) || require('wasRepacked')(doc)
-  },
-  //Ensure that it is still verified and not unchecked after bin was set
-  wasBinned(doc) {
-    return doc.bin && doc.bin.length == 4
-  },
-  //It is on a repacked shelf
-  wasRepacked(doc) {
-    return doc.bin && doc.bin.length != 4
-  },
   },
 
   //Client shipments page
@@ -283,6 +284,8 @@ exports.views = {
         emit(key, {"qty.dispensed":qty})
     },
     reduce
+  },
+
   'inventory.new':{
     map(doc) { //new inventory
       require('wasInventory')(doc) && require('inventory')(doc, emit, require('qty')(doc))
@@ -303,19 +306,6 @@ exports.views = {
        var isRepacked      = require('isRepacked')(doc) && {"qty.repacked":qty, "value.repacked":val, "count.repacked":count}
        var isPending       = require('isPending')(doc) && {"qty.pending":qty, "value.pending":val, "count.pending":count}
        var isDispe
-    },
-    reduce
-  },
-
-
-
-
-
-
-
-
-
-
     },
     reduce
   },
