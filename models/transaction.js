@@ -133,6 +133,23 @@ exports.lib = {
     return require(date)(doc)
   },
 
+  sortedBin(doc) {
+    return doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')
+  },
+
+  inventory(doc, emit, val) {
+
+    var createdAt = require('createdAt')(doc)
+    var removedAt = require('inventoryUntil')(doc)
+    var to_id     = require('to_id')(doc)
+    var repacked  = require('wasRepacked')(doc)
+    var sortedBin = require('sortedBin')(doc)
+
+    require('eachMonth')(createdAt, removedAt, function(year, month, last) {
+      if ( ! last) emit([to_id, year, month, doc.drug.generic, doc.drug._id, ! repacked, sortedBin], val)
+    })
+  },
+
   //Sugar to make a key in the form [recipient_id, (optional) prefix(s), year, month, day]
   dateKey(doc, dateType, prefix) {
     return require('flatten')(require('recipient_id')(doc), prefix || [], require(dateType)(doc))
