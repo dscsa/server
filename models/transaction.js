@@ -121,7 +121,7 @@ exports.lib = {
     return (doc.exp.to || doc.exp.from).slice(0, 10).split('-')
   },
 
-  inventoryUntil(doc) { //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pending, etc)
+  removedAt(doc) { //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pending, etc)
 
     var date = 'expAt'
 
@@ -134,7 +134,8 @@ exports.lib = {
   },
 
   sortedBin(doc) {
-    return doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')
+    var switchRowCol = doc.bin[0]+doc.bin[2]+doc.bin[1]
+    return doc.bin[3] ? switchRowCol+doc.bin[3] : ' '+switchRowCol //repacks sorted first
   },
 
   //fromDate, toDate must be date arrays.
@@ -154,22 +155,6 @@ exports.lib = {
       callback(''+y, ('0'+m).slice(-2))
     }
     callback(''+y, ('0'+m).slice(-2), true)
-  },
-
-  //Inventory at the end of each month (so we do not count the last month)
-  inventory(doc, emit, val) {
-
-    var createdAt = require('createdAt')(doc)
-    var removedAt = require('inventoryUntil')(doc)
-    var to_id     = require('to_id')(doc)
-    var repacked  = require('wasRepacked')(doc)
-    var sortedBin = require('sortedBin')(doc)
-    var current   = ! doc.next[0] && doc.verifiedAt //this will always be true for future dates, but for past dates it will only be true for unpulled expireds
-    var exp = doc.exp.to || doc.exp.from
-
-    require('eachMonth')(createdAt, removedAt, function(year, month, last) {
-      if ( ! last) emit([to_id, year, month, current, doc.drug.generic, exp, doc.drug._id, ! repacked, sortedBin], val)
-    })
   },
 
   //Sugar to make a key in the form [recipient_id, (optional) prefix(s), year, month, day]
@@ -327,21 +312,64 @@ exports.views = {
 
   'inventory.new':{
     map(doc) { //new inventory
-      require('wasInventory')(doc) && require('inventory')(doc, emit, require('qty')(doc))
+      require('wasInventory')(doc) && inventory(doc, require('qty')(doc))
+
+      function inventory(doc, val) {
+        var createdAt = require('createdAt')(doc)
+        var removedAt = require('removedAt')(doc)
+        var to_id     = require('to_id')(doc)
+        var sortedBin = require('sortedBin')(doc)
+        var exp = doc.exp.to || doc.exp.from
+
+        var stage   = 'inventory' //stage will == inventory for future dates, but for past dates it will only be true for unpulled expireds
+        if (require('isDisposed')(doc)) stage = 'disposed' else
+        if (require('isDispensed')(doc)) stage = 'dispensed' else
+        if (require('isPending')(doc)) stage = 'pending' else
+        if (require('isRepacked')(doc)) stage = 'repacked'
+
+        require('eachMonth')(createdAt, removedAt, function(year, month, last) {
+          if ( ! last) emit([to_id, year, month, doc.drug.generic, stage, exp, doc.drug._id, sortedBin], val)
+        })
+      }
     },
     reduce:'_stats'
   },
 
+
+  //Live Inventory [to_id, year, month+2]?group_level=4
+  //Inventory Download [to_id, year, month+2]?group_level=false
+  //v2 Inventory [to_id, year, month+2, Drug Name]
+  //v2 Drugs [to_id, year, month+2, Drug Name]?group_level=5 (inventory/dispense/disposed/pending/repacked)
+  //Audit Inventory [to_id, year-1, 12]?group_level=4
+
   'inventory.new.value':{
     map(doc) { //new inventory
-      require('wasInventory')(doc) && require('inventory')(doc, emit, require('value')(doc))
+      require('wasInventory')(doc) && inventory(doc, require('value')(doc))
+
+      function inventory(doc, val) {
+        var createdAt = require('createdAt')(doc)
+        var removedAt = require('removedAt')(doc)
+        var to_id     = require('to_id')(doc)
+        var sortedBin = require('sortedBin')(doc)
+        var exp = doc.exp.to || doc.exp.from
+
+        var stage   = 'inventory' //stage will == inventory for future dates, but for past dates it will only be true for unpulled expireds
+        if (require('isDisposed')(doc)) stage = 'disposed' else
+        if (require('isDispensed')(doc)) stage = 'dispensed' else
+        if (require('isPending')(doc)) stage = 'pending' else
+        if (require('isRepacked')(doc)) stage = 'repacked'
+
+        require('eachMonth')(createdAt, removedAt, function(year, month, last) {
+          if ( ! last) emit([to_id, year, month, doc.drug.generic, stage, exp, doc.drug._id, sortedBin], val)
+        })
+      }
     },
     reduce:'_stats'
   },
 
   'inventory.indate':{
     map(doc) {
-     var inventoryUntil  = require('inventoryUntil')(doc)
+     var removedAt  = require('removedAt')(doc)
      var createdAt       = require('createdAt')(doc)
      var from_id         = require('from_id')(doc)
      var qty             = require('qty')(doc)
@@ -354,13 +382,13 @@ exports.views = {
      var isDispensed     = require('isDispensed')(doc) && {"qty.dispensed":qty, "value.dispensed":val, "count.dispensed":count}
      log('#1 inventory.indate '+doc._id);
      //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
-     for (var y = +createdAt[0], m = +createdAt[1]; y < inventoryUntil[0] || m < inventoryUntil[1]; m++) {
+     for (var y = +createdAt[0], m = +createdAt[1]; y < removedAt[0] || m < removedAt[1]; m++) {
        if (m == 13) {
          y++
          m = 1
        }
 
-       log('inventory.indate '+doc._id+' '+createdAt[0]+'-'+createdAt[1]+' '+y+' '+inventoryUntil[0]+'-'+inventoryUntil[1]+' '+to_id+'-'+from_id);
+       log('inventory.indate '+doc._id+' '+createdAt[0]+'-'+createdAt[1]+' '+y+' '+removedAt[0]+'-'+removedAt[1]+' '+to_id+'-'+from_id);
        //convert month # back to a two character string
        var key = [to_id, y, ('0'+m).slice(-2), doc.drug.generic, doc.drug._id, from_id]
 
