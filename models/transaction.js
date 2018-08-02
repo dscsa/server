@@ -331,6 +331,13 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'inventory.new.value':{
+    map(doc) { //new inventory
+      require('wasInventory')(doc) && require('inventory')(doc, emit, require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
   'inventory.indate':{
     map(doc) {
      var inventoryUntil  = require('inventoryUntil')(doc)
