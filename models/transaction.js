@@ -322,10 +322,10 @@ exports.views = {
         var exp = doc.exp.to || doc.exp.from
 
         var stage   = 'inventory' //stage will == inventory for future dates, but for past dates it will only be true for unpulled expireds
-        if (require('isDisposed')(doc)) stage = 'disposed' else
-        if (require('isDispensed')(doc)) stage = 'dispensed' else
-        if (require('isPending')(doc)) stage = 'pending' else
-        if (require('isRepacked')(doc)) stage = 'repacked'
+        if (require('isDisposed')(doc)) stage = 'disposed'
+        else if (require('isDispensed')(doc)) stage = 'dispensed'
+        else if (require('isPending')(doc)) stage = 'pending'
+        else if (require('isRepacked')(doc)) stage = 'repacked'
 
         require('eachMonth')(createdAt, removedAt, function(year, month, last) {
           if ( ! last) emit([to_id, year, month, doc.drug.generic, stage, exp, doc.drug._id, sortedBin], val)
@@ -354,10 +354,10 @@ exports.views = {
         var exp = doc.exp.to || doc.exp.from
 
         var stage   = 'inventory' //stage will == inventory for future dates, but for past dates it will only be true for unpulled expireds
-        if (require('isDisposed')(doc)) stage = 'disposed' else
-        if (require('isDispensed')(doc)) stage = 'dispensed' else
-        if (require('isPending')(doc)) stage = 'pending' else
-        if (require('isRepacked')(doc)) stage = 'repacked'
+        if (require('isDisposed')(doc)) stage = 'disposed'
+        else if (require('isDispensed')(doc)) stage = 'dispensed'
+        else if (require('isPending')(doc)) stage = 'pending'
+        else if (require('isRepacked')(doc)) stage = 'repacked'
 
         require('eachMonth')(createdAt, removedAt, function(year, month, last) {
           if ( ! last) emit([to_id, year, month, doc.drug.generic, stage, exp, doc.drug._id, sortedBin], val)
