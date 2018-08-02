@@ -164,10 +164,11 @@ exports.lib = {
     var to_id     = require('to_id')(doc)
     var repacked  = require('wasRepacked')(doc)
     var sortedBin = require('sortedBin')(doc)
+    var current   = ! doc.next[0] && doc.verifiedAt //this will always be true for future dates, but for past dates it will only be true for unpulled expireds
+    var exp = doc.exp.to || doc.exp.from
 
     require('eachMonth')(createdAt, removedAt, function(year, month, last) {
-      if (last) log('inventory.eachMonth '+doc.drug.generic+' '+doc._id+' '+sortedBin+' '+createdAt[0]+'-'+createdAt[1]+' '+year+' '+month+' '+removedAt[0]+'-'+removedAt[1]+' '+to_id);
-      if ( ! last) emit([to_id, year, month, doc.drug.generic, doc.drug._id, ! repacked, sortedBin], val)
+      if ( ! last) emit([to_id, year, month, current, doc.drug.generic, exp, doc.drug._id, ! repacked, sortedBin], val)
     })
   },
 
