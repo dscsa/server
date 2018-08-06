@@ -24,7 +24,7 @@ module.exports = defaults => {
     let headers
     const promise = new Promise((res, rej) => { resolve = res, reject = rej })
     const stack = new Error().stack
-
+    //console.log('ajax', options, stack)
     const request = ajax(options, (error, body, res) => {
 
       if (error && error.code == 500) {

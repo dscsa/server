@@ -25,16 +25,42 @@ exports.get_csv = function*(db) {
   this.type = 'text/csv'
 }
 
+//This is to find the emptiest bins
+exports.binned = function* (id) { //account._id will not be set because google does not send cookie
+  const view = yield this.db.transaction.query('inventory-by-bin-verifiedat', {group_level:3, startkey:[id, 'binned'], endkey:[id, 'binned', {}]}) //exclude repack bins from empty bins
+  let sortAsc = view.rows.sort((a, b) => a.value.count - b.value.count)
+  this.body  = csv.fromJSON(sortAsc, this.query.fields && this.query.fields.split(','))
+}
+
 //Shows everything in inventory AND all ordered items not in inventory
-exports.inventory = function* (id) { //account._id will not be set because google does not send cookie
+exports.inventory = function* (to_id) { //account._id will not be set because google does not send cookie
+
+  let minExp   = new Date()
+  let minMonth = minExp.getMonth() + (+this.query.buffer || 0) - 1 // - 1 because we use expireds until the end of the month
+  minExp.setMonth(minMonth) //internal search does 1 month, so let's pad it by an additional month
+  let [year, month] = minExp.toJSON().split('-')
+
+  let opts = {
+    group_level:5, //by drug.generic
+    startkey:[to_id, 'month', year, month],
+    endkey:[to_id, 'month', year, month+'\uffff']
+  }
+
   const [inventory, account] = yield [
-    this.db.transaction.query('inventory', opts(1, id)),
-    this.db.account.get(id)
+    this.db.transaction.query('inventory.qty-by-generic', opts),
+    this.db.account.get(to_id)
   ]
 
   //Match inventory with ordered when applicable
   let rows = inventory.rows.map(row => {
-    let generic = row.key[1]
+    let generic = row.key[opts.group_level-1]
+
+    row.key = row.key.slice(1)
+    row.value.qty = row.value.sum
+    delete row.value.sum
+    delete row.value.max
+    delete row.value.min
+    delete row.value.sumsqr
 
     if (account.ordered[generic]) {
       row.value.ordered = true
@@ -47,70 +73,158 @@ exports.inventory = function* (id) { //account._id will not be set because googl
 
   //Add unmatched orders to the end of array
   for (let generic in account.ordered)
-    rows.push({key:[id, generic], value:{ordered:true, order:account.ordered[generic]}})
+    rows.push({key:[to_id, year, month, generic], value:{ordered:true, order:account.ordered[generic]}})
 
   this.body = csv.fromJSON(rows, this.query.fields && this.query.fields.split(','))
 }
 
-exports.metrics = function* (id) { //account._id will not be set because google does not send cookie
-  let options = opts(this.query.group_level, id)
-  const [qty, value, retail, count] = yield [
-    this.db.transaction.query('qty', options),
-    this.db.transaction.query('value', options),
-    this.db.transaction.query('retail', options),
-    this.db.transaction.query('count', options)
+exports.recordByGeneric = function* (to_id) { //account._id will not be set because google does not send cookie
+  let [qtyRecords, valueRecords] = yield [
+    getRecords.call(this, to_id, 'qty-by-generic-ndc'),
+    getRecords.call(this, to_id, 'value-by-generic-ndc')
   ]
 
-  let rows = qty.rows.map((row, i) => {
-    return {key:row.key, value:Object.assign(row.value, value.rows[i].value, retail.rows[i].value, count.rows[i].value)}
-  })
+  let records = {}
+  mergeRecords(qtyRecords, 'count', records)
+  mergeRecords(qtyRecords, 'qty', records)
+  mergeRecords(valueRecords, 'value', records)
 
-  this.body = csv.fromJSON(rows, this.query.fields && this.query.fields.split(','))
+  records = sortRecords(records)
+
+  this.body = csv.fromJSON(records, this.query.fields && this.query.fields.split(','))
 }
 
-exports.record = function* (id) { //account._id will not be set because google does not send cookie
-  const view = yield this.db.transaction.query('record', opts(this.query.group_level, id))
-  this.body  = csv.fromJSON(view.rows, this.query.fields && this.query.fields.split(','))
+exports.recordByUser = function* (to_id) { //account._id will not be set because google does not send cookie
+
+  let qtyRecords = yield getRecords.call(this, to_id, 'qty-by-user-from-shipment')
+
+  let records = {}
+  mergeRecords(qtyRecords, 'count', records)
+  mergeRecords(qtyRecords, 'qty', records)
+  records = sortRecords(records)
+
+  this.body = csv.fromJSON(records, this.query.fields && this.query.fields.split(','))
 }
 
-exports.users = function* (id) { //account._id will not be set because google does not send cookie
-  const view = yield this.db.transaction.query('users', opts(this.query.group_level, id))
-  this.body  = csv.fromJSON(view.rows, this.query.fields && this.query.fields.split(','))
-}
+exports.recordByFrom = function* (to_id) { //account._id will not be set because google does not send cookie
 
-exports.from = function* (id) { //account._id will not be set because google does not send cookie
-
-  let options = opts(this.query.group_level, id)
-
-  const [qty, value, count, accounts] = yield [
-    this.db.transaction.query('from.qty', options),
-    this.db.transaction.query('from.value', options),
-    this.db.transaction.query('from.count', options),
-    this.db.account.allDocs({endkey:'_design', include_docs:true})
+  let [qtyRecords, valueRecords] = yield [
+    getRecords.call(this, to_id, 'qty-by-from-generic-ndc'),
+    getRecords.call(this, to_id, 'value-by-from-generic-ndc')
   ]
 
-  //Turn into object for quicker repetitive lookups
-  var accountMap = {}
-  for (let row of accounts.rows)
-    accountMap[row.id] = row.doc
+  let records = {}
+  mergeRecords(qtyRecords, 'count', records)
+  mergeRecords(qtyRecords, 'qty', records)
+  mergeRecords(valueRecords, 'value', records)
 
-  //Combine qty, value, and account.  Then denormalize from-account data into our transactions.
-  let rows = qty.rows.map((row, i) => {
-    return {key:row.key, value:Object.assign(row.value, value.rows[i].value, count.rows[i].value, {'shipment.from':accountMap[row.key[1]]})}
+  records = sortRecords(records)
+
+  this.body = csv.fromJSON(records, this.query.fields && this.query.fields.split(','))
+}
+
+function* getRecords (to_id, suffix) {
+  //TODO Enable people to pick only certain fields so we don't need all these queries
+  ///We can also reduce the lines of code by doing a for-loop accross the stages
+  let group  = this.query.group || ''
+  let opts   = {
+    group_level:this.query.group_level ? +this.query.group_level + 2 : groupby(group).level, //default is by drug.generic.  Add 2 for to_id and year/month/day key
+    startkey:[to_id, group].concat(this.query.startkey || []),
+    endkey:[to_id, group].concat(this.query.endkey || [])
+  }
+
+  opts.endkey[opts.endkey.length] = {}
+
+  let records = yield [
+    this.db.transaction.query('received.'+suffix, opts),
+    this.db.transaction.query('verified.'+suffix, opts),
+    this.db.transaction.query('expired.'+suffix, opts),
+    this.db.transaction.query('disposed.'+suffix, opts),
+    this.db.transaction.query('dispensed.'+suffix, opts),
+    this.db.transaction.query('pended.'+suffix, opts),
+  ]
+  return records
+}
+
+function mergeRecords(records, suffix, rows) {
+  mergeRecord(rows, records[0], 'received.'+suffix)
+  mergeRecord(rows, records[1], 'verified.'+suffix)
+  mergeRecord(rows, records[2], 'expired.'+suffix)
+  mergeRecord(rows, records[3], 'disposed.'+suffix)
+  mergeRecord(rows, records[4], 'dispensed.'+suffix)
+  mergeRecord(rows, records[5], 'pended.'+suffix)
+}
+
+//console.log('recordByGeneric opts, rows', opts, rows)
+//(Re)sort them in ascending order.  And calculate inventory
+function sortRecords(rows) {
+  let last = { qty:0, value:0, count:0 } //since cumulative, must be done in ascending date order.
+  return Object.keys(rows).sort().map(key => {
+    let row = rows[key].value
+    last.qty   = last.qty   + row['received.qty'] - row['expired.qty'] - row['disposed.qty'] - row['dispensed.qty'] - row['pended.qty']
+    last.value = last.value + row['received.value'] - row['expired.value'] - row['disposed.value'] - row['dispensed.value'] - row['pended.value']
+    //Can't calculate an inventory count like this because repacking can split/combine existing items, meaning that more can be dispensed/disposed/expired than what is received.  Would need to do with using the view
+    //last.count = last.count + row['received.count'] - row['expired.count'] - row['disposed.count'] - row['dispensed.count'] - row['pended.count']
+    //combining with last row (last.qty = row['inventory.qty'] = calculation) doubled the delta for some reason
+    row['inventory.qty']   = +(last.qty).toFixed(2)
+    row['inventory.value'] = +(last.value).toFixed(2)
+    //row['inventory.count'] = +(last.count).toFixed(2)
+
+    //Rather than maintaining a two separate views with refused.qty and refused.value it's easy here to split diposed into disposed.refused and disposed.verified
+    row['refused.count'] = row['received.count'] - row['verified.count']
+    row['refused.qty']   = row['received.qty']   - row['verified.qty']
+    row['refused.value'] = +(row['received.value'] - row['verified.value']).toFixed(2)
+
+    row['disposed.qty']   -= row['refused.qty']
+    row['disposed.count'] -= row['refused.count']
+    row['disposed.value'] -= row['refused.value']
+
+
+    return rows[key]
   })
-
-  this.body = csv.fromJSON(rows, this.query.fields && this.query.fields.split(','))
 }
 
-//This is to find the emptiest bins
-exports.bins = function* (id) { //account._id will not be set because google does not send cookie
-  const view = yield this.db.transaction.query('inventory.bin', {group_level:3, startkey:[id, false], endkey:[id, false, {}]}) //exclude repack bins from empty bins
-  let sortAsc = view.rows.sort((a, b) => a.value - b.value)
-  this.body  = csv.fromJSON(sortAsc, this.query.fields && this.query.fields.split(','))
+function mergeRecord(rows, record, field) {
+  for (let row of record.rows) {
+    let key = row.key.slice(1).join(',')
+    rows[key] = rows[key] || {key:row.key.slice(1), value:{
+       //specify csv column order here -- TODO default to user supplied this.query.fields
+      'received.count':0,
+      'verified.count':0,
+      'refused.count':0,
+      'expired.count':0,
+      'disposed.count':0,
+      'dispensed.count':0,
+      'pended.count':0,
+      'received.qty':0,
+      'verified.qty':0,
+      'refused.qty':0,
+      'expired.qty':0,
+      'disposed.qty':0,
+      'dispensed.qty':0,
+      'pended.qty':0,
+      'inventory.qty':0,
+      'received.value':0,
+      'verified.value':0,
+      'refused.value':0,
+      'expired.value':0,
+      'disposed.value':0,
+      'dispensed.value':0,
+      'pended.value':0,
+      'inventory.value':0
+    }}
+
+    rows[key].value[field] = field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
+  }
 }
 
-function opts(group_level = 0, id) {
-   return {group_level:+group_level+1, startkey:[id], endkey:[id, {}]}
+function groupby(group) {
+  return {
+    ''    :{ level:3 },
+    year  :{ level:4 },
+    month :{ level:5 },
+    day   :{ level:6 },
+  }[group]
 }
 
 exports.validate = function(model) {

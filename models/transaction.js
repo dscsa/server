@@ -1,5 +1,11 @@
 "use strict"
 //defaults
+
+//TODO replace all recipient_id with TO_ID
+//TODO replace all with sortedBin
+//TODO replace all isXXX with wasXXX
+//TODO remove deprecations
+
 module.exports = exports = Object.create(require('../helpers/model'))
 
 let drug     = require('./drug')
@@ -11,131 +17,102 @@ let admin  = {ajax:{auth:require('../../../keys/dev.js')}}
 
 exports.lib = {
 
-  count(doc) { //silly but used by metric lib
-    return 1
-  },
-
   qty(doc) {
     return doc.qty.to || doc.qty.from || 0
   },
 
   price(doc) {
-    return doc.drug.price ? doc.drug.price.goodrx || doc.drug.price.nadac || 0 : 0
+    return doc.drug.price ? doc.drug.price.goodrx || doc.drug.price.nadac || doc.drug.price.retail || 0 : 0
   },
 
   value(doc) {
-    var qty   = require('qty')(doc)
-    var price = require('price')(doc)
-    return price * qty
-  },
-
-  retail(doc) {
-    var qty   = require('qty')(doc)
-    var price = doc.drug.price ? doc.drug.price.retail || require('price')(doc) : 0
-    return price * qty
-  },
-
-  //It came in a shipment, not restocked or repacked which both have shipment._id == account._id
-  isReceived(doc) {
-    return doc.shipment._id.indexOf('.') != -1
-  },
-
-  //Checkmark sets verifiedAt
-  isAccepted(doc) {
-    return doc.verifiedAt && require('isReceived')(doc)
-  },
-
-  //No checkmark, also includes excess drugs that were repacked but did not go into a vial.  Or no bin in case bin was never added after verifiying
-  isDisposed(doc) {
-    return ! doc.verifiedAt || ! doc.bin
-  },
-
-  isInventory(doc) {
-    //verifiedAt is the checkmark, next can have pending, dispensed, or a transaction meaning this transaction has been used for something else
-    return require('isBinned')(doc) || require('isRepacked')(doc)
-  },
-
-  //Ensure that it is still verified and not unchecked after bin was set
-  isBinned(doc) {
-    return ! doc.next[0] && doc.bin && doc.bin.length == 4 && doc.verifiedAt
-  },
-
-  //It is on a repacked shelf
-  isRepacked(doc, includePending) {
-    return (includePending || ! doc.next[0]) && doc.bin && doc.bin.length == 3
-  },
-
-  isPending(doc) {
-    return doc.next[0] && doc.next[0].pending
-  },
-
-  isDispensed(doc) {
-    return doc.next[0] && doc.next[0].dispensed
-  },
-
-  wasInventory(doc) {
-    return require('wasBinned')(doc) || require('wasRepacked')(doc)
-  },
-  //Ensure that it is still verified and not unchecked after bin was set
-  wasBinned(doc) {
-    return doc.bin && doc.bin.length == 4
-  },
-  //It is on a repacked shelf
-  wasRepacked(doc) {
-    return doc.bin && doc.bin.length != 4
-  },
-
-  //For authorization purposes.  Only allow recipients to see their own metrics
-  //TODO for naming consistency replace with to_id
-  recipient_id(doc) {
-    return doc.shipment._id.slice(0, 10)
+    return +(require('price')(doc) * require('qty')(doc)).toFixed(2)
   },
 
   //For authorization purposes.  Only allow recipients to see their own metrics
   to_id(doc) {
-    return doc.shipment._id.slice(0, 10)
+    return doc.shipment && doc.shipment._id.slice(0, 10)
   },
 
+  //Identify the donor (for repacked this is the same as the recipient)
   from_id(doc) {
-    return doc.shipment._id.slice(-10)
+    return doc.shipment && doc.shipment._id.slice(-10)
   },
 
   createdAt(doc) {
     return doc._id.slice(0, 10).split('-')
   },
 
-  updatedAt(doc) {
-    return doc.updatedAt.slice(0, 10).split('-')
+  receivedAt(doc) {
+    return doc.shipment && ~ doc.shipment._id.indexOf('.') && doc.shipment._id.slice(11, 21).split('-')
   },
 
-  //when next[0] is undefined, rather than stopping emit() lets just emit the updatedAt key
+  //Don't count repacks as verified even though verifiedAt is set, becase then we could have verified > received
+  verifiedAt(doc) {
+    return doc.verifiedAt && doc.verifiedAt.slice(0, 10).split('-')
+  },
+
+  //TODO In case next.length > 1 we may need to do a loop.  Break at first key with "dispensed" prop?
+  //see 'next.transaction._id' view for an example
   nextAt(doc) {
-    return doc.next[0] ? doc.next[0].createdAt.slice(0, 10).split('-') : require('updatedAt')(doc)
+    return doc.next[0] && doc.next[0].createdAt.slice(0, 10).split('-')
   },
 
-  shippedAt(doc) {
-    return require('isReceived')(doc) ? doc.shipment._id.slice(11, 21).split('-') : require('createdAt')(doc) //createdAt is a pretty good proxy.  Only different if it takes more than one day to log the shipment
+  //TODO see above
+  disposedAt(doc) {
+    var nextAt = require('nextAt')(doc)
+    return nextAt && doc.next[0].disposed && nextAt
   },
 
-  expAt(doc) {
-    return (doc.exp.to || doc.exp.from).slice(0, 10).split('-')
+  //TODO see above
+  dispensedAt(doc) {
+    var nextAt = require('nextAt')(doc)
+    return nextAt && doc.next[0].dispensed && nextAt
   },
 
-  removedAt(doc) { //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pending, etc)
+  //TODO see above
+  pendedAt(doc) {
+    var nextAt = require('nextAt')(doc)
+    return nextAt && doc.next[0].pended && nextAt
+  },
 
-    var date = 'expAt'
+ //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
+  expiredAt(doc) {
+    return require('isInventory')(doc) && (doc.exp.to || doc.exp.from).slice(0, 10).split('-')
+  },
 
-    if (require('isDisposed')(doc))
-      date = 'updatedAt'
-    else if (doc.next[0])
-      date = 'nextAt'
+  //This includes unpulled expired, no-way to remove those from view
+  //removes all pended, dispensed, disposed, and previous (repacked)
+  isInventory(doc) {
+    return doc.bin && ! doc.next.length
+  },
 
-    return require(date)(doc)
+  isBinned(doc) {
+    return require('isInventory')(doc) && doc.bin.length == 4
+  },
+
+  isRepacked(doc) {
+    return require('isInventory')(doc)&& doc.bin.length != 4
   },
 
   sortedBin(doc) {
-    var switchRowCol = doc.bin[0]+doc.bin[2]+doc.bin[1]
+    if ( ! doc.bin) return
+    var switchRowCol = doc.bin[0]+doc.bin[2]+doc.bin[1]            //we don't want shopper to walk backwards so this makes all movement forward
     return doc.bin[3] ? switchRowCol+doc.bin[3] : ' '+switchRowCol //repacks sorted first
+  },
+
+  sortedDrug(doc) {
+    return (doc.exp.to || doc.exp.from)+' '+doc.drug._id+' '+require('sortedBin')(doc)
+  },
+
+  groupByDate(emit, doc, stage, key, val) {
+    var date = require(stage+'At')(doc)
+    if ( ! date) return
+    var to_id = require('to_id')(doc)
+    emit([to_id, ''].concat(key), val)
+    emit([to_id, 'year',  date[0]].concat(key), val)
+    emit([to_id, 'month', date[0], date[1]].concat(key), val)
+    emit([to_id, 'day',   date[0], date[1], date[2]].concat(key), val)
   },
 
   //fromDate, toDate must be date arrays.
@@ -157,380 +134,366 @@ exports.lib = {
     callback(''+y, ('0'+m).slice(-2), true)
   },
 
-  //Sugar to make a key in the form [recipient_id, (optional) prefix(s), year, month, day]
-  dateKey(doc, dateType, prefix) {
-    return require('flatten')(require('recipient_id')(doc), prefix || [], require(dateType)(doc))
+  expired(emit, doc, val) {
+    if ( ! require('isInventory')) return
+    var to_id     = require('to_id')(doc)
+    var expiredAt = require('expiredAt')(doc)
+    var sortedBin = require('sortedBin')(doc)
+    require('eachMonth')(expiredAt, function(year, month, last) {
+      emit([to_id, year, month, sortedBin], val)
+    })
   },
 
-  flatten() {
-    var flatArray = []
-    for (var i in arguments)
-      flatArray = flatArray.concat(arguments[i])
-    return flatArray
-  },
+  inventory(emit, doc, val) {
+    var createdAt  = require('createdAt')(doc)
+    var removedAt  = require('nextAt')(doc) || require('expiredAt')(doc)
+    var to_id      = require('to_id')(doc)
+    var sortedDrug = require('sortedDrug')(doc)
 
-  createdAtMetrics(doc, type) {
-    var val = require(type)(doc)
+    var stage = 'created' //should not be used right now, but in the future we may want to upload transactions before we received them
+    if (require('isBinned')(doc)) stage = 'binned' //stage should == binned/repacked for future dates, but for past dates it will only be true for unpulled expireds
+    else if (require('isRepacked')(doc)) stage = 'repacked' //stage should == binned/repacked for future dates, but for past dates it will only be true for unpulled expireds
+    else if (require('disposedAt')(doc)) stage = 'disposed'
+    else if (require('dispensedAt')(doc)) stage = 'dispensed'
+    else if (require('pendedAt')(doc)) stage = 'pended'
 
-    var metric = {}
-    //Setting these as 0 keeps a consistent property order in couchdb
-    metric[type+'.received']  = require('isReceived')(doc) ? val : 0
-    metric[type+'.accepted']  = require('isAccepted')(doc) ? val : 0
-    metric[type+'.disposed']  = 0
-    metric[type+'.binned']    = 0
-    metric[type+'.repacked']  = 0
-    metric[type+'.pending']   = 0
-    metric[type+'.dispensed'] = 0
-
-    if (type == 'qty')
-      metric['qty.in-out'] = metric['qty.received'] //In aggregate, this should be 0 because drugs in should equal drugs out
-
-    return metric
-  },
-
-  updatedAtMetrics(doc, type) {
-    var val = require(type)(doc)
-
-    var metric = {}
-    //Setting these as 0 keeps a consistent property order in couchdb
-    metric[type+'.received']  = 0
-    metric[type+'.accepted']  = 0
-    metric[type+'.disposed']  = require('isDisposed')(doc) ? val : 0
-    metric[type+'.binned']    = require('isBinned')(doc) ? val : 0
-    metric[type+'.repacked']  = require('isRepacked')(doc) ? val : 0
-    metric[type+'.pending']   = 0
-    metric[type+'.dispensed'] = 0
-
-    if (type == 'qty')
-      metric['qty.in-out'] = - metric['qty.disposed'] - metric['qty.binned'] - metric['qty.repacked'] //In aggregate, this should be 0 because drugs in should equal drugs out
-
-    return metric
-  },
-
-  nextAtMetrics(doc, type) {
-    var val = require(type)(doc)
-
-    var metric = {}
-    //Setting these as 0 keeps a consistent property order in couchdb
-    metric[type+'.received']  = 0
-    metric[type+'.accepted']  = 0
-    metric[type+'.disposed']  = 0
-    metric[type+'.binned']    = 0
-    metric[type+'.repacked']  = 0
-    metric[type+'.pending']   = require('isPending')(doc) ? val : 0
-    metric[type+'.dispensed'] = require('isDispensed')(doc) ? val : 0
-
-    if (type == 'qty')
-      metric['qty.in-out'] = - metric['qty.pending'] - metric['qty.dispensed'] //In aggregate, this should be 0 because drugs in should equal drugs out
-
-    return metric
+    require('eachMonth')(createdAt, removedAt, function(year, month, last) {
+      if (last) return  //don't count it as inventory in the month that it was removed (expired okay since we use until end of the month)
+      emit([to_id, 'month', year, month, doc.drug.generic, stage, sortedDrug], val)
+      if (month == 12) emit([to_id, 'year', year, doc.drug.generic, stage, sortedDrug], val)
+    })
   }
 }
 
-//Transactions
-exports.views = {
-  //Used by history
+//1. Client (Public) Endpoints
 
+//2. Server (Private) Endpoints for finding and updating denormalized data, etc.
+//Transaction History, Update Brand Name across drugs, Update manufacturers across drugs, Update drug names across transactions
+
+//3. Basic Metrics (Viewed in Google Sheets) for non-expired drugs that were in inventory for a given month:
+//Uses: How much was received today?  How much did this user log?
+//inventory.binned qty,val,count, inventory.repacked qty,val,count, inventory.pended qty,val,count,
+//Key [to, y/m date until expired/next, drug, ndc, bin]
+
+//4. Inventory Metrics (Viewed in Google Sheets) for non-expired drugs that were in inventory for a given month:
+//Uses: Live Inventory, Audits
+//inventory.binned qty,val,count, inventory.repacked qty,val,count, inventory.pended qty,val,count,
+//Key [to, y/m date until expired/next, drug, ndc, bin]
+
+//5. Year to Date Reports (helpful when grouping by drug at given date such as Audits, Inspections)
+//Uses: Any aggregates that we need by drug at a specific point in time: Donor Reports, Live Inventory Dispensing Estimate, Inspection Record
+//received.ytd, verified.ytd, ....
+//Can't do any point in time here because unlike Inventory these states could be indefinite in length
+//Key [to, y/m date until end of year, drug, ndc]
+
+//6. Backups
+//Export of all inventory in case v2 goes down. (Handled by 1?)
+//Full CSV back up of each database
+
+//7. Backend Debugging
+//Received qty,val,count, Verified, Disposed, Dispensed, Expired
+//Key [to, Year, Month, Day, User] (can we make timesheet with this key order?)
+
+//8. DEPRECATED views
+
+exports.views = {
+
+  //*** 1. Pure property lookups  ***
+
+  //Client shipments page
+  'shipment._id':function(doc) {
+    emit([require('to_id')(doc), doc.shipment._id])
+  },
+
+  //*** 2. Server (Private) Endpoints ***
+  //Used by history
   'next.transaction._id':function(doc) {
     for (var i in doc.next)
       doc.next[i].transaction && emit(doc.next[i].transaction._id)
   },
 
-  //used by drug endpoint to update transactions on drug name/form updates
-  'drug._id':function(doc) {
-    emit([require('recipient_id')(doc), doc.drug._id])
+  //Used by drug endpoint to update transactions on drug name/form updates
+  'by-ndc-generic':function(doc) {
+    emit([doc.drug._id, doc.drug.generic])
   },
 
-  //Client shipments page
-  'shipment._id':function(doc) {
-    emit([require('recipient_id')(doc), doc.shipment._id])
+  'by-generic-price':function(doc) {
+     emit([doc.drug.generic, require('price')(doc)])
   },
 
-  //Client pending drawer
-  'inventory.pending':function(doc) {
-    require('isPending')(doc) && emit([require('recipient_id')(doc), doc.next[0].pending._id || doc.next[0].createdAt, ! require('isRepacked')(doc, true), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
+  //Along with the drug.js counterpart, Will be used to make sure all brand names are consistent for a given generic name
+  'by-generic-brand':function(doc) {
+    emit([doc.drug.generic, doc.drug.brand])
+  },
+
+  //*** 2. Filtered View  ***
+  'pended-by-name-bin':function(doc) {
+    require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended._id || doc.next[0].createdAt, require('sortedBin')(doc)])
   },
 
   //Client bin checking and reorganization, & account/bins.csv for use by data loggers needing to pick empty boxes.  Skip reduce with reduce=false.  Alphabatize within bin
-  'inventory.bin':{
+  'inventory-by-bin-verifiedat':{
     map(doc) {
-      require('isInventory')(doc) && emit([require('recipient_id')(doc), require('isRepacked')(doc), doc.bin.slice(0, 3), doc.bin.slice(3), doc.drug.generic])
-    },
-    reduce:'_count'
-  },
-
-  //Client expiration == 2018-05
-  'inventory.exp':function(doc) {
-    require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.exp.to || doc.exp.from, ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
-  },
-
-  //Client expiration <= 2018-05 (Year to Date e.g, Jan - May 2018 but nothing in 2017 or earlier)
-  'inventory.exp.ytd':function(doc) {
-    if ( ! require('isInventory')(doc)) return
-    var exp = (doc.exp.to || doc.exp.from).split('-')
-    for (var i = +exp[1]; i <= 12; i++) {
-      exp[1] = ('0'+i).slice(-2)
-      emit([require('recipient_id')(doc), exp.join('-'), ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
-    }
-  },
-
-  //Client shopping.  Geneic name is most Important, then expiration so we can make shopping lists via API, then repack since physically separate from other bins, and then switch bin's columns and rows to minimize walking
-  'inventory.drug.generic':function(doc) {
-    require('isInventory')(doc) && emit([require('recipient_id')(doc), doc.drug.generic, doc.exp.to || doc.exp.from, doc.drug._id, ! require('isRepacked')(doc), doc.bin[0]+doc.bin[2]+doc.bin[1]+(doc.bin[3] || '')])
-  },
-
-  //Backend to help if someone accidentally dispenses a drug
-  'dispensed.drug.generic':function(doc) {
-    require('isDispensed')(doc) && emit([require('recipient_id')(doc), doc.drug.generic])
-  },
-
-  //Backend to help if someone accidentally disposes a drug
-  'disposed.drug.generic':function(doc) {
-    require('isDisposed')(doc) && emit([require('recipient_id')(doc), doc.drug.generic])
-  },
-
-  //Live inventory
-  inventory:{
-    map(doc) {
-      var qty = require('qty')(doc)
-      var key = [require('recipient_id')(doc), doc.drug.generic, doc.exp.to || doc.exp.from, doc.drug._id]
-
-      if (require('isBinned')(doc))
-        emit(key, {"qty.binned":qty})
-
-      if (require('isRepacked')(doc))
-        emit(key, {"qty.repacked":qty})
-
-      if (require('isPending')(doc))
-        emit(key, {"qty.pending":qty})
-
-      if (require('isDispensed')(doc))
-        emit(key, {"qty.dispensed":qty})
-    },
-    reduce
-  },
-
-  'inventory.new':{
-    map(doc) { //new inventory
-      require('wasInventory')(doc) && inventory(doc, require('qty')(doc))
-
-      function inventory(doc, val) {
-        var createdAt = require('createdAt')(doc)
-        var removedAt = require('removedAt')(doc)
-        var to_id     = require('to_id')(doc)
-        var sortedBin = require('sortedBin')(doc)
-        var exp = doc.exp.to || doc.exp.from
-
-        var stage   = 'inventory' //stage will == inventory for future dates, but for past dates it will only be true for unpulled expireds
-        if (require('isDisposed')(doc)) stage = 'disposed'
-        else if (require('isDispensed')(doc)) stage = 'dispensed'
-        else if (require('isPending')(doc)) stage = 'pending'
-        else if (require('isRepacked')(doc)) stage = 'repacked'
-
-        require('eachMonth')(createdAt, removedAt, function(year, month, last) {
-          if ( ! last) emit([to_id, year, month, doc.drug.generic, stage, exp, doc.drug._id, sortedBin], val)
-        })
-      }
+      require('isInventory')(doc) && emit([require('to_id')(doc), require('isBinned')(doc) ? 'binned' : 'repacked', doc.bin, require('verifiedAt')(doc)], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
+  //NOTE THIS IS YEAR TO DATE (NOT AN EXACTLY WHEN EXPIRED)
+  //Pulling expired: endkey=[to_id, 2018, 06]
+  //V2 Drugs Page // stage == 'inventory' ? sortedBin :  doc.drug.generic
+  //Metrics Page (next to received, verified, disposed, pended, dispensed, ??inventory/repack/binned??)
+  'expired.qty-by-bin':{
+    map(doc) {
+      require('expired')(emit, doc, require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'expired.value-by-bin':{
+    map(doc) {
+      require('expired')(emit, doc, require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  //Inventory at the end of each month (so we do not count the last month)
+  //An item is in inventory from the moment it is created (not verified because verified is unset once destroyed) until the moment it is removed (next property is set) or until it expires
+  //We do a loop because couchdb cannot filter and group on different fields.  Emitting [exp, drug] would filter and group on exp.
+  //Emitting [drug, exp] would filter and group by drug.  We want to group by drug and filter by exp.  To achieve this we emit
+  //every month between the item being added and when it leaves inventory (see above).  This way search for [2018, 06] doesn't just
+  //give us 2018-06 items but all items before that too e.g 2018-05, 2018-04 .... until createdAt date.  In this way the Exp filter
+  //is built into the view itself and doesn't require us to use start and end keys to filter by exp, and in this way we can group by drug
 
   //Live Inventory [to_id, year, month+2]?group_level=4
   //Inventory Download [to_id, year, month+2]?group_level=false
   //v2 Inventory [to_id, year, month+2, Drug Name]
-  //v2 Drugs [to_id, year, month+2, Drug Name]?group_level=5 (inventory/dispense/disposed/pending/repacked)
+  //v2 Drugs [to_id, year, month+2, Drug Name]?group_level=5 (inventory/dispense/disposed/pended/repacked)
   //Audit Inventory [to_id, year-1, 12]?group_level=4
 
-  'inventory.new.value':{
-    map(doc) { //new inventory
-      require('wasInventory')(doc) && inventory(doc, require('value')(doc))
-
-      function inventory(doc, val) {
-        var createdAt = require('createdAt')(doc)
-        var removedAt = require('removedAt')(doc)
-        var to_id     = require('to_id')(doc)
-        var sortedBin = require('sortedBin')(doc)
-        var exp = doc.exp.to || doc.exp.from
-
-        var stage   = 'inventory' //stage will == inventory for future dates, but for past dates it will only be true for unpulled expireds
-        if (require('isDisposed')(doc)) stage = 'disposed'
-        else if (require('isDispensed')(doc)) stage = 'dispensed'
-        else if (require('isPending')(doc)) stage = 'pending'
-        else if (require('isRepacked')(doc)) stage = 'repacked'
-
-        require('eachMonth')(createdAt, removedAt, function(year, month, last) {
-          if ( ! last) emit([to_id, year, month, doc.drug.generic, stage, exp, doc.drug._id, sortedBin], val)
-        })
-      }
+  'inventory.qty-by-generic':{
+    map(doc) {
+      require('inventory')(emit, doc, require('qty')(doc))
     },
     reduce:'_stats'
   },
 
-  'inventory.indate':{
+  'inventory.value-by-generic':{
     map(doc) {
-     var removedAt  = require('removedAt')(doc)
-     var createdAt       = require('createdAt')(doc)
-     var from_id         = require('from_id')(doc)
-     var qty             = require('qty')(doc)
-     var val             = require('value')(doc)
-     var count           = require('count')(doc)
-     var to_id           = require('to_id')(doc)
-     var isBinned        = require('isBinned')(doc) && {"qty.binned":qty, "value.binned":val, "count.binned":count}
-     var isRepacked      = require('isRepacked')(doc) && {"qty.repacked":qty, "value.repacked":val, "count.repacked":count}
-     var isPending       = require('isPending')(doc) && {"qty.pending":qty, "value.pending":val, "count.pending":count}
-     var isDispensed     = require('isDispensed')(doc) && {"qty.dispensed":qty, "value.dispensed":val, "count.dispensed":count}
-     log('#1 inventory.indate '+doc._id);
-     //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
-     for (var y = +createdAt[0], m = +createdAt[1]; y < removedAt[0] || m < removedAt[1]; m++) {
-       if (m == 13) {
-         y++
-         m = 1
-       }
-
-       log('inventory.indate '+doc._id+' '+createdAt[0]+'-'+createdAt[1]+' '+y+' '+removedAt[0]+'-'+removedAt[1]+' '+to_id+'-'+from_id);
-       //convert month # back to a two character string
-       var key = [to_id, y, ('0'+m).slice(-2), doc.drug.generic, doc.drug._id, from_id]
-
-       if (isBinned)
-        emit(key, isBinned)
-
-       if (isRepacked)
-        emit(key, isBinned)
-
-       if (isPending)
-        emit(key, isPending)
-
-       if (isDispensed)
-        emit(key, isDispensed)
-      }
+      require('inventory')(emit, doc, require('value')(doc))
     },
-    reduce
+    reduce:'_stats'
   },
 
-  //Admin backend to see if I understand the difference between accepted and current inventory
-  debug(doc) {
-
-    //If it was restocked or repacked, then it must be accepted otherwise why did we log it
-    //Actually this is excess from repackaging.
-    // if (doc.shipment._id.indexOf('.') == -1 && ! doc.verifiedAt)
-    //   emit(require('dateKey')(doc), 'repacked or restocked but not verified')
-
-    //If not these what is it?
-    if ( ! require('isReceived')(doc) && ! require('isDisposed')(doc) && ! require('isInventory')(doc) && ! require('isPending')(doc) && ! require('isDispensed')(doc))
-      emit(require('createdAt')(doc), 'in == out')
-
-    //If it is accepted/repacked, then it is either waiting on a bin or has a bin length of 3 or 4
-    if (doc.verifiedAt && ( ! doc.bin || (doc.bin.length != 3 && doc.bin.length != 4)))
-      emit(require('createdAt')(doc), 'accepted but no bin')
-
-    //If it is accepted and not yet repacked/dispensed, then why is it not in inventory or pending?
-    if (require('isAccepted')(doc) && ! next.length && ! (require('isInventory')(doc) || require('isPending')(doc)))
-      emit(require('createdAt')(doc), 'accepted not inventory')
-
-    //If not accepted and not repacked, how is it in inventory/pending?
-    if ( ! require('isAccepted')(doc) && ! require('isRepacked')(doc) && (require('isInventory')(doc) || require('isPending')(doc)))
-      emit(require('createdAt')(doc), 'inventory not accepted')
+  'received.qty-by-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'received', [doc.drug.generic, doc.drug._id], require('qty')(doc))
+    },
+    reduce:'_stats'
   },
 
-  //Used by account/:id/metrics.csv
-  count:{
+  'received.value-by-generic-ndc':{
     map(doc) {
-      emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'count'))
-      emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'count'))
-      emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'count'))
+      require('groupByDate')(emit, doc, 'received', [doc.drug.generic, doc.drug._id], require('value')(doc))
     },
-    reduce
+    reduce:'_stats'
   },
 
-  //Used by account/:id/metrics.csv
-  qty:{
+  'verified.qty-by-generic-ndc':{
     map(doc) {
-      emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'qty'))
-      emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'qty'))
-      emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'qty'))
+      require('groupByDate')(emit, doc, 'verified', [doc.drug.generic, doc.drug._id], require('qty')(doc))
     },
-    reduce
+    reduce:'_stats'
   },
 
-  //Used by account/:id/metrics.csv
-  value:{
+  'verified.value-by-generic-ndc':{
     map(doc) {
-      emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'value'))
-      emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'value'))
-      emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'value'))
+      require('groupByDate')(emit, doc, 'verified', [doc.drug.generic, doc.drug._id], require('value')(doc))
     },
-    reduce
+    reduce:'_stats'
   },
 
-  //Used by account/:id/metrics.csv
-  retail:{
+  'expired.qty-by-generic-ndc':{
     map(doc) {
-      emit(require('dateKey')(doc, 'createdAt'), require('createdAtMetrics')(doc, 'retail'))
-      emit(require('dateKey')(doc, 'updatedAt'), require('updatedAtMetrics')(doc, 'retail'))
-      emit(require('dateKey')(doc, 'nextAt'), require('nextAtMetrics')(doc, 'retail'))
+      require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug._id], require('qty')(doc))
     },
-    reduce
+    reduce:'_stats'
   },
 
-  //Used by account/:id/record.csv
-  record:{
+  'expired.value-by-generic-ndc':{
     map(doc) {
-      emit(require('dateKey')(doc, 'createdAt', [doc.drug.generic, doc.drug._id]), require('createdAtMetrics')(doc, 'qty'))
-      emit(require('dateKey')(doc, 'updatedAt', [doc.drug.generic, doc.drug._id]), require('updatedAtMetrics')(doc, 'qty'))
-      emit(require('dateKey')(doc, 'nextAt', [doc.drug.generic, doc.drug._id]), require('nextAtMetrics')(doc, 'qty'))
+      require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug._id], require('value')(doc))
     },
-    reduce
+    reduce:'_stats'
   },
 
-  //Used to track user based activity
-  users:{
+  'disposed.qty-by-generic-ndc':{
     map(doc) {
-      emit(require('dateKey')(doc, 'createdAt', [doc.user._id]), require('createdAtMetrics')(doc, 'count'))
-      emit(require('dateKey')(doc, 'updatedAt', [doc.user._id]), require('updatedAtMetrics')(doc, 'count'))
-      emit(require('dateKey')(doc, 'nextAt', [doc.user._id]), require('nextAtMetrics')(doc, 'count'))
+      require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug._id], require('qty')(doc))
     },
-    reduce
+    reduce:'_stats'
   },
 
-  //Used by account/:id/from.csv to track metrics by state and donor
-  'from.count':{
+  'disposed.value-by-generic-ndc':{
     map(doc) {
-      var from = doc.shipment._id.split('.')[2]
-      var key  = require('dateKey')(doc, 'shippedAt', [from])
-      emit(key, require('createdAtMetrics')(doc, 'count'))
+      require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug._id], require('value')(doc))
     },
-    reduce
+    reduce:'_stats'
   },
 
-  'from.qty':{
+  'dispensed.qty-by-generic-ndc':{
     map(doc) {
-      var from = doc.shipment._id.split('.')[2]
-      var key  = require('dateKey')(doc, 'shippedAt', [from])
-      emit(key, require('createdAtMetrics')(doc, 'qty'))
+      require('groupByDate')(emit, doc, 'dispensed', [doc.drug.generic, doc.drug._id], require('qty')(doc))
     },
-    reduce
+    reduce:'_stats'
   },
 
-  'from.value':{
+  'dispensed.value-by-generic-ndc':{
     map(doc) {
-      var from = doc.shipment._id.split('.')[2]
-      var key  = require('dateKey')(doc, 'shippedAt', [from])
-      emit(key, require('createdAtMetrics')(doc, 'value'))
+      require('groupByDate')(emit, doc, 'dispensed', [doc.drug.generic, doc.drug._id], require('value')(doc))
     },
-    reduce
+    reduce:'_stats'
+  },
+
+  'pended.qty-by-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'pended', [doc.drug.generic, doc.drug._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'pended.value-by-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'pended', [doc.drug.generic, doc.drug._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'received.qty-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'received', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'received.value-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'received', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'verified.qty-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'verified', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'verified.value-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'verified', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'expired.qty-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'expired.value-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'disposed.qty-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'disposed.value-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'dispensed.qty-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'dispensed', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'dispensed.value-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'dispensed', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'pended.qty-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'pended', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'pended.value-by-from-generic-ndc':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'pended', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'received.qty-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'received', [doc.user._id, require('from_id')(doc), doc.shipment._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'verified.qty-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'verified', [doc.user._id, require('from_id')(doc), doc.shipment._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'expired.qty-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'disposed.qty-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'disposed', [doc.user._id, require('from_id')(doc), doc.shipment._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'dispensed.qty-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'dispensed', [doc.user._id, require('from_id')(doc), doc.shipment._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'pended.qty-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'pended', [doc.user._id, require('from_id')(doc), doc.shipment._id], require('qty')(doc))
+    },
+    reduce:'_stats'
   }
-}
-
-function reduce(ids, vals, rereduce) {
-  // reduce function give overflow (too many keys?) if not put into a property.
-  var result = {}
-
-  for(var i in vals)
-    for (var metric in vals[i])
-      result[metric] = (result[metric] || 0) + (vals[i][metric] || 0)
-
-  return result
 }
 
 exports.get_csv = function*(db) {
@@ -545,31 +508,12 @@ exports.validate = function(model) {
   return model
     .ensure('isChecked').set(doc => undefined) //client sets this but we don't want to save it
     .ensure('shipment._id').custom(authorized).withMessage('You are not authorized to modify this transaction')
-    .ensure('drug.price').trigger(updatePrice).withMessage("Could not get update the drug's price for this transaction")
 }
 
 //Context-specific - options MUST have 'this' property in order to work.
 function authorized(doc, shipment_id) {
   var id = shipment_id.split(".")
   return id[0] == this.account._id || id[2] == this.account._id
-}
-
-function updatePrice(doc, oldPrice, key, opts) {
-
-  if (oldPrice.goodrx && oldPrice.nadac) return
-
-  //This transaction will save, so we can't update this _rev with a price
-  //without causing a discrepancy between the client and server.  Instead, we wait for a
-  //tranaction with any edit to be fully entered and then save the price info to a new _rev which will replicate back to the client
-  return drug.updatePrice.call(this, doc.drug, 15000)
-  .then(newPrice => {
-
-    if ( ! newPrice) return //price was up-to-date
-    //don't override the prices that are already set
-    oldPrice.nadac = oldPrice.nadac || newPrice.nadac
-    oldPrice.goodrx = oldPrice.goodrx || newPrice.goodrx
-    console.log('Updated the price of the drug '+doc.drug._id+' for this transaction', doc)
-  })
 }
 
 //TODO don't search for shipment if shipment._id doesn't have two periods (inventory)

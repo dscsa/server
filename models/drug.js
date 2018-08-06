@@ -23,7 +23,18 @@ exports.views = {
 
   upc(doc) {
     emit(doc.upc)
+  },
+
+  //Along with the transaction.js counterpart drug.generic, Will be used to make sure all brand names are consistent for a given generic name
+  'by-generic-brand':function(doc) {
+    emit([doc.generic, doc.brand])
+  },
+
+  //Ensure that all labeler codes have the same manufacturer
+  'by-labelcode-labeler':function(doc) {
+    emit([doc._id.split('-')[0], doc.labeler])
   }
+
 }
 
 exports.get_csv = function*(db) {
@@ -35,8 +46,11 @@ exports.get_csv = function*(db) {
 //Server-side validation methods to supplement shared ones.
 exports.validate = function(model) {
   return model
-    .ensure('_rev').custom(updateTransactions).withMessage('Could not update transactions containing this drug')
-    .ensure('_rev').trigger(updatePrice).withMessage('Could not update the price of this drug')
+    .ensure('_rev').custom(updateTransactionsWithBrand).withMessage('Could not update drug.brand on all transactions')
+    .ensure('_rev').custom(updateTransactionsWithGeneric).withMessage('Could not update drug.generic on all transactions')
+    .ensure('_rev').custom(updateDrugsWithBrand).withMessage('Could not update brand name on all drugs')
+    .ensure('_rev').custom(updateDrugsWithLabeler).withMessage('Could not update labeler on all drugs')
+    //.ensure('_rev').trigger(updatePrice).withMessage('Could not update the price of this drug')
 }
 
 function updatePrice(drug, rev, key, opts) {
@@ -86,58 +100,153 @@ function getPrice(drug) {
   })
 }
 
+//Update denormalized database
 //Context-specific - options MUST have 'this' property in order to work.
-//Get all transactins using this drug so we can update denormalized database
-function updateTransactions(drug, rev, key, opts) {
-  return exports.isNew(drug, opts) || setTimeout(_ => {
-    this.db.transaction.query('drug._id', {key:[this.account._id, drug._id], include_docs:true})
-    .then(transactions => {
-      //console.log('updateTransactions', transactions)
-      return Promise.all(transactions.rows.map(row => {
-        let transaction = row.doc
-        if(
-            transaction.drug.generic == drug.generic &&
-            transaction.drug.form == drug.form &&
-            transaction.drug.brand == drug.brand &&
-            transaction.drug.price &&
-            (transaction.drug.price.goodrx || ! drug.price.goodrx) &&
-            (transaction.drug.price.nadac || ! drug.price.nadac) &&
-            (transaction.drug.price.retail || ! drug.price.retail)
-          )
-          return
+function updateDrugsWithLabeler(drug, rev, key, opts) {
 
-        transaction.drug.generics = drug.generics
-        transaction.drug.form     = drug.form
-        transaction.drug.brand    = drug.brand
-        transaction.drug.generic  = drug.generic
+  const delayed = () => {
 
-        if ( ! transaction.drug.price.goodrx) {
-          transaction.drug.price.goodrx = drug.price.goodrx
-          transaction.drug.price.invalidAt = drug.price.invalidAt
-        }
+    let labelcode = drug._id.split('-')[0]
 
-        if ( ! transaction.drug.price.nadac) {
-          transaction.drug.price.nadac = drug.price.nadac
-          transaction.drug.price.invalidAt = drug.price.invalidAt
-        }
+    Promise.all([
+      this.db.drug.query('by-labelcode-labeler', {startkey:[labelcode], endkey:[labelcode, drug.labeler], include_docs:true, inclusive_end:false}),
+      this.db.drug.query('by-labelcode-labeler', {startkey:[labelcode, drug.labeler, {}], endkey:[labelcode, {}], include_docs:true}),
+      this.db.drug.query('by-labelcode-labeler', {startkey:[labelcode], endkey:[labelcode, {}]})
+    ]).then(([ltLabeler, gtLabeler, allLabeler]) => {
 
-        if ( ! transaction.drug.price.retail) {
-          transaction.drug.price.retail = drug.price.retail
-          transaction.drug.price.invalidAt = drug.price.invalidAt
-        }
-        //console.log('updateTransaction', transaction)
-        //TODO _bulk_docs update would be faster (or at least catch errors with Promise.all)
-        return this.db.transaction.put(transaction, {this:this, ajax:admin.ajax})
-      }))
+      let wrongLabeler = ltLabeler.rows.concat(gtLabeler.rows)
+      console.log('Updating', wrongLabeler.length, 'of', allLabeler.rows.length, 'drugs with labeler name', drug.labeler)
+
+      if ( ! wrongLabeler.length) return
+
+      //TODO this will miss an update of Tablets <--> Capsules because that won't cause a change in the generic name.  I think this is okay at least for now
+      wrongLabeler = wrongLabeler.map(row => {
+        console.log(row.doc._id, row.doc.generic, row.doc.labeler, '-->', drug.labeler)
+        row.doc.labeler  = drug.labeler
+        return row.doc
+      })
+
+      return this.db.drug.bulkDocs(wrongLabeler, {this:this, ajax:admin.ajax})
+
+    }).catch(err => {
+      console.log('updateDrugsWithLabeler err', err) //err.errors['shipment._id'].rules
     })
-    .then(puts => {
-      console.log(`updated ${puts.filter(put => !!put).length} transactions to have drug name ${drug.generic}`) //err.errors['shipment._id'].rules
-      return true //make sure validation passes
+  }
+
+  if ( ! opts.ajax)//since this saves back to drug db it can cause an infinite loop  if not careful
+    setTimeout(delayed, 1000)
+
+  return true
+}
+
+//Update denormalized database
+//Context-specific - options MUST have 'this' property in order to work.
+function updateDrugsWithBrand(drug, rev, key, opts) {
+
+  const delayed = () => {
+    Promise.all([
+      this.db.drug.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, drug.brand], include_docs:true, inclusive_end:false}),
+      this.db.drug.query('by-generic-brand', {startkey:[drug.generic, drug.brand, {}], endkey:[drug.generic, {}], include_docs:true}),
+      this.db.drug.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, {}]})
+    ]).then(([ltBrand, gtBrand, allBrand]) => {
+
+      let wrongBrand = ltBrand.rows.concat(gtBrand.rows)
+      console.log('Updating', wrongBrand.length, 'of', allBrand.rows.length, 'drugs with brand name', drug.brand)
+
+      if ( ! wrongBrand.length) return
+
+      wrongBrand = wrongBrand.map(row => {
+        console.log(row.doc.brand, '-->', drug.brand, row.doc._id, row.doc.generic)
+        row.doc.brand = drug.brand
+        return row.doc
+      })
+
+      //console.log('updateDrugsWithBrand', JSON.stringify(wrongBrand, null, ' '))
+      return this.db.drug.bulkDocs(wrongBrand, {this:this, ajax:admin.ajax})
+
+    }).catch(err => {
+      console.log('updateDrugsWithBrand err', err) //err.errors['shipment._id'].rules
     })
-    .catch(err => {
-      console.log('updateTransactions err', err) //err.errors['shipment._id'].rules
+  }
+
+  if ( ! opts.ajax) //since this saves back to drug db it can cause an infinite loop  if not careful
+    setTimeout(delayed, 1000)
+
+  return true
+}
+
+//Update denormalized database
+//Context-specific - options MUST have 'this' property in order to work.
+function updateTransactionsWithBrand(drug, rev, key, opts) {
+
+
+  const delayed = () => {
+    Promise.all([
+      this.db.transaction.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, drug.brand], include_docs:true, inclusive_end:false}),
+      this.db.transaction.query('by-generic-brand', {startkey:[drug.generic, drug.brand, {}], endkey:[drug.generic, {}], include_docs:true}),
+      this.db.transaction.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, {}]})
+    ]).then(([ltBrand, gtBrand, allBrand]) => {
+
+      let wrongBrand = ltBrand.rows.concat(gtBrand.rows)
+      console.log('Updating', wrongBrand.length, 'of', allBrand.rows.length, 'transactions with brand name', drug.brand)
+
+      if ( ! wrongBrand.length) return
+
+      wrongBrand = wrongBrand.map(row => {
+        console.log( row.doc.drug.brand, '-->', drug.brand, row.doc._id, row.doc.drug._id, row.doc.drug.generic)
+        row.doc.drug.brand = drug.brand
+        return row.doc
+      })
+
+      return this.db.transaction.bulkDocs(wrongBrand, {this:this, ajax:admin.ajax})
+
+    }).catch(err => {
+      console.log('updateTransactionsWithBrand err', err) //err.errors['shipment._id'].rules
     })
-  }, 1000) //this needs to happen after update drug otherwise conflicts when saving drug can occur
+  }
+
+  if ( ! opts.ajax)
+    setTimeout(delayed, 1000)
+
+  return true
+}
+
+//Update denormalized database
+//Context-specific - options MUST have 'this' property in order to work.
+function updateTransactionsWithGeneric(drug, rev, key, opts) {
+
+  const delayed = () => {
+    Promise.all([
+      this.db.transaction.query('by-ndc-generic', {startkey:[drug._id], endkey:[drug._id, drug.generic], include_docs:true, inclusive_end:false}),
+      this.db.transaction.query('by-ndc-generic', {startkey:[drug._id, drug.generic, {}], endkey:[drug._id, {}], include_docs:true}),
+      this.db.transaction.query('by-ndc-generic', {startkey:[drug._id], endkey:[drug._id, {}]})
+    ]).then(([ltGeneric, gtGeneric, allGeneric]) => {
+
+      let wrongGeneric = ltGeneric.rows.concat(gtGeneric.rows)
+      console.log('Updating', wrongGeneric.length, 'of', allGeneric.rows.length, 'transactions with generic name', drug.generic)
+
+      if ( ! wrongGeneric.length) return
+
+      //TODO this will miss an update of Tablets <--> Capsules because that won't cause a change in the generic name.  I think this is okay at least for now
+      wrongGeneric = wrongGeneric.map(row => {
+        console.log( row.doc.drug.generic,  '-->', drug.generic, row.doc._id, row.doc.drug._id)
+        row.doc.drug.generic  = drug.generic
+        row.doc.drug.generics = drug.generics
+        row.doc.drug.form     = drug.form
+        return row.doc
+      })
+
+      return this.db.transaction.bulkDocs(wrongGeneric, {this:this, ajax:admin.ajax})
+
+    }).catch(err => {
+      console.log('updateTransactionsWithGeneric err', err) //err.errors['shipment._id'].rules
+    })
+  }
+
+  if ( ! opts.ajax)
+    setTimeout(delayed, 1000)
+
+  return true
 }
 
 function getNadac(drug) {

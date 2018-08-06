@@ -179,20 +179,17 @@ keys(function() {
   r('/account/:id/inventory.csv')     //Allow user to get, modify, & delete docs
     .get(models.account.inventory)
 
-  r('/account/:id/record.csv')     //Allow user to get, modify, & delete docs
-    .get(models.account.record)
+  r('/account/:id/record-by-generic.csv')     //Allow user to get, modify, & delete docs
+    .get(models.account.recordByGeneric)
 
-  r('/account/:id/metrics.csv')     //Allow user to get, modify, & delete docs
-    .get(models.account.metrics)
+  r('/account/:id/record-by-user.csv')     //Allow user to get, modify, & delete docs
+    .get(models.account.recordByUser)
 
-  r('/account/:id/users.csv')     //Allow user to get, modify, & delete docs
-    .get(models.account.users)
+  r('/account/:id/record-by-from.csv')     //Allow user to get, modify, & delete docs
+    .get(models.account.recordByFrom)
 
-  r('/account/:id/from.csv')     //Allow user to get, modify, & delete docs
-    .get(models.account.from)
-
-  r('/account/:id/bins.csv')     //Allow user to get, modify, & delete docs
-    .get(models.account.bins)
+  r('/account/:id/binned.csv')     //Allow user to get, modify, & delete docs
+    .get(models.account.binned)
 
   r('/:model/:id')
     .get(function*(db, id) {

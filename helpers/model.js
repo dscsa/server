@@ -9,9 +9,10 @@ exports.get = function* (name) {
 }
 
 //TODO replace this shim with a proxy once migrated to couchdb 2.0
-exports.bulk_get = function* () {
-  this.status = 400
-  this.body = '_bulk_get not implemented yet'
+exports.bulk_get = function* (name) {
+  this.body = yield this.db[name].bulkGet(Object.assign(this.query, this.req.body))
+  //this.status = 400
+  //this.body = '_bulk_get not implemented yet'
   // this.body = yield this.req.body.docs.map(doc => {
   //   return this.db.user.get(doc.id, {rev:doc.rev,latest:true,revs:true})
   // })
@@ -53,5 +54,7 @@ exports.del = function* (name, id) {
 }
 
 exports.isNew = function(doc, opts) {
-  return ! doc._rev || (doc._rev.split('-')[0] == 1 && opts.new_edits === false)
+  let isNew = ! doc._rev || (doc._rev.split('-')[0] == 1 && opts.new_edits === false)
+  isNew && console.log('isNew',  doc._id, doc._rev, opts.new_edits, doc)
+  return isNew
 }
