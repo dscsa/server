@@ -1,7 +1,8 @@
 "use strict"
 
 let fs      = require('fs')
-let app     = require('koa')()
+let app     = require('koa')
+app         = new app()
 let body    = require('./helpers/body')
 let keys    = require('./helpers/keys')
 let r       = require('./helpers/router')(app)
@@ -26,46 +27,43 @@ keys(function() {
   //app.use(body({multipart:true}))
   //Parse our manual cookie so we know account _ids without relying on couchdb
   //Collect the request body so that we can use it with pouch
-  app.use(function*(next) {
+  app.use(async function(ctx, next) {
 
+    ctx.db   = pouchdb    
+    ctx.ajax = ajax({baseUrl:'http://localhost:5984'})
 
-
-    this.db   = pouchdb
-    this.ajax = ajax({baseUrl:'http://localhost:5984'})
-
-    //return this.ajax({url:'http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date%3E%222017-06-02T22:49:03.681%22%20AND%20ndc_description%20like%20%22MEMA%2510%25%22'})
-
+    //return ctx.ajax({url:'http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date%3E%222017-06-02T22:49:03.681%22%20AND%20ndc_description%20like%20%22MEMA%2510%25%22'})
 
     //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
-    this.set('access-control-allow-origin', this.headers.origin || this.headers.host)
-    this.set('access-control-allow-headers', 'accept, accept-encoding, accept-language, cache-control, connection, if-none-match, authorization, content-type, host, origin, pragma, referer, x-csrf-token, user-agent')
-    this.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
-    this.set('access-control-allow-credentials', true)
-    //this.set('access-control-max-age', 1728000)
+    ctx.set('access-control-allow-origin', ctx.headers.origin || ctx.headers.host)
+    ctx.set('access-control-allow-headers', 'accept, accept-encoding, accept-language, cache-control, connection, if-none-match, authorization, content-type, host, origin, pragma, referer, x-csrf-token, user-agent')
+    ctx.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE')
+    ctx.set('access-control-allow-credentials', true)
+    //ctx.set('access-control-max-age', 1728000)
 
-    if (this.method == 'OPTIONS')
-      return this.status = 204
+    if (ctx.method == 'OPTIONS')
+      return ctx.status = 204
 
-    let cookie  = JSON.parse(this.cookies.get('AuthUser') || 'null')
+    let cookie  = JSON.parse(ctx.cookies.get('AuthUser') || 'null')
 
-    this.user    = {_id:cookie && cookie._id}
-    this.account = {_id:cookie && cookie.account._id}
+    ctx.user    = {_id:cookie && cookie._id}
+    ctx.account = {_id:cookie && cookie.account._id}
 
-    yield body(this.req)
-    yield next
+    await body(ctx.req)
+    await next()
 
-    this.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
-    this.set('transfer-encoding', 'chunked') //This was sometimes causing errors when Jess/Adam logged in with a PC ERR: Content Length Mismatch
+    ctx.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
+    ctx.set('transfer-encoding', 'chunked') //This was sometimes causing errors when Jess/Adam logged in with a PC ERR: Content Length Mismatch
   })
 
-  app.use(function *(next) {
+  app.use(async function(ctx, next) {
     try {
-      yield next
+      await next()
     } catch (err) {
-      console.log('server error:', this.path, err)
+      console.log('server error:', ctx.path, err)
       //Handle three types of errors
       //1) actual coding errors, which will be instanceof Error
-      //2) this.throw() errors from my code which will be instanceof Error
+      //2) ctx.throw() errors from my code which will be instanceof Error
       //3) http statusCodes <200 && >=300 in which we want to stop normal flow and proxy response to user
       //Server errors should mimic CouchDB errors as closely as possible
       if (err instanceof Error) {
@@ -77,10 +75,10 @@ keys(function() {
         }
       }
 
-      err.request = this.req.body
-      this.message = err.error+': '+err.reason
-      this.status = err.status || 500 //koa's this.throw sets err.status
-      this.body   = err
+      err.request = ctx.req.body
+      ctx.message = err.error+': '+err.reason
+      ctx.status = err.status || 500 //koa's ctx.throw sets err.status
+      ctx.body   = err
     }
   })
 
@@ -89,11 +87,11 @@ keys(function() {
   //
 
   r('/')
-    .get(function*() {
-      if(this.headers.origin || this.headers.referer) //Not sure why pouchdb checks this.  Shows welcome UUID & Version
-        return yield proxy.call(this)
+    .get(async function(ctx) {
+      if(ctx.headers.origin || ctx.headers.referer) //Not sure why pouchdb checks ctx.  Shows welcome UUID & Version
+        return await proxy(ctx)
 
-      yield get_asset.call(this)
+      await get_asset(ctx)
     })
 
   //Serve the application and assets
@@ -192,9 +190,9 @@ keys(function() {
     .get(models.account.binned)
 
   r('/:model/:id')
-    .get(function*(db, id) {
-      this.query.selector = `{"id":"${id}"}`
-      yield model('get').call(this, db)
+    .get(async function(ctx, db, id) {
+      ctx.query.selector = `{"id":"${id}"}`
+      await model('get')(ctx, db)
     })
     .put(model('put'))
     .del(model('del'))
@@ -224,7 +222,7 @@ keys(function() {
   // r('/user/email')
   //   .post(models.user.email)           //TODO only get, modify, & delete user for logged in account
 
-  //all(/on?deep.field=this&this.must.be.true.to.trigger=true)
+  //all(/on?deep.field=this&ctx.must.be.true.to.trigger=true)
   //all(/on?deep.field=this)
   //all(/event)
 
@@ -234,37 +232,37 @@ keys(function() {
   // Hoisted Helper Functions
   //
 
-  function* adminProxy(db) {
-    this.req.auth = require('../../keys/dev')
-    return yield proxy.call(this, db)
+  async function adminProxy(ctx, db) {
+    ctx.req.auth = require('../../keys/dev')
+    return await proxy(ctx, db)
   }
 
-  function* proxy(db) {
+  async function proxy(ctx, db) {
 
     if (db && ! models[db])
-      return this.status = 404
+      return ctx.status = 404
 
-    if (this.query.timeout) //honor the 25 sec timeout
-      this.req.timeout = this.query.timeout //this is not actually a node thing, just a flag for pouchdb-server.ajax
+    if (ctx.query.timeout) //honor the 25 sec timeout
+      ctx.req.timeout = ctx.query.timeout //this is not actually a node thing, just a flag for pouchdb-server.ajax
 
     //ajax returns a stream that koa can handle
-    this.body = this.ajax(this.req)
+    ctx.body = ctx.ajax(ctx.req)
   }
 
   function model(method) {
-    return function*(db) {
+    return async function(ctx, db, ...args) {
       if ( ! models[db])
-        return this.status = 404
+        return ctx.status = 404
 
-      yield models[db][method].apply(this, arguments)
+      await models[db][method].apply(this, [ctx, db, ...args])
     }
   }
 
-  function* get_asset(asset) {
+  async function get_asset(ctx, asset) {
 
-    asset = asset ? this.path : '/client/src/views/index.html'
+    asset = asset ? ctx.path : '/client/src/views/index.html'
 
-    this.type = asset.split('.').pop()
-    this.body = fs.createReadStream(__dirname+'/..'+asset)
+    ctx.type = asset.split('.').pop()
+    ctx.body = fs.createReadStream(__dirname+'/..'+asset)
   }
 })

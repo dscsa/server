@@ -15,11 +15,11 @@ exports.views = {
   }
 }
 
-exports.get_csv = function*(db) {
-  const opts = {startkey:this.account._id, endkey:this.account._id+'\uffff', include_docs:true}
-  let view = yield this.db.shipment.allDocs(opts)
-  this.body = csv.fromJSON(view.rows)
-  this.type = 'text/csv'
+exports.get_csv = async function (ctx, db) {
+  const opts = {startkey:ctx.account._id, endkey:ctx.account._id+'\uffff', include_docs:true}
+  let view = await ctx.db.shipment.allDocs(opts)
+  ctx.body = csv.fromJSON(view.rows)
+  ctx.type = 'text/csv'
 }
 
 //Server-side validation methods to supplement shared ones.
@@ -27,8 +27,8 @@ exports.validate = function(model) {
   return model.ensure('_id').custom(authorized).withMessage('You are not authorized to modify this shipment')
 }
 
-//Context-specific - options MUST have 'this' property in order to work.
-function authorized(doc) {
+//Context-specific - options MUST have 'ctx' property in order to work.
+function authorized(doc, opts) {
   var id = doc._id.split(".")
-  return id[0] == this.account._id || id[2] == this.account._id
+  return id[0] == opts.ctx.account._id || id[2] == opts.ctx.account._id
 }

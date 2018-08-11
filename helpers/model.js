@@ -2,34 +2,34 @@
 
 let csv = require('csv/server')
 
-exports.get = function* (name) {
-  this.query.selector  = JSON.parse(this.query.selector)
-  this.query.open_revs = JSON.parse(this.query.open_revs || "null")
-  this.body = yield this.db[name].get(this.query.selector.id, this.query)
+exports.get = async function (ctx, name) {
+  ctx.query.selector  = JSON.parse(ctx.query.selector)
+  ctx.query.open_revs = JSON.parse(ctx.query.open_revs || "null")
+  ctx.body = await ctx.db[name].get(ctx.query.selector.id, ctx.query)
 }
 
 //TODO replace this shim with a proxy once migrated to couchdb 2.0
-exports.bulk_get = function* (name) {
-  this.body = yield this.db[name].bulkGet(Object.assign(this.query, this.req.body))
-  //this.status = 400
-  //this.body = '_bulk_get not implemented yet'
-  // this.body = yield this.req.body.docs.map(doc => {
-  //   return this.db.user.get(doc.id, {rev:doc.rev,latest:true,revs:true})
+exports.bulk_get = async function (ctx, name) {
+  ctx.body = await ctx.db[name].bulkGet(Object.assign(ctx.query, ctx.req.body))
+  //ctx.status = 400
+  //ctx.body = '_bulk_get not implemented yet'
+  // ctx.body = await ctx.req.body.docs.map(doc => {
+  //   return ctx.db.user.get(doc.id, {rev:doc.rev,latest:true,revs:true})
   // })
 }
 
-exports.all_docs = function* (name) {
-  this.body = yield this.db[name].allDocs(Object.assign(this.query, this.req.body))
+exports.all_docs = async function (ctx, name) {
+  ctx.body = await ctx.db[name].allDocs(Object.assign(ctx.query, ctx.req.body))
 }
 
 //CouchDB requires an _id based on the user's name
-exports.post = function* (name) {
-  this.body = yield this.db[name].post(this.req.body, {this:this})
+exports.post = async function (ctx, name) {
+  ctx.body = await ctx.db[name].post(ctx.req.body, {ctx})
 }
 
-exports.put = function* (name, id) {
-  console.log('put', name, this.req.body, id)
-  this.body = yield this.db[name].put(this.req.body, {this:this}).then(doc => {
+exports.put = async function (ctx, name, id) {
+  console.log('put', name, ctx.req.body, id)
+  ctx.body = await ctx.db[name].put(ctx.req.body, {ctx}).then(doc => {
     console.log('put doc', doc)
     return doc
   })
@@ -41,16 +41,16 @@ exports.put = function* (name, id) {
 
 //TODO this doesn't work when adding new docs to models like shipment that have an _id with only
 //1 second resolution.  The first doc is saved but the other docs are ignored since _id is same
-exports.bulk_docs = function* (name) {
+exports.bulk_docs = async function (ctx, name) {
   try {
-    this.body = yield this.db[name].bulkDocs(this.req.body, {this:this})
+    ctx.body = await ctx.db[name].bulkDocs(ctx.req.body, {ctx})
   } catch (err) {
-    console.log('bulk docs err', name, this.req.body, err)
+    console.log('bulk docs err', name, ctx.req.body, err)
   }
 }
 
-exports.del = function* (name, id) {
-  this.body = yield this.db[name].remove(id, this.query.rev)
+exports.del = async function (ctx, name, id) {
+  ctx.body = await ctx.db[name].remove(id, ctx.query.rev)
 }
 
 exports.isNew = function(doc, opts) {

@@ -7,7 +7,7 @@ let admin = {ajax:{auth:require('../../../keys/dev')}}
 
 exports.views = {
   //Use _bulk_get here instead? Not supported in 1.6
-  //this.db.account.get({_id:{$gt:null, $in:accounts[0].authorized}}),
+  //ctx.db.account.get({_id:{$gt:null, $in:accounts[0].authorized}}),
   authorized(doc) {
     for (var i in doc.authorized) {
       emit(doc.authorized[i])
@@ -19,24 +19,24 @@ exports.views = {
   }
 }
 
-exports.get_csv = function*(db) {
-  let view = yield this.db.account.allDocs({endkey:'_design', include_docs:true})
-  this.body = csv.fromJSON(view.rows)
-  this.type = 'text/csv'
+exports.get_csv = async function (ctx, db) {
+  let view = await ctx.db.account.allDocs({endkey:'_design', include_docs:true})
+  ctx.body = csv.fromJSON(view.rows)
+  ctx.type = 'text/csv'
 }
 
 //This is to find the emptiest bins
-exports.binned = function* (id) { //account._id will not be set because google does not send cookie
-  const view = yield this.db.transaction.query('inventory-by-bin-verifiedat', {group_level:3, startkey:[id, 'binned'], endkey:[id, 'binned', {}]}) //exclude repack bins from empty bins
+exports.binned = async function  (ctx, id) { //account._id will not be set because google does not send cookie
+  const view = await ctx.db.transaction.query('inventory-by-bin-verifiedat', {group_level:3, startkey:[id, 'binned'], endkey:[id, 'binned', {}]}) //exclude repack bins from empty bins
   let sortAsc = view.rows.sort((a, b) => a.value.count - b.value.count)
-  this.body  = csv.fromJSON(sortAsc, this.query.fields && this.query.fields.split(','))
+  ctx.body  = csv.fromJSON(sortAsc, ctx.query.fields && ctx.query.fields.split(','))
 }
 
 //Shows everything in inventory AND all ordered items not in inventory
-exports.inventory = function* (to_id) { //account._id will not be set because google does not send cookie
+exports.inventory = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
   let minExp   = new Date()
-  let minMonth = minExp.getMonth() + (+this.query.buffer || 0) - 1 // - 1 because we use expireds until the end of the month
+  let minMonth = minExp.getMonth() + (+ctx.query.buffer || 0) // - 1 because we use expireds until the end of the month
   minExp.setMonth(minMonth) //internal search does 1 month, so let's pad it by an additional month
   let [year, month] = minExp.toJSON().split('-')
 
@@ -46,10 +46,12 @@ exports.inventory = function* (to_id) { //account._id will not be set because go
     endkey:[to_id, 'month', year, month+'\uffff']
   }
 
-  const [inventory, account] = yield [
-    this.db.transaction.query('inventory.qty-by-generic', opts),
-    this.db.account.get(to_id)
-  ]
+  console.log('inventory.qty-by-generic', opts)
+
+  const [inventory, account] = await Promise.all([
+    ctx.db.transaction.query('inventory.qty-by-generic', opts),
+    ctx.db.account.get(to_id)
+  ])
 
   //Match inventory with ordered when applicable
   let rows = inventory.rows.map(row => {
@@ -75,14 +77,14 @@ exports.inventory = function* (to_id) { //account._id will not be set because go
   for (let generic in account.ordered)
     rows.push({key:[to_id, year, month, generic], value:{ordered:true, order:account.ordered[generic]}})
 
-  this.body = csv.fromJSON(rows, this.query.fields && this.query.fields.split(','))
+  ctx.body = csv.fromJSON(rows, ctx.query.fields && ctx.query.fields.split(','))
 }
 
-exports.recordByGeneric = function* (to_id) { //account._id will not be set because google does not send cookie
-  let [qtyRecords, valueRecords] = yield [
-    getRecords.call(this, to_id, 'qty-by-generic-ndc'),
-    getRecords.call(this, to_id, 'value-by-generic-ndc')
-  ]
+exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
+  let [qtyRecords, valueRecords] = await Promise.all([
+    getRecords(ctx, to_id, 'qty-by-generic-ndc'),
+    getRecords(ctx, to_id, 'value-by-generic-ndc')
+  ])
 
   let records = {}
   mergeRecords(qtyRecords, 'count', records)
@@ -91,27 +93,27 @@ exports.recordByGeneric = function* (to_id) { //account._id will not be set beca
 
   records = sortRecords(records)
 
-  this.body = csv.fromJSON(records, this.query.fields && this.query.fields.split(','))
+  ctx.body = csv.fromJSON(records, ctx.query.fields && ctx.query.fields.split(','))
 }
 
-exports.recordByUser = function* (to_id) { //account._id will not be set because google does not send cookie
+exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  let qtyRecords = yield getRecords.call(this, to_id, 'qty-by-user-from-shipment')
+  let qtyRecords = await getRecords(ctx, to_id, 'qty-by-user-from-shipment')
 
   let records = {}
   mergeRecords(qtyRecords, 'count', records)
   mergeRecords(qtyRecords, 'qty', records)
   records = sortRecords(records)
 
-  this.body = csv.fromJSON(records, this.query.fields && this.query.fields.split(','))
+  ctx.body = csv.fromJSON(records, ctx.query.fields && ctx.query.fields.split(','))
 }
 
-exports.recordByFrom = function* (to_id) { //account._id will not be set because google does not send cookie
+exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  let [qtyRecords, valueRecords] = yield [
-    getRecords.call(this, to_id, 'qty-by-from-generic-ndc'),
-    getRecords.call(this, to_id, 'value-by-from-generic-ndc')
-  ]
+  let [qtyRecords, valueRecords] = await Promise.all([
+    getRecords(ctx, to_id, 'qty-by-from-generic-ndc'),
+    getRecords(ctx, to_id, 'value-by-from-generic-ndc')
+  ])
 
   let records = {}
   mergeRecords(qtyRecords, 'count', records)
@@ -120,29 +122,29 @@ exports.recordByFrom = function* (to_id) { //account._id will not be set because
 
   records = sortRecords(records)
 
-  this.body = csv.fromJSON(records, this.query.fields && this.query.fields.split(','))
+  ctx.body = csv.fromJSON(records, ctx.query.fields && ctx.query.fields.split(','))
 }
 
-function* getRecords (to_id, suffix) {
+async function getRecords(ctx, to_id, suffix) {
   //TODO Enable people to pick only certain fields so we don't need all these queries
   ///We can also reduce the lines of code by doing a for-loop accross the stages
-  let group  = this.query.group || ''
+  let group  = ctx.query.group || ''
   let opts   = {
-    group_level:this.query.group_level ? +this.query.group_level + 2 : groupby(group).level, //default is by drug.generic.  Add 2 for to_id and year/month/day key
-    startkey:[to_id, group].concat(this.query.startkey || []),
-    endkey:[to_id, group].concat(this.query.endkey || [])
+    group_level:ctx.query.group_level ? +ctx.query.group_level + 2 : groupby(group).level, //default is by drug.generic.  Add 2 for to_id and year/month/day key
+    startkey:[to_id, group].concat(ctx.query.startkey || []),
+    endkey:[to_id, group].concat(ctx.query.endkey || [])
   }
 
   opts.endkey[opts.endkey.length] = {}
 
-  let records = yield [
-    this.db.transaction.query('received.'+suffix, opts),
-    this.db.transaction.query('verified.'+suffix, opts),
-    this.db.transaction.query('expired.'+suffix, opts),
-    this.db.transaction.query('disposed.'+suffix, opts),
-    this.db.transaction.query('dispensed.'+suffix, opts),
-    this.db.transaction.query('pended.'+suffix, opts),
-  ]
+  let records = await Promise.all([
+    ctx.db.transaction.query('received.'+suffix, opts),
+    ctx.db.transaction.query('verified.'+suffix, opts),
+    ctx.db.transaction.query('expired.'+suffix, opts),
+    ctx.db.transaction.query('disposed.'+suffix, opts),
+    ctx.db.transaction.query('dispensed.'+suffix, opts),
+    ctx.db.transaction.query('pended.'+suffix, opts),
+  ])
   return records
 }
 
@@ -188,7 +190,7 @@ function mergeRecord(rows, record, field) {
   for (let row of record.rows) {
     let key = row.key.slice(1).join(',')
     rows[key] = rows[key] || {key:row.key.slice(1), value:{
-       //specify csv column order here -- TODO default to user supplied this.query.fields
+       //specify csv column order here -- TODO default to user supplied ctx.query.fields
       'received.count':0,
       'verified.count':0,
       'refused.count':0,
@@ -232,15 +234,15 @@ exports.validate = function(model) {
     .ensure('_id').custom(authorized).withMessage('You are not authorized to modify this account')
 }
 
-//Context-specific - options MUST have 'this' property in order to work.
-function authorized(doc, val, key, opts) {
+//Context-specific - options MUST have 'ctx' property in order to work.
+function authorized(doc, opts) {
 
-  if (this.account._id)
-    return doc._id == this.account._id
+  if (opts.ctx.account._id)
+    return doc._id == opts.ctx.account._id
 
   if (exports.isNew(doc, opts)) {
     console.log('account is new')
-    return this.ajax = admin.ajax, true //enable user to be created even though current user doesn't exist and therefor doesn't have allAccounts role
+    return opts.ctx.ajax = admin.ajax, true //enable user to be created even though current user doesn't exist and therefor doesn't have allAccounts role
   }
 
   console.log('account is not authorized', doc._rev, opts)
@@ -248,90 +250,90 @@ function authorized(doc, val, key, opts) {
 }
 
 exports.authorized = {
-  *get() {
+  async get(ctx) {
     //Search for all accounts (recipients) that have authorized this account as a sender
     //shortcut to /accounts?selector={"authorized":{"$elemMatch":"${session.account}"}}
-    this.status = 501 //not implemented
+    ctx.status = 501 //not implemented
   },
 
-  *post() {
+  async post(ctx) {
     //Authorize a sender
-    console.log(this.account._id, this.req.body)
-    let account = yield this.db.account.get(this.account._id)
-    console.log(account.authorized, account.authorized.indexOf(this.req.body))
+    console.log(ctx.account._id, ctx.req.body)
+    let account = await ctx.db.account.get(ctx.account._id)
+    console.log(account.authorized, account.authorized.indexOf(ctx.req.body))
     //allow body to be an array of ids to authorize
-    let index = account.authorized.indexOf(this.req.body)
+    let index = account.authorized.indexOf(ctx.req.body)
 
     if (index != -1) {
-      this.status  = 409
-      this.message = 'This account is already authorized'
+      ctx.status  = 409
+      ctx.message = 'This account is already authorized'
     } else {
-      account.authorized.push(this.req.body)
-      this.body = yield this.db.account.put(account, {this:this})
-      this.body.authorized = account.authorized
+      account.authorized.push(ctx.req.body)
+      ctx.body = await ctx.db.account.put(account, {ctx})
+      ctx.body.authorized = account.authorized
     }
   },
 
-  *delete() {
+  async delete(ctx) {
     //Unauthorize a sender
-    let account = yield this.db.account.get(this.account._id)
+    let account = await ctx.db.account.get(ctx.account._id)
 
     //allow body to be an array of ids to unauthorize
-    let index   = account.authorized.indexOf(this.req.body)
+    let index   = account.authorized.indexOf(ctx.req.body)
 
     if (index == -1) {
-      this.status  = 409
-      this.message = 'This account is already not authorized'
+      ctx.status  = 409
+      ctx.message = 'This account is already not authorized'
     } else {
       account.authorized.splice(index, 1)
-      this.body = yield this.db.account.put(account, {this:this})
-      this.body.authorized = account.authorized
+      ctx.body = await ctx.db.account.put(account, {ctx})
+      ctx.body.authorized = account.authorized
     }
   }
 }
 
 exports.pend = {
 
-  *post(_id, name) {
-    this.account = {_id}
-    this.body = yield updateNext(this, [{pending:{_id:name}, createdAt:new Date().toJSON()}])
+  async post(ctx, _id, name) {
+    ctx.account = {_id}
+    ctx.body = await updateNext(ctx, [{pending:{_id:name}, createdAt:new Date().toJSON()}])
   },
 
-  *delete(_id, name) {
-    this.account = {_id}
-    this.body = yield updateNext(this, [])
+  async delete(ctx, _id, name) {
+    ctx.account = {_id}
+    ctx.body = await updateNext(ctx, [])
   }
 }
 
 exports.dispense = {
 
-  *post(_id) {
-    this.account = {_id}
-    this.body = yield updateNext(this, [{dispensed:{}, createdAt:new Date().toJSON()}])
+  async post(ctx, _id) {
+    ctx.account = {_id}
+    ctx.body = await updateNext(ctx, [{dispensed:{}, createdAt:new Date().toJSON()}])
   },
 
-  // *delete(_id) {
-  //   this.account = {_id}
-  //   this.body = yield patchNext(this, [])
+  // async delete(ctx, _id) {
+  //   ctx.account = {_id}
+  //   ctx.body = await patchNext(ctx, [])
   // }
 }
 
 exports.dispense = {
 
-  *post(_id) {
-    this.account = {_id}
-    this.body = yield updateNext(this, [{dispose:{}, createdAt:new Date().toJSON()}])
+  async post(ctx, _id) {
+    ctx.account = {_id}
+    ctx.body = await updateNext(ctx, [{dispose:{}, createdAt:new Date().toJSON()}])
   },
 
-  // *delete(_id) {
-  //   this.account = {_id}
-  //   this.body = yield patchNext(this, [])
+  // async delete(ctx, _id) {
+  //   ctx.account = {_id}
+  //   ctx.body = await patchNext(ctx, [])
   // }
 }
 
-function updateNext($this, next) {
-  for (let transaction of $this.req.body) {
+function updateNext(ctx, next) {
+  for (let transaction of ctx.req.body) {
     transaction.next = next
   }
-  return $this.db.transaction.bulkDocs($this.req.body, {this:$this})
+  return ctx.db.transaction.bulkDocs(ctx.req.body, {ctx})
 }

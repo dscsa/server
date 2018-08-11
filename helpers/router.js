@@ -7,10 +7,12 @@ module.exports = function(app) {
   return function r(url, options) {
 
     function router(method, handler) {
+
       app.use(route[method](url, wrapper, options))
-      function *wrapper() {
-        this.set('x-endpoint', method+' '+url+' for '+this.url)
-        yield handler.apply(this, arguments)
+
+      async function wrapper(ctx, ...args) {
+        ctx.set('x-endpoint', method+' '+url+' for '+ctx.url)
+        await handler.apply(this, [ctx, ...args])
       }
     }
 

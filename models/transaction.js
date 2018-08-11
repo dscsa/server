@@ -159,8 +159,8 @@ exports.lib = {
 
     require('eachMonth')(createdAt, removedAt, function(year, month, last) {
       if (last) return  //don't count it as inventory in the month that it was removed (expired okay since we use until end of the month)
-      emit([to_id, 'month', year, month, doc.drug.generic, stage, sortedDrug], val)
-      if (month == 12) emit([to_id, 'year', year, doc.drug.generic, stage, sortedDrug], val)
+      emit([to_id, 'month', year, month, doc.drug.generic, stage, sortedDrug, doc.bin], val)
+      if (month == 12) emit([to_id, 'year', year, doc.drug.generic, stage, sortedDrug, doc.bin], val)
     })
   }
 }
@@ -496,39 +496,38 @@ exports.views = {
   }
 }
 
-exports.get_csv = function*(db) {
-  const opts = {startkey:[this.account._id], endkey:[this.account._id, {}], include_docs:true}
-  let view = yield this.db.transaction.query('shipment._id', opts)
-  this.body = csv.fromJSON(view.rows)
-  this.type = 'text/csv'
+exports.get_csv = async function (ctx, db) {
+  const opts = {startkey:[ctx.account._id], endkey:[ctx.account._id, {}], include_docs:true}
+  let view = await ctx.db.transaction.query('shipment._id', opts)
+  ctx.body = csv.fromJSON(view.rows)
+  ctx.type = 'text/csv'
 }
 
 //Server-side validation methods to supplement shared ones.
 exports.validate = function(model) {
   return model
     .ensure('isChecked').set(doc => undefined) //client sets this but we don't want to save it
-    .ensure('shipment._id').custom(authorized).withMessage('You are not authorized to modify this transaction')
+    .ensure('_rev').custom(authorized).withMessage('You are not authorized to modify this transaction')
 }
 
-//Context-specific - options MUST have 'this' property in order to work.
-function authorized(doc, shipment_id) {
-  var id = shipment_id.split(".")
-  return id[0] == this.account._id || id[2] == this.account._id
+//Context-specific - options MUST have 'ctx' property in order to work.
+function authorized(doc, opts) {
+  var id = doc.shipment._id.split('.')
+  return id[0] == opts.ctx.account._id || id[2] == opts.ctx.account._id
 }
 
 //TODO don't search for shipment if shipment._id doesn't have two periods (inventory)
 //TODO option to include full from/to account information
-exports.history = function *history(id) {
-  let $this = this
+exports.history = async function history($ctx, id) {
+
   let result = []
   //console.log('recurse 0', id)
-  this.body = yield recurse(id, result)
-  function *recurse (_id, list) {
-    //console.log('recurse 1', _id, list, $this.account)
-    let [trans, {rows:prevs}] = yield [
-      $this.db.transaction.get(_id), //don't use show function because we might need to see transactions not directly authorized
-      $this.db.transaction.query('next.transaction._id', {key:_id})
-    ]
+  ctx.body = async function recurse (ctx, _id, list) {
+    //console.log('recurse 1', _id, list, $ctx.account)
+    let [trans, {rows:prevs}] = await Promise.all([
+      $ctx.db.transaction.get(_id), //don't use show function because we might need to see transactions not directly authorized
+      $ctx.db.transaction.query('next.transaction._id', {key:_id})
+    ])
     //console.log('recurse 2', prevs)
 
     list.push(trans)
@@ -541,7 +540,7 @@ exports.history = function *history(id) {
       trans.type = 'Transaction'
     }
 
-    let all = [exports.lib.isReceived(trans) ? $this.db.shipment.get(trans.shipment._id) : {account:{from:$this.account}}]
+    let all = [exports.lib.isReceived(trans) ? $ctx.db.shipment.get(trans.shipment._id) : {account:{from:$ctx.account}}]
 
     //console.log('recurse 3', all)
     //Recursive call!
@@ -550,17 +549,17 @@ exports.history = function *history(id) {
       all.push(recurse(prev.id, prevs.length == 1 ? list : indentedList))
     }
     //Search for transaction's ancestors and shipment in parallel
-    all = yield all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
+    all = await all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
     //Now we just fill in full shipment and account info into the transaction
     //console.log('recurse 5', all)
     trans.shipment = all[0]
     let account    = all[0].account
     //TODO this call is serial. Can we do in parallel with next async call?
     //TODO this is co specific won't work when upgrading to async/await which need Promise.all
-    let accounts = yield [
-      $this.db.account.get(account.from._id),
-      account.to && $this.db.account.get(account.to._id)
-    ]
+    let accounts = await Promise.all([
+      $ctx.db.account.get(account.from._id),
+      account.to && $ctx.db.account.get(account.to._id)
+    ])
     account.from = accounts[0]
     account.to   = accounts[1] //This is redundant (the next transactions from is the transactions to), but went with simplicity > speed
 

@@ -1,14 +1,14 @@
 const ajax = require('../../pouchdb-ajax')
 
 module.exports = defaults => {
-  return opts => {
+  return ctx => {
     const options = Object.assign(defaults || {}, {
-      url:opts.url,
-      headers:opts.headers,
-      method:opts.method,
-      timeout:opts.timeout,
-      auth:opts.auth,
-      body:opts.pipe && ! opts.body ? opts : opts.body
+      url:ctx.url,
+      headers:ctx.headers,
+      method:ctx.method,
+      timeout:ctx.timeout,
+      auth:ctx.auth,
+      body:ctx.pipe && ! ctx.body ? ctx : ctx.body
     })
 
     if ( ~ options.url.indexOf('//'))
@@ -23,8 +23,7 @@ module.exports = defaults => {
     let status
     let headers
     const promise = new Promise((res, rej) => { resolve = res, reject = rej })
-    const stack = new Error().stack
-    //console.log('ajax', options, stack)
+    const stack   = new Error().stack
     const request = ajax(options, (error, body, res) => {
 
       if (error && error.code == 500) {

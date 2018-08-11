@@ -8,12 +8,16 @@ let admin  = {ajax:{auth:require('../../../keys/dev.js')}}
 
 //Drugs
 exports.views = {
-  'generics.name':function(doc) {
-    for (var i in doc.generics) {
-      if ( ! doc.generics[i].name)
-        log('drug generic map error for', doc)
+  'name':function(doc) {
 
-      emit(doc.generics[i].name.toLowerCase())
+    if (doc.brand)
+      emit(doc.brand.toLowerCase())
+
+    for (var i = 0; i < doc.generics.length; i++) {
+      if ( ! doc.generics[i].name)
+        log('generic map error for', doc.generics.length, i, doc.generics[i].name, doc.generics[i], doc)
+      else
+        emit(doc.generics[i].name.toLowerCase())
     }
   },
 
@@ -30,6 +34,11 @@ exports.views = {
     emit([doc.generic, doc.brand])
   },
 
+  //Ensure that all GSN codes are the same for a generic
+  'by-generic-gsn':function(doc) {
+    emit([doc.generic, doc.labeler])
+  },
+
   //Ensure that all labeler codes have the same manufacturer
   'by-labelcode-labeler':function(doc) {
     emit([doc._id.split('-')[0], doc.labeler])
@@ -37,27 +46,29 @@ exports.views = {
 
 }
 
-exports.get_csv = function*(db) {
-  let view = yield this.db.drug.allDocs({endkey:'_design', include_docs:true})
-  this.body = csv.fromJSON(view.rows)
-  this.type = 'text/csv'
+exports.get_csv = async function (ctx, db) {
+  let view = await ctx.db.drug.allDocs({endkey:'_design', include_docs:true})
+  ctx.body = csv.fromJSON(view.rows)
+  ctx.type = 'text/csv'
 }
 
 //Server-side validation methods to supplement shared ones.
 exports.validate = function(model) {
   return model
-    .ensure('_rev').custom(updateTransactionsWithBrand).withMessage('Could not update drug.brand on all transactions')
-    .ensure('_rev').custom(updateTransactionsWithGeneric).withMessage('Could not update drug.generic on all transactions')
-    .ensure('_rev').custom(updateDrugsWithBrand).withMessage('Could not update brand name on all drugs')
-    .ensure('_rev').custom(updateDrugsWithLabeler).withMessage('Could not update labeler on all drugs')
-    //.ensure('_rev').trigger(updatePrice).withMessage('Could not update the price of this drug')
+    .ensure('_rev').trigger(updateTransactionsWithBrand).withMessage('Could not update drug.brand on all transactions')
+    .ensure('_rev').trigger(updateTransactionsWithGeneric).withMessage('Could not update drug.generic on all transactions')
+    .ensure('_rev').trigger(updateDrugsWithBrand).withMessage('Could not update brand name on all drugs')
+    .ensure('_rev').trigger(updateDrugsWithLabeler).withMessage('Could not update labeler on all drugs')
+    .ensure('_rev').trigger(updateDrugsWithGsn).withMessage('Could not update GSN on all drugs')
+    .ensure('_rev').trigger(updatePrice).withMessage('Could not update the price of this drug')
 }
 
-function updatePrice(drug, rev, key, opts) {
+function updatePrice(drug, opts) {
   //This drug rev was saved to pouchdb on client.  We can't update this _rev with a price
   //without causing a discrepancy between the client and server.  Instead, we wait for a
   //bit and then save the price info to a new _rev which will replicate back to the client
-  return exports.updatePrice.call(this, drug, 500)
+  if ( ! opts.ajax) //don't let our other update functions trigger this or A LOT of drugs will be updated
+    return exports.updatePrice(opts.ctx, drug, 500)
 }
 
 //GET the full drug first since want this to work with both drug and transaction.drug
@@ -65,17 +76,17 @@ function updatePrice(drug, rev, key, opts) {
 //Look up the goodrx and nadac price of the drug
 //Update the drug with the new price info
 //Update all transactions with 0 price including any that were just entered
-exports.updatePrice = function(drug, delay) {
+exports.updatePrice = function(ctx, drug, delay) {
 
-  return getPrice.call(this, drug)
+  return getPrice(ctx, drug)
   .then(price => {
     console.log('drug.updatePrice', price)
     if (price)
       setTimeout(_ => {
-        this.db.drug.get(drug._id)
+        ctx.db.drug.get(drug._id)
         .then(drug => {
           drug.price = price
-          return this.db.drug.put(drug, {this:this})
+          return ctx.db.drug.put(drug, {ctx})
         })
         .catch(err => console.log('drug.updatePrice saving err', err))
       }, delay)
@@ -85,14 +96,14 @@ exports.updatePrice = function(drug, delay) {
   .catch(err => console.log('drug.updatePrice getting err', err))
 }
 
-function getPrice(drug) {
+function getPrice(ctx, drug) {
 
   if (new Date() < new Date(drug.price.invalidAt) )
     return Promise.resolve(false)
 
-  let nadac     = getNadac.call(this, drug) //needs ndc9
-  let goodrx    = getGoodrx.call(this, drug)
-  let retail    = getRetail.call(this, drug)
+  let nadac     = getNadac(ctx, drug) //needs ndc9
+  let goodrx    = getGoodrx(ctx, drug)
+  let retail    = getRetail(ctx, drug)
   let invalidAt = new Date(Date.now()+7*24*60*60*1000).toJSON().slice(0, 10) //Auto-filled prices expire in one week
 
   return Promise.all([nadac, goodrx, retail]).then(all => {
@@ -101,17 +112,17 @@ function getPrice(drug) {
 }
 
 //Update denormalized database
-//Context-specific - options MUST have 'this' property in order to work.
-function updateDrugsWithLabeler(drug, rev, key, opts) {
-
+//Context-specific - options MUST have 'ctx' property in order to work.
+function updateDrugsWithLabeler(drug, opts) {
+  let ctx = opts.ctx
   const delayed = () => {
 
     let labelcode = drug._id.split('-')[0]
 
     Promise.all([
-      this.db.drug.query('by-labelcode-labeler', {startkey:[labelcode], endkey:[labelcode, drug.labeler], include_docs:true, inclusive_end:false}),
-      this.db.drug.query('by-labelcode-labeler', {startkey:[labelcode, drug.labeler, {}], endkey:[labelcode, {}], include_docs:true}),
-      this.db.drug.query('by-labelcode-labeler', {startkey:[labelcode], endkey:[labelcode, {}]})
+      ctx.db.drug.query('by-labelcode-labeler', {startkey:[labelcode], endkey:[labelcode, drug.labeler], include_docs:true, inclusive_end:false}),
+      ctx.db.drug.query('by-labelcode-labeler', {startkey:[labelcode, drug.labeler, {}], endkey:[labelcode, {}], include_docs:true}),
+      ctx.db.drug.query('by-labelcode-labeler', {startkey:[labelcode], endkey:[labelcode, {}]})
     ]).then(([ltLabeler, gtLabeler, allLabeler]) => {
 
       let wrongLabeler = ltLabeler.rows.concat(gtLabeler.rows)
@@ -126,7 +137,7 @@ function updateDrugsWithLabeler(drug, rev, key, opts) {
         return row.doc
       })
 
-      return this.db.drug.bulkDocs(wrongLabeler, {this:this, ajax:admin.ajax})
+      return ctx.db.drug.bulkDocs(wrongLabeler, {ctx, ajax:admin.ajax})
 
     }).catch(err => {
       console.log('updateDrugsWithLabeler err', err) //err.errors['shipment._id'].rules
@@ -141,13 +152,14 @@ function updateDrugsWithLabeler(drug, rev, key, opts) {
 
 //Update denormalized database
 //Context-specific - options MUST have 'this' property in order to work.
-function updateDrugsWithBrand(drug, rev, key, opts) {
-
+function updateDrugsWithBrand(drug, opts) {
+  let ctx = opts.ctx
   const delayed = () => {
+
     Promise.all([
-      this.db.drug.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, drug.brand], include_docs:true, inclusive_end:false}),
-      this.db.drug.query('by-generic-brand', {startkey:[drug.generic, drug.brand, {}], endkey:[drug.generic, {}], include_docs:true}),
-      this.db.drug.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, {}]})
+      ctx.db.drug.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, drug.brand], include_docs:true, inclusive_end:false}),
+      ctx.db.drug.query('by-generic-brand', {startkey:[drug.generic, drug.brand, {}], endkey:[drug.generic, {}], include_docs:true}),
+      ctx.db.drug.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, {}]})
     ]).then(([ltBrand, gtBrand, allBrand]) => {
 
       let wrongBrand = ltBrand.rows.concat(gtBrand.rows)
@@ -162,7 +174,7 @@ function updateDrugsWithBrand(drug, rev, key, opts) {
       })
 
       //console.log('updateDrugsWithBrand', JSON.stringify(wrongBrand, null, ' '))
-      return this.db.drug.bulkDocs(wrongBrand, {this:this, ajax:admin.ajax})
+      return ctx.db.drug.bulkDocs(wrongBrand, {ctx, ajax:admin.ajax})
 
     }).catch(err => {
       console.log('updateDrugsWithBrand err', err) //err.errors['shipment._id'].rules
@@ -177,14 +189,51 @@ function updateDrugsWithBrand(drug, rev, key, opts) {
 
 //Update denormalized database
 //Context-specific - options MUST have 'this' property in order to work.
-function updateTransactionsWithBrand(drug, rev, key, opts) {
-
-
+function updateDrugsWithGsn(drug, opts) {
+  let ctx = opts.ctx
   const delayed = () => {
+
     Promise.all([
-      this.db.transaction.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, drug.brand], include_docs:true, inclusive_end:false}),
-      this.db.transaction.query('by-generic-brand', {startkey:[drug.generic, drug.brand, {}], endkey:[drug.generic, {}], include_docs:true}),
-      this.db.transaction.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, {}]})
+      ctx.db.drug.query('by-generic-gsn', {startkey:[drug.generic], endkey:[drug.generic, drug.gsn], include_docs:true, inclusive_end:false}),
+      ctx.db.drug.query('by-generic-gsn', {startkey:[drug.generic, drug.gsn, {}], endkey:[drug.generic, {}], include_docs:true}),
+      ctx.db.drug.query('by-generic-gsn', {startkey:[drug.generic], endkey:[drug.generic, {}]})
+    ]).then(([ltGsn, gtGsn, allGsn]) => {
+
+      let wrongGsn = ltGsn.rows.concat(gtGsn.rows)
+      console.log('Updating', wrongGsn.length, 'of', allGsn.rows.length, 'drugs with gsn', drug.gsn)
+
+      if ( ! wrongGsn.length) return
+
+      wrongGsn = wrongGsn.map(row => {
+        console.log(row.doc.gsn, '-->', drug.gsn, row.doc._id, row.doc.generic)
+        row.doc.gsn = drug.gsn
+        return row.doc
+      })
+
+      //console.log('updateDrugsWithBrand', JSON.stringify(wrongBrand, null, ' '))
+      return ctx.db.drug.bulkDocs(wrongGsn, {ctx, ajax:admin.ajax})
+
+    }).catch(err => {
+      console.log('updateDrugsWithGsn err', err) //err.errors['shipment._id'].rules
+    })
+  }
+
+  if ( ! opts.ajax) //since this saves back to drug db it can cause an infinite loop  if not careful
+    setTimeout(delayed, 1000)
+
+  return true
+}
+
+//Update denormalized database
+//Context-specific - options MUST have 'this' property in order to work.
+function updateTransactionsWithBrand(drug, opts) {
+  let ctx = opts.ctx
+  const delayed = () => {
+
+    Promise.all([
+      ctx.db.transaction.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, drug.brand], include_docs:true, inclusive_end:false}),
+      ctx.db.transaction.query('by-generic-brand', {startkey:[drug.generic, drug.brand, {}], endkey:[drug.generic, {}], include_docs:true}),
+      ctx.db.transaction.query('by-generic-brand', {startkey:[drug.generic], endkey:[drug.generic, {}]})
     ]).then(([ltBrand, gtBrand, allBrand]) => {
 
       let wrongBrand = ltBrand.rows.concat(gtBrand.rows)
@@ -198,7 +247,7 @@ function updateTransactionsWithBrand(drug, rev, key, opts) {
         return row.doc
       })
 
-      return this.db.transaction.bulkDocs(wrongBrand, {this:this, ajax:admin.ajax})
+      return ctx.db.transaction.bulkDocs(wrongBrand, {ctx, ajax:admin.ajax})
 
     }).catch(err => {
       console.log('updateTransactionsWithBrand err', err) //err.errors['shipment._id'].rules
@@ -213,13 +262,14 @@ function updateTransactionsWithBrand(drug, rev, key, opts) {
 
 //Update denormalized database
 //Context-specific - options MUST have 'this' property in order to work.
-function updateTransactionsWithGeneric(drug, rev, key, opts) {
-
+function updateTransactionsWithGeneric(drug, opts) {
+  let ctx = opts.ctx
   const delayed = () => {
+
     Promise.all([
-      this.db.transaction.query('by-ndc-generic', {startkey:[drug._id], endkey:[drug._id, drug.generic], include_docs:true, inclusive_end:false}),
-      this.db.transaction.query('by-ndc-generic', {startkey:[drug._id, drug.generic, {}], endkey:[drug._id, {}], include_docs:true}),
-      this.db.transaction.query('by-ndc-generic', {startkey:[drug._id], endkey:[drug._id, {}]})
+      ctx.db.transaction.query('by-ndc-generic', {startkey:[drug._id], endkey:[drug._id, drug.generic], include_docs:true, inclusive_end:false}),
+      ctx.db.transaction.query('by-ndc-generic', {startkey:[drug._id, drug.generic, {}], endkey:[drug._id, {}], include_docs:true}),
+      ctx.db.transaction.query('by-ndc-generic', {startkey:[drug._id], endkey:[drug._id, {}]})
     ]).then(([ltGeneric, gtGeneric, allGeneric]) => {
 
       let wrongGeneric = ltGeneric.rows.concat(gtGeneric.rows)
@@ -236,7 +286,7 @@ function updateTransactionsWithGeneric(drug, rev, key, opts) {
         return row.doc
       })
 
-      return this.db.transaction.bulkDocs(wrongGeneric, {this:this, ajax:admin.ajax})
+      return ctx.db.transaction.bulkDocs(wrongGeneric, {ctx, ajax:admin.ajax})
 
     }).catch(err => {
       console.log('updateTransactionsWithGeneric err', err) //err.errors['shipment._id'].rules
@@ -249,12 +299,12 @@ function updateTransactionsWithGeneric(drug, rev, key, opts) {
   return true
 }
 
-function getNadac(drug) {
+function getNadac(ctx, drug) {
   let date = new Date(); date.setMonth(date.getMonth() - 2) //Datbase not always up to date so can't always do last week.  On 2016-06-18 last as_of_date was 2016-05-11, so lets look back two months
   let url = `http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date>"${date.toJSON().slice(0, -1)}"`
 
   let ndcUrl = url+nadacNdcUrl(drug)
-  return this.ajax({url:ndcUrl})
+  return ctx.ajax({url:ndcUrl})
   .then(nadac => {
 
     if (nadac.body && nadac.body.length)
@@ -262,7 +312,7 @@ function getNadac(drug) {
 
     console.log('No NADAC price found for an ndc starting with '+drug.ndc9, ndcUrl)
     let nameUrl = url+nadacNameUrl(drug)
-    return this.ajax({url:nameUrl})
+    return ctx.ajax({url:nameUrl})
     .then(nadac => {
 
       if(nadac.body && nadac.body.length)  //When the price is not found but no error is thrown
@@ -321,12 +371,12 @@ function getNumberOfUnits(nadac, drug) {
   return match ? +match[1] : console.log("Drug could not be converted to account for GM or ML")
 }
 
-function getGoodrx(drug) {
+function getGoodrx(ctx, drug) {
 
   let fullName = formatDrugName(drug)
   let strength = formatDrugStrength(drug)
 
-  return goodrxApi.call(this, 'fair-price', fullName, strength).then(nameSearch => {
+  return goodrxApi(ctx, 'fair-price', fullName, strength).then(nameSearch => {
 
     if (nameSearch.price)
       return formatPrice(nameSearch.price/nameSearch.quantity)
@@ -334,7 +384,7 @@ function getGoodrx(drug) {
     if ( ! nameSearch.candidate)
       return console.log('No GoodRx price or candidate found for the name '+fullName+' '+strength, nameSearch.url)
 
-    return goodrxApi.call(this, 'fair-price', nameSearch.candidate, strength).then(candidateSearch => {
+    return goodrxApi(ctx, 'fair-price', nameSearch.candidate, strength).then(candidateSearch => {
 
       if (candidateSearch.price)
         return formatPrice(candidateSearch.price/candidateSearch.quantity)
@@ -344,12 +394,12 @@ function getGoodrx(drug) {
   })
 }
 
-function getRetail(drug) {
+function getRetail(ctx, drug) {
 
   let fullName = formatDrugName(drug)
   let strength = formatDrugStrength(drug)
 
-  return goodrxApi.call(this, 'compare-price', fullName, strength).then(nameSearch => {
+  return goodrxApi(ctx, 'compare-price', fullName, strength).then(nameSearch => {
 
     //console.log('Retail price results '+fullName+' '+strength, nameSearch)
 
@@ -359,7 +409,7 @@ function getRetail(drug) {
     if ( ! nameSearch.candidate)
       return console.log('No GoodRx price or candidate found for the name '+fullName+' '+strength, nameSearch.url)
 
-    return goodrxApi.call(this, 'compare-price', nameSearch.candidate, strength).then(candidateSearch => {
+    return goodrxApi(ctx, 'compare-price', nameSearch.candidate, strength).then(candidateSearch => {
 
       console.log('Retail price results for candidate '+nameSearch.candidate+' '+strength, candidateSearch)
 
@@ -372,9 +422,9 @@ function getRetail(drug) {
 }
 
 //409 error means qs not properly encoded, 400 means missing drug
-function goodrxApi(endpoint, drug, strength) {
+function goodrxApi(ctx, endpoint, drug, strength) {
   let url = goodrxUrl(endpoint, drug, strength)
-  return this.ajax({url}).then(goodrx => {
+  return ctx.ajax({url}).then(goodrx => {
      if (goodrx.body) return goodrx.body.data
      let candidate = goodrx.error.errors && goodrx.error.errors[0].candidates && goodrx.error.errors[0].candidates[0]
      return {url, candidate, error:goodrx.error}
