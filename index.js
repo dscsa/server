@@ -7,7 +7,6 @@ let body    = require('./helpers/body')
 let keys    = require('./helpers/keys')
 let r       = require('./helpers/router')(app)
 let ajax    = require('./helpers/ajax')
-let pouchdb = require('../pouch/pouchdb-server')
 let models  = {
   drug        : require('./models/drug'),
   account     : require('./models/account'),
@@ -24,12 +23,14 @@ process.on('unhandledRejection', (reason, promise) => {
 
 keys(function() {
 
+  let pouchdb = require('../pouch/pouchdb-server')
+
   //app.use(body({multipart:true}))
   //Parse our manual cookie so we know account _ids without relying on couchdb
   //Collect the request body so that we can use it with pouch
   app.use(async function(ctx, next) {
 
-    ctx.db   = pouchdb    
+    ctx.db   = pouchdb
     ctx.ajax = ajax({baseUrl:'http://localhost:5984'})
 
     //return ctx.ajax({url:'http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date%3E%222017-06-02T22:49:03.681%22%20AND%20ndc_description%20like%20%22MEMA%2510%25%22'})
