@@ -7,13 +7,6 @@ let body    = require('./helpers/body')
 let keys    = require('./helpers/keys')
 let r       = require('./helpers/router')(app)
 let ajax    = require('./helpers/ajax')
-let models  = {
-  drug        : require('./models/drug'),
-  account     : require('./models/account'),
-  user        : require('./models/user'),
-  shipment    : require('./models/shipment'),
-  transaction : require('./models/transaction'),
-}
 
 process.on('unhandledRejection', (reason, promise) => {
   console.log('unhandledRejection', reason instanceof Buffer ? reason.toString() : reason)
@@ -24,6 +17,13 @@ process.on('unhandledRejection', (reason, promise) => {
 keys(function() {
 
   let pouchdb = require('../pouch/pouchdb-server')
+  let models  = {
+    drug        : require('./models/drug'),
+    account     : require('./models/account'),
+    user        : require('./models/user'),
+    shipment    : require('./models/shipment'),
+    transaction : require('./models/transaction'),
+  }
 
   //app.use(body({multipart:true}))
   //Parse our manual cookie so we know account _ids without relying on couchdb
