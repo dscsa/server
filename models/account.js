@@ -35,8 +35,10 @@ exports.binned = async function  (ctx, id) { //account._id will not be set becau
 //Shows everything in inventory AND all ordered items not in inventory
 exports.inventory = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
+
   let minExp   = new Date()
-  let minMonth = minExp.getMonth() + (+ctx.query.buffer || 0) // - 1 because we use expireds until the end of the month
+  let minMonth = minExp.getMonth() + (+ctx.query.buffer || 0) // TODO exlcudes expireds in the last month because they are set to the 1st of the month
+  console.log('inventory.csv', minExp.getMonth(), +ctx.query.buffer || 0,  minMonth, ctx.query)
   minExp.setMonth(minMonth) //internal search does 1 month, so let's pad it by an additional month
   let [year, month] = minExp.toJSON().split('-')
 
