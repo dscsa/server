@@ -78,7 +78,7 @@ exports.lib = {
 
  //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
   expiredAt(doc) {
-    return require('isInventory')(doc) && (doc.exp.to || doc.exp.from).slice(0, 10).split('-')
+    return (doc.exp.to || doc.exp.from).slice(0, 10).split('-')
   },
 
   //This includes unpulled expired, no-way to remove those from view
@@ -126,6 +126,8 @@ exports.lib = {
       toDate[1] = 12
     }
 
+    if ( ! toDate) return log('eachMonth NO toDate:'+toDate+' fromDate:'+fromDate.join('-'))
+
     //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
     for (var y = +fromDate[0], m = +fromDate[1]; y < toDate[0] || m < toDate[1]; m++) {
       if (m == 13) { y++; m = 1 }
@@ -145,6 +147,7 @@ exports.lib = {
   },
 
   inventory(emit, doc, val) {
+
     var createdAt  = require('createdAt')(doc)
     var removedAt  = require('nextAt')(doc) || require('expiredAt')(doc)
     var to_id      = require('to_id')(doc)
