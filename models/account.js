@@ -59,7 +59,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
   let rows = inventory.rows.map(row => {
 
     console.log('inventory.qty-by-generic', row.key)
-    let generic = row.key[3]
+    let generic = row.key[opts.startkey.length]
 
     row.key = row.key.slice(1)
     row.value.qty = row.value.sum
