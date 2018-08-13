@@ -78,7 +78,8 @@ exports.lib = {
 
  //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
   expiredAt(doc) {
-    return (doc.exp.to || doc.exp.from).slice(0, 10).split('-')
+    var exp = doc.exp.to || doc.exp.from
+    return exp && exp.slice(0, 10).split('-')
   },
 
   //This includes unpulled expired, no-way to remove those from view
@@ -163,7 +164,7 @@ exports.lib = {
     require('eachMonth')(createdAt, removedAt, function(year, month, last) {
       if (last) return  //don't count it as inventory in the month that it was removed (expired okay since we use until end of the month)
       emit([to_id, 'month', year, month, doc.drug.generic, stage, sortedDrug, doc.bin], val)
-      if (month == 12) emit([to_id, 'year', year, doc.drug.generic, stage, sortedDrug, doc.bin], val)
+      if (month == 12) emit([to_id, 'year', year, doc.drug.generic, doc.drug.gsns, doc.drug.brand, stage, sortedDrug, doc.bin], val)
     })
   }
 }
@@ -227,6 +228,11 @@ exports.views = {
   //Along with the drug.js counterpart, Will be used to make sure all brand names are consistent for a given generic name
   'by-generic-brand':function(doc) {
     emit([doc.drug.generic, doc.drug.brand])
+  },
+
+  //Along with the drug.js counterpart, Will be used to make sure all gsn numbers are consistent for a given generic name
+  'by-generic-gsns':function(doc) {
+    emit([doc.drug.generic, doc.drug.gsns])
   },
 
   //*** 2. Filtered View  ***

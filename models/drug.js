@@ -35,8 +35,8 @@ exports.views = {
   },
 
   //Ensure that all GSN codes are the same for a generic
-  'by-generic-gsn':function(doc) {
-    emit([doc.generic, doc.labeler])
+  'by-generic-gsns':function(doc) {
+    emit([doc.generic, doc.gsns])
   },
 
   //Ensure that all labeler codes have the same manufacturer
@@ -57,9 +57,10 @@ exports.validate = function(model) {
   return model
     .ensure('_rev').trigger(updateTransactionsWithBrand).withMessage('Could not update drug.brand on all transactions')
     .ensure('_rev').trigger(updateTransactionsWithGeneric).withMessage('Could not update drug.generic on all transactions')
+    .ensure('_rev').trigger(updateTransactionsWithGSNs).withMessage('Could not update GSNs on all transactions')
     .ensure('_rev').trigger(updateDrugsWithBrand).withMessage('Could not update brand name on all drugs')
     .ensure('_rev').trigger(updateDrugsWithLabeler).withMessage('Could not update labeler on all drugs')
-    .ensure('_rev').trigger(updateDrugsWithGsn).withMessage('Could not update GSN on all drugs')
+    .ensure('_rev').trigger(updateDrugsWithGSNs).withMessage('Could not update GSNs on all drugs')
     .ensure('_rev').trigger(updatePrice).withMessage('Could not update the price of this drug')
 }
 
@@ -189,32 +190,32 @@ function updateDrugsWithBrand(drug, opts) {
 
 //Update denormalized database
 //Context-specific - options MUST have 'this' property in order to work.
-function updateDrugsWithGsn(drug, opts) {
+function updateDrugsWithGSNs(drug, opts) {
   let ctx = opts.ctx
   const delayed = () => {
 
     Promise.all([
-      ctx.db.drug.query('by-generic-gsn', {startkey:[drug.generic], endkey:[drug.generic, drug.gsn], include_docs:true, inclusive_end:false}),
-      ctx.db.drug.query('by-generic-gsn', {startkey:[drug.generic, drug.gsn, {}], endkey:[drug.generic, {}], include_docs:true}),
-      ctx.db.drug.query('by-generic-gsn', {startkey:[drug.generic], endkey:[drug.generic, {}]})
-    ]).then(([ltGsn, gtGsn, allGsn]) => {
+      ctx.db.drug.query('by-generic-gsns', {startkey:[drug.generic], endkey:[drug.generic, drug.gsns], include_docs:true, inclusive_end:false}),
+      ctx.db.drug.query('by-generic-gsns', {startkey:[drug.generic, drug.gsns, {}], endkey:[drug.generic, {}], include_docs:true}),
+      ctx.db.drug.query('by-generic-gsns', {startkey:[drug.generic], endkey:[drug.generic, {}]})
+    ]).then(([ltGsns, gtGsns, allGsns]) => {
 
-      let wrongGsn = ltGsn.rows.concat(gtGsn.rows)
-      console.log('Updating', wrongGsn.length, 'of', allGsn.rows.length, 'drugs with gsn', drug.gsn)
+      let wrongGsns = ltGsns.rows.concat(gtGsns.rows)
+      console.log('Updating', wrongGsns.length, 'of', allGsns.rows.length, 'drugs with GSNs', drug.gsns)
 
-      if ( ! wrongGsn.length) return
+      if ( ! wrongGsns.length) return
 
-      wrongGsn = wrongGsn.map(row => {
-        console.log(row.doc.gsn, '-->', drug.gsn, row.doc._id, row.doc.generic)
-        row.doc.gsn = drug.gsn
+      wrongGsns = wrongGsns.map(row => {
+        console.log(row.doc.gsns, '-->', drug.gsns, row.doc._id, row.doc.generic)
+        row.doc.gsns = drug.gsns
         return row.doc
       })
 
-      //console.log('updateDrugsWithBrand', JSON.stringify(wrongBrand, null, ' '))
-      return ctx.db.drug.bulkDocs(wrongGsn, {ctx, ajax:admin.ajax})
+      //console.log('updateDrugsWithGsns', JSON.stringify(wrongGsns, null, ' '))
+      return ctx.db.drug.bulkDocs(wrongGsns, {ctx, ajax:admin.ajax})
 
     }).catch(err => {
-      console.log('updateDrugsWithGsn err', err) //err.errors['shipment._id'].rules
+      console.log('updateDrugsWithGSNs err', err) //err.errors['shipment._id'].rules
     })
   }
 
@@ -251,6 +252,42 @@ function updateTransactionsWithBrand(drug, opts) {
 
     }).catch(err => {
       console.log('updateTransactionsWithBrand err', err) //err.errors['shipment._id'].rules
+    })
+  }
+
+  if ( ! opts.ajax)
+    setTimeout(delayed, 1000)
+
+  return true
+}
+
+//Update denormalized database
+//Context-specific - options MUST have 'this' property in order to work.
+function updateTransactionsWithGSNs(drug, opts) {
+  let ctx = opts.ctx
+  const delayed = () => {
+
+    Promise.all([
+      ctx.db.transaction.query('by-generic-gsns', {startkey:[drug.generic], endkey:[drug.generic, drug.gsns], include_docs:true, inclusive_end:false}),
+      ctx.db.transaction.query('by-generic-gsns', {startkey:[drug.generic, drug.gsns, {}], endkey:[drug.generic, {}], include_docs:true}),
+      ctx.db.transaction.query('by-generic-gsns', {startkey:[drug.generic], endkey:[drug.generic, {}]})
+    ]).then(([ltGsns, gtGsns, allGsns]) => {
+
+      let wrongGsns = ltGsns.rows.concat(gtGsns.rows)
+      console.log('Updating', wrongGsns.length, 'of', allGsns.rows.length, 'transactions with GSN numbers', drug.gsns)
+
+      if ( ! wrongGsns.length) return
+
+      wrongGsns = wrongGsns.map(row => {
+        console.log( row.doc.drug.gsns, '-->', drug.gsns, row.doc._id, row.doc.drug._id, row.doc.drug.generic)
+        row.doc.drug.gsns = drug.gsns
+        return row.doc
+      })
+
+      return ctx.db.transaction.bulkDocs(wrongGsns, {ctx, ajax:admin.ajax})
+
+    }).catch(err => {
+      console.log('updateTransactionsWithGSNs err', err) //err.errors['shipment._id'].rules
     })
   }
 
