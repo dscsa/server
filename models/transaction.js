@@ -163,7 +163,7 @@ exports.lib = {
 
     require('eachMonth')(createdAt, removedAt, function(year, month, last) {
       if (last) return  //don't count it as inventory in the month that it was removed (expired okay since we use until end of the month)
-      emit([to_id, 'month', year, month, doc.drug.generic, stage, sortedDrug, doc.bin], val)
+      emit([to_id, 'month', year, month, doc.drug.generic, doc.drug.gsns, doc.drug.brand, stage, sortedDrug, doc.bin], val)
       if (month == 12) emit([to_id, 'year', year, doc.drug.generic, doc.drug.gsns, doc.drug.brand, stage, sortedDrug, doc.bin], val)
     })
   }
