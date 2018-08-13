@@ -43,7 +43,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
   let [year, month] = minExp.toJSON().split('-')
 
   let opts = {
-    group_level:5, //by drug.generic
+    group_level:7, //by drug.generic, drug.gsns, drug.brand,
     startkey:[to_id, 'month', year, month],
     endkey:[to_id, 'month', year, month+'\uffff']
   }
