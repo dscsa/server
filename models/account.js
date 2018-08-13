@@ -57,9 +57,9 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
 
   //Match inventory with ordered when applicable
   let rows = inventory.rows.map(row => {
-    let generic = row.key[opts.startkey.length]
 
-    console.log('inventory.qty-by-generic', row.key, generic)
+    console.log('inventory.qty-by-generic', row.key)
+    let generic = row.key[3]
 
     row.key = row.key.slice(1)
     row.value.qty = row.value.sum
