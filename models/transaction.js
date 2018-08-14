@@ -243,7 +243,7 @@ exports.views = {
   //Client bin checking and reorganization, & account/bins.csv for use by data loggers needing to pick empty boxes.  Skip reduce with reduce=false.  Alphabatize within bin
   'inventory-by-bin-verifiedat':{
     map(doc) {
-      require('isInventory')(doc) && emit([require('to_id')(doc), require('isBinned')(doc) ? 'binned' : 'repacked', doc.bin, require('verifiedAt')(doc)], require('qty')(doc))
+      require('isInventory')(doc) && emit([require('to_id')(doc), doc.bin, require('verifiedAt')(doc)], require('qty')(doc))
     },
     reduce:'_stats'
   },
