@@ -324,14 +324,14 @@ exports.views = {
 
   'expired.qty-by-generic-ndc':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug._id], require('qty')(doc))
+      require('isInventory') && require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'expired.value-by-generic-ndc':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug._id], require('value')(doc))
+      require('isInventory') && require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -408,14 +408,14 @@ exports.views = {
 
   'expired.qty-by-from-generic-ndc':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('qty')(doc))
+      require('isInventory') && require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'expired.value-by-from-generic-ndc':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('value')(doc))
+      require('isInventory') && require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -478,7 +478,7 @@ exports.views = {
 
   'expired.qty-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id], require('qty')(doc))
+      require('isInventory') && require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id], require('qty')(doc))
     },
     reduce:'_stats'
   },

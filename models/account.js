@@ -141,6 +141,8 @@ async function getRecords(ctx, to_id, suffix) {
 
   opts.endkey[opts.endkey.length] = {}
 
+  console.log('getRecords', suffix, opts)
+
   let records = await Promise.all([
     ctx.db.transaction.query('received.'+suffix, opts),
     ctx.db.transaction.query('verified.'+suffix, opts),
