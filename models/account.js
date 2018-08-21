@@ -100,10 +100,7 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
     getRecords(ctx, to_id, 'value-by-generic')
   ])
 
-  let records = {}
-  mergeRecords(qtyRecords, 'count', records)
-  mergeRecords(qtyRecords, 'qty', records)
-  mergeRecords(valueRecords, 'value', records)
+  let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
 
   records = sortRecords(records)
 
@@ -117,10 +114,7 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
     getRecords(ctx, to_id, 'value-by-from-generic')
   ])
 
-  let records = {}
-  mergeRecords(qtyRecords, 'count', records)
-  mergeRecords(qtyRecords, 'qty', records)
-  mergeRecords(valueRecords, 'value', records)
+  let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
 
   records = sortRecords(records, to_id) //Exclude expired becuase it will be wrong since we every thing "from" the to_id is just a repack and nothing will be received making expired.count/qty/value all negative
 
@@ -130,9 +124,7 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
 exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
   let qtyRecords = await getRecords(ctx, to_id, 'qty-by-user-from-shipment')
 
-  let records = {}
-  mergeRecords(qtyRecords, 'count', records)
-  mergeRecords(qtyRecords, 'qty', records)
+  let records = mergeRecords({qty:qtyRecords,count:qtyRecords})
 
   records = sortRecords(records)
 
@@ -170,6 +162,7 @@ async function getRecords(ctx, to_id, suffix) {
 
   let records = await Promise.all([
     ctx.db.transaction.query('received.'+suffix, opts),
+    ctx.db.transaction.query('refused.'+suffix, opts),
     ctx.db.transaction.query('verified.'+suffix, opts),
     ctx.db.transaction.query('disposed.'+suffix, opts),
     ctx.db.transaction.query('dispensed.'+suffix, opts),
@@ -182,42 +175,54 @@ async function getRecords(ctx, to_id, suffix) {
   return records
 }
 
-function mergeRecords(records, suffix, rows) {
-  console.log('inventory', records[0].rows.length, records[5].rows.length)
+//Something like {qty:records, count:records}
+function mergeRecords(opts) {
 
-  let fieldOrder = {
-     //specify csv column order here -- TODO default to user supplied ctx.query.fields
-    'received.count':0,
-    'refused.count':0,
-    'verified.count':0,
-    'expired.count':0,
-    'disposed.count':0,
-    'dispensed.count':0,
-    'pended.count':0,
-    'inventory.count':0,
-    'received.qty':0,
-    'refused.qty':0,
-    'verified.qty':0,
-    'expired.qty':0,
-    'disposed.qty':0,
-    'dispensed.qty':0,
-    'pended.qty':0,
-    'inventory.qty':0,
-    'received.value':0,
-    'refused.value':0,
-    'verified.value':0,
-    'expired.value':0,
-    'disposed.value':0,
-    'dispensed.value':0,
-    'pended.value':0,
-    'inventory.value':0
+  //specify csv column order here -- TODO default to user supplied ctx.query.fields
+  let fieldOrder = Object.assign({},
+    opts.count && {
+      'received.count':0,
+      'refused.count':0,
+      'verified.count':0,
+      'expired.count':0,
+      'disposed.count':0,
+      'dispensed.count':0,
+      'pended.count':0,
+      'inventory.count':0
+    },
+    opts.qty && {
+      'received.qty':0,
+      'refused.qty':0,
+      'verified.qty':0,
+      'expired.qty':0,
+      'disposed.qty':0,
+      'dispensed.qty':0,
+      'pended.qty':0,
+      'inventory.qty':0
+    },
+    opts.value && {
+      'received.value':0,
+      'refused.value':0,
+      'verified.value':0,
+      'expired.value':0,
+      'disposed.value':0,
+      'dispensed.value':0,
+      'pended.value':0,
+      'inventory.value':0
+    }
+  )
+
+  let records = {}
+  for (let suffix in opts) {
+    mergeRecord(records, opts[suffix][0], 'received.'+suffix, fieldOrder)
+    mergeRecord(records, opts[suffix][1], 'refused.'+suffix, fieldOrder)
+    mergeRecord(records, opts[suffix][2], 'verified.'+suffix, fieldOrder)
+    mergeRecord(records, opts[suffix][3], 'disposed.'+suffix, fieldOrder)
+    mergeRecord(records, opts[suffix][4], 'dispensed.'+suffix, fieldOrder)
+    mergeRecord(records, opts[suffix][5], 'pended.'+suffix, fieldOrder)
+    mergeRecord(records, opts[suffix][6], 'inventory.'+suffix, fieldOrder, true)
   }
-  mergeRecord(rows, records[0], 'received.'+suffix, fieldOrder)
-  mergeRecord(rows, records[1], 'verified.'+suffix, fieldOrder)
-  mergeRecord(rows, records[2], 'disposed.'+suffix, fieldOrder)
-  mergeRecord(rows, records[3], 'dispensed.'+suffix, fieldOrder)
-  mergeRecord(rows, records[4], 'pended.'+suffix, fieldOrder)
-  mergeRecord(rows, records[5], 'inventory.'+suffix, fieldOrder, true)
+  return records
 }
 
 function mergeRecord(rows, record, field, fieldOrder, optional) {
@@ -244,41 +249,43 @@ function mergeRecord(rows, record, field, fieldOrder, optional) {
 function sortRecords(rows, excludeExpired) {
   let oldGroup, excess
   return Object.keys(rows).sort().map(key => {
-    let row   = rows[key].value
-    let group = rows[key].key[rows[key].key.length - 1]
+    let row      = rows[key]
+    let group    = row.key[row.key.length - 1]
+    let excluded = excludeExpired == group
 
-    if (rows[key].key[1] == 'day') { //Expiration dates are only stored by month, not day.  So expired and therefore inventory can not be tracked by day
-      row['inventory.count'] = row['inventory.qty'] = row['inventory.value'] = 'N/A'
-      row['expired.count'] = row['expired.qty'] = row['expired.value'] = 'N/A'
-    } else if (excludeExpired == group) {
-      row['expired.count'] = row['expired.qty'] = row['expired.value'] = 'N/A'
-    } else {
-      //Can't calculate an expired count like this because repacking can split/combine existing items, meaning that more can be dispensed/disposed/expired than what is received.  Would need to do with using the view
-      if ( ! excess || group != oldGroup)
-        excess = {count:0, qty:0, value:0}
+    if ( ! excess || group != oldGroup)
+      excess = {count:0, qty:0, value:0}
 
-      excess.count += row['received.count'] - row['disposed.count'] - row['dispensed.count'] - row['pended.count']
-      excess.qty += row['received.qty'] - row['disposed.qty'] - row['dispensed.qty'] - row['pended.qty']
-      excess.value += row['received.value'] - row['disposed.value'] - row['dispensed.value'] - row['pended.value']
+    //Are count fields included?
+    if (row.value['received.count'] != null)
+      sortRecord(row, 'count', excess, excluded)
 
-      row['expired.count'] = +(excess.count - row['inventory.count']).toFixed(0)
-      row['expired.qty']   = +(excess.qty - row['inventory.qty']).toFixed(0)
-      row['expired.value'] = +(excess.value - row['inventory.value']).toFixed(2)
-      oldGroup = group
-    }
+    //Are qty fields included?
+    if (row.value['received.qty'] != null)
+      sortRecord(row, 'qty', excess, excluded)
 
-    //Rather than maintaining a two separate views with refused.qty and refused.value it's easy here to split diposed into disposed.refused and disposed.verified
-    row['refused.count'] = row['received.count'] - row['verified.count']
-    row['refused.qty']   = row['received.qty']   - row['verified.qty']
-    row['refused.value'] = +(row['received.value'] - row['verified.value']).toFixed(2)
+    //Are value fields included?
+    if (row.value['received.value'] != null)
+      sortRecord(row, 'value', excess, excluded)
 
-    row['disposed.qty']   -= row['refused.qty']
-    row['disposed.count'] -= row['refused.count']
-    row['disposed.value'] -= row['refused.value']
+    oldGroup = group
 
-
-    return rows[key]
+    return row
   })
+}
+
+function sortRecord(row, suffix, excess, excludeExpired) {
+
+  if (row.key[1] == 'day') { //Expiration dates are only stored by month, not day.  So expired and therefore inventory can not be tracked by day
+    row.value['inventory.'+suffix] = ''
+    row.value['expired.'+suffix] = ''
+  } else if (excludeExpired) {
+    row.value['expired.'+suffix] = ''
+  } else {
+    //Can't calculate an expired count like this because repacking can split/combine existing items, meaning that more can be dispensed/disposed/expired than what is received.  Would need to do with using the view
+    excess[suffix] += row.value['received.'+suffix] - row.value['refused.'+suffix] - row.value['disposed.'+suffix] - row.value['dispensed.'+suffix] - row.value['pended.'+suffix]
+    row.value['expired.'+suffix] = +(excess[suffix] - row.value['inventory.'+suffix]).toFixed(suffix == 'value' ? 2 : 0)
+  }
 }
 
 function group_level(group) {
@@ -286,7 +293,7 @@ function group_level(group) {
     ''    :{groupByDate:3, groupByInv:5},
     year  :{groupByDate:4, groupByInv:4},
     month :{groupByDate:5, groupByInv:5},
-    day   :{groupByDate:6, groupByInv:null}
+    day   :{groupByDate:6, groupByInv:1}
   }[group]
 }
 

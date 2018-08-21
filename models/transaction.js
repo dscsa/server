@@ -59,9 +59,17 @@ exports.lib = {
   },
 
   //TODO see above
+  refusedAt(doc) {
+    var nextAt = require('nextAt')(doc)
+    var receivedAt = require('receivedAt')(doc)
+    return ( ! doc.verifiedAt && receivedAt) && nextAt && doc.next[0].disposed && nextAt
+  },
+
+  //TODO see above
   disposedAt(doc) {
     var nextAt = require('nextAt')(doc)
-    return nextAt && doc.next[0].disposed && nextAt
+    var receivedAt = require('receivedAt')(doc)
+    return (doc.verifiedAt || ! receivedAt) && nextAt && doc.next[0].disposed && nextAt
   },
 
   //TODO see above
@@ -295,6 +303,20 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'refused.qty-by-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'refused', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedDrug')(doc), doc.bin], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'refused.value-by-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'refused', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedDrug')(doc), doc.bin], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
   'verified.qty-by-generic':{
     map(doc) {
       require('groupByDate')(emit, doc, 'verified', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedDrug')(doc), doc.bin], require('qty')(doc))
@@ -361,6 +383,20 @@ exports.views = {
   'received.value-by-from-generic':{
     map(doc) {
       require('groupByDate')(emit, doc, 'received', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedDrug')(doc), doc.bin], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'refused.qty-by-from-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'refused', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedDrug')(doc), doc.bin], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'refused.value-by-from-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'refused', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedDrug')(doc), doc.bin], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -438,6 +474,13 @@ exports.views = {
   'received.qty-by-user-from-shipment':{
     map(doc) {
       require('groupByDate')(emit, doc, 'received', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'refused.qty-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'refused', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin], require('qty')(doc))
     },
     reduce:'_stats'
   },
