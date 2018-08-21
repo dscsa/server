@@ -43,47 +43,54 @@ function currentDate(months, split) {
 //Shows everything in inventory AND all ordered items not in inventory
 exports.inventory = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  let [year, month] = currentDate(ctx.query.buffer, true)
+  let [invYear, invMonth] = currentDate(ctx.query.inventory_months, true)
 
-  let opts = {
+  let invOpts = {
     group_level:7, //by drug.generic, drug.gsns, drug.brand,
-    startkey:[to_id, 'month', year, month],
-    endkey:[to_id, 'month', year, month+'\uffff']
+    startkey:[to_id, 'month', invYear, invMonth],
+    endkey:[to_id, 'month', invYear, invMonth+'\uffff']
   }
 
-  console.log('inventory.qty-by-generic', opts)
+  let [disYear, disMonth] = currentDate(ctx.query.dispensed_months, true)
 
-  const [inventory, account] = await Promise.all([
-    ctx.db.transaction.query('inventory.qty-by-generic', opts),
+  let disOpts = {
+    group_level:7, //by drug.generic, drug.gsns, drug.brand,
+    startkey:[to_id, 'month', disYear, disMonth],
+    endkey:[to_id, 'month', disYear, {}]
+  }
+
+  console.log('inventory.csv', 'invOpts', invOpts, 'disOpts', disOpts)
+
+  const [inventory, dispensed, account] = await Promise.all([
+    ctx.db.transaction.query('inventory.qty-by-generic', invOpts),
+    ctx.db.transaction.query('dispensed.qty-by-generic', disOpts),
     ctx.db.account.get(to_id)
   ])
 
+  let drugs = {}, fieldOrder = {'inventory.qty':0, 'dispensed.qty':0}
+  mergeRecord(drugs, inventory, 'inventory.qty', fieldOrder)
+  mergeRecord(drugs, dispensed, 'dispensed.qty', fieldOrder)
+
+  console.log('inventory.csv', drugs, inventory, dispensed)
+
   //Match inventory with ordered when applicable
-  let rows = inventory.rows.map(row => {
-
-    //console.log('inventory.qty-by-generic', row.key)
-    let generic = row.key[opts.startkey.length]
-
-    row.value.qty = row.value.sum
-    delete row.value.sum
-    delete row.value.max
-    delete row.value.min
-    delete row.value.sumsqr
+  for (let i in drugs) {
+    let generic = drugs[i].key[4]
 
     if (account.ordered[generic]) {
-      row.value.ordered = true
-      row.value.order = account.ordered[generic]
+      drugs[i].value.ordered = true
+      drugs[i].value.order = account.ordered[generic]
       delete account.ordered[generic]
     }
-
-    return row
-  })
+  }
 
   //Add unmatched orders to the end of array.  Match fields in the order they were emitted
   for (let generic in account.ordered)
-    rows.push({key:[to_id, '', year, month, generic], value:{ordered:true, order:account.ordered[generic]}})
+    drugs[generic] = {key:[to_id, '', invYear, invMonth, generic], value:{ordered:true, order:account.ordered[generic]}}
 
-  ctx.body = csv.fromJSON(rows, ctx.query.fields)
+  drugs = Object.keys(drugs).map(i => drugs[i])
+
+  ctx.body = csv.fromJSON(drugs, ctx.query.fields)
 }
 
 exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -132,14 +139,22 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   ctx.body = csv.fromJSON(records, ctx.query.fields)
 }
 
+function startkey(key) {
+  return JSON.parse(key || '[]')
+}
+
+function endkey(key) {
+  return [...startkey(key), {}]
+}
+
 async function getRecords(ctx, to_id, suffix) {
   //TODO Enable people to pick only certain fields so we don't need all these queries
   ///We can also reduce the lines of code by doing a for-loop accross the stages
   let group  = ctx.query.group || ''
   let opts   = {
     group_level:group_level(group).groupByDate,
-    startkey:[to_id, group].concat(ctx.query.startkey || []),
-    endkey:[to_id, group].concat(ctx.query.endkey || []).concat([{}])
+    startkey:[to_id, group].concat(startkey(ctx.query.startkey)),
+    endkey:[to_id, group].concat(endkey(ctx.query.endkey))
   }
 
   ///Unlike the others inventory dates can be in the future (e.g, emitted every month until they expire).  We only want ones in
@@ -147,8 +162,8 @@ async function getRecords(ctx, to_id, suffix) {
   let invDate = group ? [] : currentDate(1, true).slice(0, 2)
   let invOpts = {
     group_level:group_level(group).groupByInv,
-    startkey:[to_id, group || 'month'].concat(invDate).concat(ctx.query.startkey || []),
-      endkey:[to_id, group || 'month'].concat(invDate).concat(ctx.query.endkey || []).concat([{}])
+    startkey:[to_id, group || 'month'].concat(invDate).concat(startkey(ctx.query.startkey)),
+      endkey:[to_id, group || 'month'].concat(invDate).concat(endkey(ctx.query.endkey))
   }
 
   console.log('getRecords', 'received.'+suffix, 'opts', opts, 'invOpts', invOpts)
@@ -169,12 +184,59 @@ async function getRecords(ctx, to_id, suffix) {
 
 function mergeRecords(records, suffix, rows) {
   console.log('inventory', records[0].rows.length, records[5].rows.length)
-  mergeRecord(rows, records[0], 'received.'+suffix)
-  mergeRecord(rows, records[1], 'verified.'+suffix)
-  mergeRecord(rows, records[2], 'disposed.'+suffix)
-  mergeRecord(rows, records[3], 'dispensed.'+suffix)
-  mergeRecord(rows, records[4], 'pended.'+suffix)
-  mergeRecord(rows, records[5], 'inventory.'+suffix, true)
+
+  let fieldOrder = {
+     //specify csv column order here -- TODO default to user supplied ctx.query.fields
+    'received.count':0,
+    'refused.count':0,
+    'verified.count':0,
+    'expired.count':0,
+    'disposed.count':0,
+    'dispensed.count':0,
+    'pended.count':0,
+    'inventory.count':0,
+    'received.qty':0,
+    'refused.qty':0,
+    'verified.qty':0,
+    'expired.qty':0,
+    'disposed.qty':0,
+    'dispensed.qty':0,
+    'pended.qty':0,
+    'inventory.qty':0,
+    'received.value':0,
+    'refused.value':0,
+    'verified.value':0,
+    'expired.value':0,
+    'disposed.value':0,
+    'dispensed.value':0,
+    'pended.value':0,
+    'inventory.value':0
+  }
+  mergeRecord(rows, records[0], 'received.'+suffix, fieldOrder)
+  mergeRecord(rows, records[1], 'verified.'+suffix, fieldOrder)
+  mergeRecord(rows, records[2], 'disposed.'+suffix, fieldOrder)
+  mergeRecord(rows, records[3], 'dispensed.'+suffix, fieldOrder)
+  mergeRecord(rows, records[4], 'pended.'+suffix, fieldOrder)
+  mergeRecord(rows, records[5], 'inventory.'+suffix, fieldOrder, true)
+}
+
+function mergeRecord(rows, record, field, fieldOrder, optional) {
+
+  for (let row of record.rows) {
+
+    //Move primary group (Generic/User/From) to the first key of the array instead of the last
+    //we need it date first for emit order to enable searching etc, but we
+    ///need it group first for sorting within node (expired calculations etc)
+    let sortKey = row.key.slice()
+    sortKey[1]  = sortKey.pop() //replace the 'year'/'month'/'day'/'' group of the key
+    sortKey     = sortKey.join(',')
+
+    if (optional && ! rows[sortKey]) continue
+
+    rows[sortKey] = rows[sortKey] || {key:row.key, value:Object.assign({}, fieldOrder)}
+
+    rows[sortKey].value[field] = field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
+  }
 }
 
 //console.log('recordByGeneric opts, rows', opts, rows)
@@ -217,54 +279,6 @@ function sortRecords(rows, excludeExpired) {
 
     return rows[key]
   })
-}
-
-function mergeRecord(rows, record, field, optional) {
-  console.log('mergeRecord', field, record.rows.length)
-
-  for (let row of record.rows) {
-
-    //Move primary group (Generic/User/From) to the first key of the array instead of the last
-    //we need it date first for emit order to enable searching etc, but we
-    ///need it group first for sorting within node (expired calculations etc)
-    let sortKey = row.key.slice()
-    sortKey[1]  = sortKey.pop() //replace the 'year'/'month'/'day'/'' group of the key
-    sortKey     = sortKey.join(',')
-
-    console.log(field, row.key, sortKey)
-
-    if (optional && ! rows[sortKey]) continue
-
-    rows[sortKey] = rows[sortKey] || {key:row.key, value:{
-       //specify csv column order here -- TODO default to user supplied ctx.query.fields
-      'received.count':0,
-      'refused.count':0,
-      'verified.count':0,
-      'expired.count':0,
-      'disposed.count':0,
-      'dispensed.count':0,
-      'pended.count':0,
-      'inventory.count':0,
-      'received.qty':0,
-      'refused.qty':0,
-      'verified.qty':0,
-      'expired.qty':0,
-      'disposed.qty':0,
-      'dispensed.qty':0,
-      'pended.qty':0,
-      'inventory.qty':0,
-      'received.value':0,
-      'refused.value':0,
-      'verified.value':0,
-      'expired.value':0,
-      'disposed.value':0,
-      'dispensed.value':0,
-      'pended.value':0,
-      'inventory.value':0
-    }}
-
-    rows[sortKey].value[field] = field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
-  }
 }
 
 function group_level(group) {
