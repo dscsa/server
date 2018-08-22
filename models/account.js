@@ -68,9 +68,9 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
   console.log('inventory.csv', 'invOpts', invOpts, inventory.rows.length)
   console.log('inventory.csv', 'disOpts', disOpts, dispensed.rows.length)
 
-  let drugs = {}, fieldOrder = {'inventory.qty':0, 'dispensed.qty':0}
-  mergeRecord(drugs, inventory, 'inventory.qty', fieldOrder, genericKey)
-  mergeRecord(drugs, dispensed, 'dispensed.qty', fieldOrder, genericKey)
+  let drugs = {}
+  mergeRecord(drugs, inventory, 'inventory.qty', genericKey)
+  mergeRecord(drugs, dispensed, 'dispensed.qty', genericKey)
 
   //Match inventory with ordered when applicable
   for (let i in drugs) {
