@@ -134,7 +134,7 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
 }
 
-defaultFieldOrder(values) {
+function defaultFieldOrder(values) {
   return [
     'received.count',
     'refused.count',
