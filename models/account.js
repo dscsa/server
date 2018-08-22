@@ -107,7 +107,7 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
 
   records = sortRecords(records)
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields)
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true))
 }
 
 exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -121,7 +121,7 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
 
   records = sortRecords(records, to_id) //Exclude expired becuase it will be wrong since we every thing "from" the to_id is just a repack and nothing will be received making expired.count/qty/value all negative
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields)
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true))
 }
 
 exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -131,7 +131,38 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
 
   records = sortRecords(records)
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields)
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
+}
+
+defaultFieldOrder(values) {
+  return [
+    'received.count',
+    'refused.count',
+    'verified.count',
+    'expired.count',
+    'disposed.count',
+    'dispensed.count',
+    'pended.count',
+    'inventory.count',
+    'received.qty',
+    'refused.qty',
+    'verified.qty',
+    'expired.qty',
+    'disposed.qty',
+    'dispensed.qty',
+    'pended.qty',
+    'inventory.qty'
+  ].concat( ! values ? [] :
+  [
+    'received.value',
+    'refused.value',
+    'verified.value',
+    'expired.value',
+    'disposed.value',
+    'dispensed.value',
+    'pended.value',
+    'inventory.value'
+  ])
 }
 
 function startkey(key) {
@@ -180,50 +211,15 @@ async function getRecords(ctx, to_id, suffix) {
 
 //Something like {qty:records, count:records}
 function mergeRecords(opts) {
-
-  //specify csv column order here -- TODO default to user supplied ctx.query.fields
-  let fieldOrder = Object.assign({},
-    opts.count && {
-      'received.count':0,
-      'refused.count':0,
-      'verified.count':0,
-      'expired.count':0,
-      'disposed.count':0,
-      'dispensed.count':0,
-      'pended.count':0,
-      'inventory.count':0
-    },
-    opts.qty && {
-      'received.qty':0,
-      'refused.qty':0,
-      'verified.qty':0,
-      'expired.qty':0,
-      'disposed.qty':0,
-      'dispensed.qty':0,
-      'pended.qty':0,
-      'inventory.qty':0
-    },
-    opts.value && {
-      'received.value':0,
-      'refused.value':0,
-      'verified.value':0,
-      'expired.value':0,
-      'disposed.value':0,
-      'dispensed.value':0,
-      'pended.value':0,
-      'inventory.value':0
-    }
-  )
-
   let records = {}
   for (let suffix in opts) {
-    mergeRecord(records, opts[suffix][0], 'received.'+suffix, fieldOrder, uniqueKey)
-    mergeRecord(records, opts[suffix][1], 'refused.'+suffix, fieldOrder, uniqueKey)
-    mergeRecord(records, opts[suffix][2], 'verified.'+suffix, fieldOrder, uniqueKey)
-    mergeRecord(records, opts[suffix][3], 'disposed.'+suffix, fieldOrder, uniqueKey)
-    mergeRecord(records, opts[suffix][4], 'dispensed.'+suffix, fieldOrder, uniqueKey)
-    mergeRecord(records, opts[suffix][5], 'pended.'+suffix, fieldOrder, uniqueKey)
-    mergeRecord(records, opts[suffix][6], 'inventory.'+suffix, fieldOrder, uniqueKey)
+    mergeRecord(records, opts[suffix][0], 'received.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][1], 'refused.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][2], 'verified.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][3], 'disposed.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][4], 'dispensed.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][5], 'pended.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][6], 'inventory.'+suffix, uniqueKey)
   }
   return records
 }
@@ -239,13 +235,13 @@ function uniqueKey(key, field) {
   return unique.slice(0, level-1).join(',') //remove anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
-function mergeRecord(rows, record, field, fieldOrder, groupFn, debug) {
+function mergeRecord(rows, record, field, groupFn, debug) {
 
   for (let row of record.rows) {
 
     let group = groupFn(row.key, field)
 
-    rows[group] = rows[group] || {key:row.key, value:Object.assign({group}, fieldOrder)}
+    rows[group] = rows[group] || {key:row.key, value:{group}}
 
     /*
     incrementing shouldn't be necessary in long run, but differing GSNs and Brand names are overwriting one another right now.  For example, inventory CSV is showing inventory.qty as 713 (2nd row oeverwrite the first)
