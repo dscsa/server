@@ -136,6 +136,7 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
 
 function defaultFieldOrder(values) {
   return [
+    'group',
     'received.count',
     'refused.count',
     'verified.count',
@@ -187,7 +188,7 @@ async function getRecords(ctx, to_id, suffix) {
   //the past emit([to_id, 'month', year, month, doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, sortedDrug, doc.bin], val)
   let invDate = group ? [] : currentDate(1, true).slice(0, 2)
   let invOpts = {
-    group_level:group_level(group).groupByInv,
+    group_level:group_level(group).groupByInv + invDate.length,
     startkey:[to_id, group || 'month'].concat(invDate).concat(startkey(ctx.query.startkey)),
       endkey:[to_id, group || 'month'].concat(invDate).concat(endkey(ctx.query.endkey))
   }
@@ -219,7 +220,7 @@ function mergeRecords(opts) {
     mergeRecord(records, opts[suffix][3], 'disposed.'+suffix, uniqueKey)
     mergeRecord(records, opts[suffix][4], 'dispensed.'+suffix, uniqueKey)
     mergeRecord(records, opts[suffix][5], 'pended.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][6], 'inventory.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][6], 'inventory.'+suffix, uniqueKey, true)
   }
   return records
 }
@@ -230,16 +231,18 @@ function mergeRecords(opts) {
 function uniqueKey(key, field) {
   let unique  = key.slice()
   let groupBy = field.slice(0, 9) == 'inventory' ? 'groupByInv' : 'groupByDate'
-  let level     = group_level(unique[1])[groupBy] //replace the 'year'/'month'/'day'/'' group of the key
-  unique[1]  = unique[level - 1]
-  return unique.slice(0, level-1).join(',') //remove anything after grouping just in case GSNs and/or Brands don't match we still want to group
+  let level   = group_level(unique[1])[groupBy] //replace the 'year'/'month'/'day'/'' group of the key
+  unique[1]   = unique[level - 1]
+  return unique.slice(1, level-1).join(',') //remove to_id and anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
-function mergeRecord(rows, record, field, groupFn, debug) {
+function mergeRecord(rows, record, field, groupFn, optional) {
 
   for (let row of record.rows) {
 
     let group = groupFn(row.key, field)
+
+    if (optional && ! rows[group]) continue
 
     rows[group] = rows[group] || {key:row.key, value:{group}}
 
@@ -252,8 +255,6 @@ function mergeRecord(rows, record, field, groupFn, debug) {
     ]}*/
     rows[group].value[field] = rows[group].value[field] || 0
     rows[group].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
-
-    if (debug) console.log(row.key, group, field, rows[group].value[field], row.value)
   }
 }
 
@@ -296,14 +297,22 @@ function sortRecord(row, suffix, excess, excludeExpired) {
     row.value['expired.'+suffix] = ''
   } else {
     //Can't calculate an expired count like this because repacking can split/combine existing items, meaning that more can be dispensed/disposed/expired than what is received.  Would need to do with using the view
-    excess[suffix] += row.value['received.'+suffix] - row.value['refused.'+suffix] - row.value['disposed.'+suffix] - row.value['dispensed.'+suffix] - row.value['pended.'+suffix]
-    row.value['expired.'+suffix] = +(excess[suffix] - row.value['inventory.'+suffix]).toFixed(2)
+    excess[suffix] +=
+      (row.value['received.'+suffix] || 0) -
+      (row.value['refused.'+suffix] || 0) -
+      (row.value['disposed.'+suffix] || 0) -
+      (row.value['dispensed.'+suffix] || 0) -
+      (row.value['pended.'+suffix] || 0)
+
+   let inventory = row.value['inventory.'+suffix] || 0
+
+    row.value['expired.'+suffix] = +(excess[suffix] - inventory).toFixed(2)
   }
 }
 
 function group_level(group) {
   return {
-    ''    :{groupByDate:3, groupByInv:5},
+    ''    :{groupByDate:3, groupByInv:3},
     year  :{groupByDate:4, groupByInv:4},
     month :{groupByDate:5, groupByInv:5},
     day   :{groupByDate:6, groupByInv:1}
