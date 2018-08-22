@@ -240,7 +240,15 @@ function mergeRecord(rows, record, field, fieldOrder, optional) {
 
     rows[sortKey] = rows[sortKey] || {key:row.key, value:Object.assign({}, fieldOrder)}
 
-    rows[sortKey].value[field] = field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
+    /*
+    incrementing shouldn't be necessary in long run, but differing GSNs and Brand names are overwriting one another right now.  For example, inventory CSV is showing inventory.qty as 713 (2nd row oeverwrite the first)
+    http://13.57.226.134:5984/transaction/_design/inventory.qty-by-generic/_view/inventory.qty-by-generic?group_level=7&startkey=[%228889875187%22,%22month%22,%222018%22,%2209%22,%22Acetaminophen%20500mg%22]&endkey=[%228889875187%22,%22month%22,%222018%22,%2209%22,%22Acetaminophen%20500mg{}%22]
+    {"rows":[
+    {"key":["8889875187","month","2018","09","Acetaminophen 500mg",null,null],"value":{"sum":2675,"count":85,"min":10,"max":62,"sumsqr":98313}},
+    {"key":["8889875187","month","2018","09","Acetaminophen 500mg",null,""],"value":{"sum":713,"count":7,"min":56,"max":200,"sumsqr":86385}}
+    ]}*/
+    rows[sortKey].value[field] = rows[sortKey].value[field] || 0
+    rows[sortKey].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
   }
 }
 
@@ -284,7 +292,7 @@ function sortRecord(row, suffix, excess, excludeExpired) {
   } else {
     //Can't calculate an expired count like this because repacking can split/combine existing items, meaning that more can be dispensed/disposed/expired than what is received.  Would need to do with using the view
     excess[suffix] += row.value['received.'+suffix] - row.value['refused.'+suffix] - row.value['disposed.'+suffix] - row.value['dispensed.'+suffix] - row.value['pended.'+suffix]
-    row.value['expired.'+suffix] = +(excess[suffix] - row.value['inventory.'+suffix]).toFixed(suffix == 'value' ? 2 : 0)
+    row.value['expired.'+suffix] = +(excess[suffix] - row.value['inventory.'+suffix]).toFixed(2)
   }
 }
 
