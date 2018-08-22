@@ -59,17 +59,18 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
     endkey:[to_id, 'month', disYear, {}]
   }
 
-  console.log('inventory.csv', 'invOpts', invOpts, 'disOpts', disOpts)
-
   const [inventory, dispensed, account] = await Promise.all([
     ctx.db.transaction.query('inventory.qty-by-generic', invOpts),
     ctx.db.transaction.query('dispensed.qty-by-generic', disOpts),
     ctx.db.account.get(to_id)
   ])
 
+  console.log('inventory.csv', 'invOpts', invOpts, inventory.rows.length)
+  console.log('inventory.csv', 'disOpts', disOpts, dispensed.rows.length)
+
   let drugs = {}, fieldOrder = {'inventory.qty':0, 'dispensed.qty':0}
   mergeRecord(drugs, inventory, 'inventory.qty', fieldOrder, genericKey)
-  mergeRecord(drugs, dispensed, 'dispensed.qty', fieldOrder, genericKey)
+  mergeRecord(drugs, dispensed, 'dispensed.qty', fieldOrder, genericKey, true)
 
   //Match inventory with ordered when applicable
   for (let i in drugs) {
@@ -238,7 +239,7 @@ function uniqueKey(key, field) {
   return unique.slice(0, level-1).join(',') //remove anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
-function mergeRecord(rows, record, field, fieldOrder, groupFn) {
+function mergeRecord(rows, record, field, fieldOrder, groupFn, debug) {
 
   for (let row of record.rows) {
 
@@ -255,6 +256,8 @@ function mergeRecord(rows, record, field, fieldOrder, groupFn) {
     ]}*/
     rows[group].value[field] = rows[group].value[field] || 0
     rows[group].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
+
+    if (debug) console.log(row.key, group, field, rows[group].value[field], row.value)
   }
 }
 
