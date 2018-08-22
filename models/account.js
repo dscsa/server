@@ -85,7 +85,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
 
   //Add unmatched orders to the end of array.  Match fields in the order they were emitted
   for (let generic in account.ordered)
-    drugs[generic] = {key:[to_id, '', invYear, invMonth, generic], value:{ordered:true, order:account.ordered[generic]}}
+    drugs[generic] = {key:[to_id, '', invYear, invMonth, generic], value:{group:generic, ordered:true, order:account.ordered[generic]}}
 
   drugs = Object.keys(drugs).map(i => drugs[i])
 
@@ -304,9 +304,10 @@ function sortRecord(row, suffix, excess, excludeExpired) {
       (row.value['dispensed.'+suffix] || 0) -
       (row.value['pended.'+suffix] || 0)
 
-   let inventory = row.value['inventory.'+suffix] || 0
+    let inventory = row.value['inventory.'+suffix] || 0
+    let expired   = excess[suffix] - inventory
 
-    row.value['expired.'+suffix] = +(excess[suffix] - inventory).toFixed(2)
+    row.value['expired.'+suffix] = expired ? +expired.toFixed(2) : ''
   }
 }
 
