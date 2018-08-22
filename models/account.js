@@ -71,8 +71,6 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
   mergeRecord(drugs, inventory, 'inventory.qty', fieldOrder)
   mergeRecord(drugs, dispensed, 'dispensed.qty', fieldOrder)
 
-  console.log('inventory.csv', drugs, inventory, dispensed)
-
   //Match inventory with ordered when applicable
   for (let i in drugs) {
     let generic = drugs[i].key[4]
@@ -233,8 +231,10 @@ function mergeRecord(rows, record, field, fieldOrder, optional) {
     //we need it date first for emit order to enable searching etc, but we
     ///need it group first for sorting within node (expired calculations etc)
     let sortKey = row.key.slice()
-    sortKey[1]  = sortKey.pop() //replace the 'year'/'month'/'day'/'' group of the key
-    sortKey     = sortKey.join(',')
+    let groupBy = field.slice(0, 9) == 'inventory' ? 'groupByInv' : 'groupByDate'
+    let level   = group_level(sortKey[1])[groupBy] //replace the 'year'/'month'/'day'/'' group of the key
+    sortKey[1]  = sortKey[level - 1]
+    sortKey     = sortKey.slice(0, level-1).join(',') //remove anything after grouping just in case GSNs and/or Brands don't match we still want to group
 
     if (optional && ! rows[sortKey]) continue
 
