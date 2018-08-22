@@ -70,7 +70,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
 
   let drugs = {}, fieldOrder = {'inventory.qty':0, 'dispensed.qty':0}
   mergeRecord(drugs, inventory, 'inventory.qty', fieldOrder, genericKey)
-  mergeRecord(drugs, dispensed, 'dispensed.qty', fieldOrder, genericKey, true)
+  mergeRecord(drugs, dispensed, 'dispensed.qty', fieldOrder, genericKey)
 
   //Match inventory with ordered when applicable
   for (let i in drugs) {
@@ -171,7 +171,7 @@ async function getRecords(ctx, to_id, suffix) {
     ctx.db.transaction.query('dispensed.'+suffix, opts),
     ctx.db.transaction.query('pended.'+suffix, opts),
     ctx.db.transaction.query('inventory.'+suffix, invOpts).then(res => {
-      group || res.rows.forEach(row => row.key[1] = '', row.key.splice(2, 2)) //remove year and month from keys if no grouping is specified
+      group || res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
       return res
     })
   ])
