@@ -43,7 +43,7 @@ function currentDate(months, split) {
 //Shows everything in inventory AND all ordered items not in inventory
 exports.inventory = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  let [invYear, invMonth] = currentDate(ctx.query.inventory_months, true)
+  let [invYear, invMonth] = currentDate(ctx.query.min_exp_months, true)
 
   let invOpts = {
     group_level:7, //by drug.generic, drug.gsns, drug.brand,
@@ -51,7 +51,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
     endkey:[to_id, 'month', invYear, invMonth+'\uffff']
   }
 
-  let [disYear, disMonth] = currentDate(ctx.query.dispensed_months, true)
+  let [disYear, disMonth] = currentDate(-ctx.query.dispensed_months, true)
 
   let disOpts = {
     group_level:7, //by drug.generic, drug.gsns, drug.brand,
@@ -238,13 +238,13 @@ function uniqueKey(key, field) {
   return unique.slice(0, level-1).join(',') //remove anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
-function mergeRecord(rows, record, field, fieldOrder, optional) {
+function mergeRecord(rows, record, field, fieldOrder, groupFn) {
 
   for (let row of record.rows) {
 
-    let unique = uniqueKey(row.key, field)
+    let group = groupFn(row.key, field)
 
-    rows[unique] = rows[unique] || {key:row.key, value:Object.assign({}, fieldOrder)}
+    rows[group] = rows[group] || {key:row.key, value:Object.assign({group}, fieldOrder)}
 
     /*
     incrementing shouldn't be necessary in long run, but differing GSNs and Brand names are overwriting one another right now.  For example, inventory CSV is showing inventory.qty as 713 (2nd row oeverwrite the first)
@@ -253,8 +253,8 @@ function mergeRecord(rows, record, field, fieldOrder, optional) {
     {"key":["8889875187","month","2018","09","Acetaminophen 500mg",null,null],"value":{"sum":2675,"count":85,"min":10,"max":62,"sumsqr":98313}},
     {"key":["8889875187","month","2018","09","Acetaminophen 500mg",null,""],"value":{"sum":713,"count":7,"min":56,"max":200,"sumsqr":86385}}
     ]}*/
-    rows[unique].value[field] = rows[unique].value[field] || 0
-    rows[unique].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
+    rows[group].value[field] = rows[group].value[field] || 0
+    rows[group].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
   }
 }
 
