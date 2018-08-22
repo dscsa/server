@@ -231,20 +231,20 @@ function mergeRecords(opts) {
 //we need it date first for emit order to enable searching etc, but we
 ///need it group first for sorting within node (expired calculations etc)
 function uniqueKey(key, field) {
-  let uniqueKey = key.slice()
-  let groupBy   = field.slice(0, 9) == 'inventory' ? 'groupByInv' : 'groupByDate'
-  let level     = group_level(uniqueKey[1])[groupBy] //replace the 'year'/'month'/'day'/'' group of the key
-  uniqueKey[1]  = uniqueKey[level - 1]
-  return uniqueKey.slice(0, level-1).join(',') //remove anything after grouping just in case GSNs and/or Brands don't match we still want to group
+  let unique  = key.slice()
+  let groupBy = field.slice(0, 9) == 'inventory' ? 'groupByInv' : 'groupByDate'
+  let level     = group_level(unique[1])[groupBy] //replace the 'year'/'month'/'day'/'' group of the key
+  unique[1]  = unique[level - 1]
+  return unique.slice(0, level-1).join(',') //remove anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
 function mergeRecord(rows, record, field, fieldOrder, optional) {
 
   for (let row of record.rows) {
 
-    let uniqueKey = uniqueKey(row.key, field)
+    let unique = uniqueKey(row.key, field)
 
-    rows[uniqueKey] = rows[uniqueKey] || {key:row.key, value:Object.assign({}, fieldOrder)}
+    rows[unique] = rows[unique] || {key:row.key, value:Object.assign({}, fieldOrder)}
 
     /*
     incrementing shouldn't be necessary in long run, but differing GSNs and Brand names are overwriting one another right now.  For example, inventory CSV is showing inventory.qty as 713 (2nd row oeverwrite the first)
@@ -253,8 +253,8 @@ function mergeRecord(rows, record, field, fieldOrder, optional) {
     {"key":["8889875187","month","2018","09","Acetaminophen 500mg",null,null],"value":{"sum":2675,"count":85,"min":10,"max":62,"sumsqr":98313}},
     {"key":["8889875187","month","2018","09","Acetaminophen 500mg",null,""],"value":{"sum":713,"count":7,"min":56,"max":200,"sumsqr":86385}}
     ]}*/
-    rows[uniqueKey].value[field] = rows[uniqueKey].value[field] || 0
-    rows[uniqueKey].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
+    rows[unique].value[field] = rows[unique].value[field] || 0
+    rows[unique].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
   }
 }
 
