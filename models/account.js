@@ -92,7 +92,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
 }
 
 function genericKey(key) {
-  return key[5]
+  return key[4]
 }
 
 exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
