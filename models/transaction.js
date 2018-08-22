@@ -101,7 +101,7 @@ exports.lib = {
   },
 
   isRepacked(doc) {
-    return require('isInventory')(doc)&& doc.bin.length != 4
+    return require('isInventory')(doc) && doc.bin.length != 4
   },
 
   sortedBin(doc) {

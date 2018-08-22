@@ -68,8 +68,8 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
   ])
 
   let drugs = {}, fieldOrder = {'inventory.qty':0, 'dispensed.qty':0}
-  mergeRecord(drugs, inventory, 'inventory.qty', fieldOrder)
-  mergeRecord(drugs, dispensed, 'dispensed.qty', fieldOrder)
+  mergeRecord(drugs, inventory, 'inventory.qty', fieldOrder, genericKey)
+  mergeRecord(drugs, dispensed, 'dispensed.qty', fieldOrder, genericKey)
 
   //Match inventory with ordered when applicable
   for (let i in drugs) {
@@ -89,6 +89,10 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
   drugs = Object.keys(drugs).map(i => drugs[i])
 
   ctx.body = csv.fromJSON(drugs, ctx.query.fields)
+}
+
+function genericKey(key) {
+  return key[5]
 }
 
 exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -166,7 +170,7 @@ async function getRecords(ctx, to_id, suffix) {
     ctx.db.transaction.query('dispensed.'+suffix, opts),
     ctx.db.transaction.query('pended.'+suffix, opts),
     ctx.db.transaction.query('inventory.'+suffix, invOpts).then(res => {
-      group || res.rows.forEach(row => row.key.splice(2, 2)) //remove year and month from keys if no grouping is specified
+      group || res.rows.forEach(row => row.key[1] = '', row.key.splice(2, 2)) //remove year and month from keys if no grouping is specified
       return res
     })
   ])
@@ -212,33 +216,35 @@ function mergeRecords(opts) {
 
   let records = {}
   for (let suffix in opts) {
-    mergeRecord(records, opts[suffix][0], 'received.'+suffix, fieldOrder)
-    mergeRecord(records, opts[suffix][1], 'refused.'+suffix, fieldOrder)
-    mergeRecord(records, opts[suffix][2], 'verified.'+suffix, fieldOrder)
-    mergeRecord(records, opts[suffix][3], 'disposed.'+suffix, fieldOrder)
-    mergeRecord(records, opts[suffix][4], 'dispensed.'+suffix, fieldOrder)
-    mergeRecord(records, opts[suffix][5], 'pended.'+suffix, fieldOrder)
-    mergeRecord(records, opts[suffix][6], 'inventory.'+suffix, fieldOrder, true)
+    mergeRecord(records, opts[suffix][0], 'received.'+suffix, fieldOrder, uniqueKey)
+    mergeRecord(records, opts[suffix][1], 'refused.'+suffix, fieldOrder, uniqueKey)
+    mergeRecord(records, opts[suffix][2], 'verified.'+suffix, fieldOrder, uniqueKey)
+    mergeRecord(records, opts[suffix][3], 'disposed.'+suffix, fieldOrder, uniqueKey)
+    mergeRecord(records, opts[suffix][4], 'dispensed.'+suffix, fieldOrder, uniqueKey)
+    mergeRecord(records, opts[suffix][5], 'pended.'+suffix, fieldOrder, uniqueKey)
+    mergeRecord(records, opts[suffix][6], 'inventory.'+suffix, fieldOrder, uniqueKey)
   }
   return records
+}
+
+//Move primary group (Generic/User/From) to the first key of the array instead of the last
+//we need it date first for emit order to enable searching etc, but we
+///need it group first for sorting within node (expired calculations etc)
+function uniqueKey(key, field) {
+  let uniqueKey = key.slice()
+  let groupBy   = field.slice(0, 9) == 'inventory' ? 'groupByInv' : 'groupByDate'
+  let level     = group_level(uniqueKey[1])[groupBy] //replace the 'year'/'month'/'day'/'' group of the key
+  uniqueKey[1]  = uniqueKey[level - 1]
+  return uniqueKey.slice(0, level-1).join(',') //remove anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
 function mergeRecord(rows, record, field, fieldOrder, optional) {
 
   for (let row of record.rows) {
 
-    //Move primary group (Generic/User/From) to the first key of the array instead of the last
-    //we need it date first for emit order to enable searching etc, but we
-    ///need it group first for sorting within node (expired calculations etc)
-    let sortKey = row.key.slice()
-    let groupBy = field.slice(0, 9) == 'inventory' ? 'groupByInv' : 'groupByDate'
-    let level   = group_level(sortKey[1])[groupBy] //replace the 'year'/'month'/'day'/'' group of the key
-    sortKey[1]  = sortKey[level - 1]
-    sortKey     = sortKey.slice(0, level-1).join(',') //remove anything after grouping just in case GSNs and/or Brands don't match we still want to group
+    let uniqueKey = uniqueKey(row.key, field)
 
-    if (optional && ! rows[sortKey]) continue
-
-    rows[sortKey] = rows[sortKey] || {key:row.key, value:Object.assign({}, fieldOrder)}
+    rows[uniqueKey] = rows[uniqueKey] || {key:row.key, value:Object.assign({}, fieldOrder)}
 
     /*
     incrementing shouldn't be necessary in long run, but differing GSNs and Brand names are overwriting one another right now.  For example, inventory CSV is showing inventory.qty as 713 (2nd row oeverwrite the first)
@@ -247,8 +253,8 @@ function mergeRecord(rows, record, field, fieldOrder, optional) {
     {"key":["8889875187","month","2018","09","Acetaminophen 500mg",null,null],"value":{"sum":2675,"count":85,"min":10,"max":62,"sumsqr":98313}},
     {"key":["8889875187","month","2018","09","Acetaminophen 500mg",null,""],"value":{"sum":713,"count":7,"min":56,"max":200,"sumsqr":86385}}
     ]}*/
-    rows[sortKey].value[field] = rows[sortKey].value[field] || 0
-    rows[sortKey].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
+    rows[uniqueKey].value[field] = rows[uniqueKey].value[field] || 0
+    rows[uniqueKey].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
   }
 }
 
