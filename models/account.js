@@ -77,15 +77,17 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
     let generic = drugs[i].key[4]
 
     if (account.ordered[generic]) {
-      drugs[i].value.ordered = true
-      drugs[i].value.order = account.ordered[generic]
+      setOrderFields(generic, account, drugs[i].value)
       delete account.ordered[generic]
     }
   }
 
   //Add unmatched orders to the end of array.  Match fields in the order they were emitted
   for (let generic in account.ordered)
-    drugs[generic] = {key:[to_id, '', invYear, invMonth, generic], value:{group:generic, ordered:true, order:account.ordered[generic]}}
+    drugs[generic] = {
+      key:[to_id, '', invYear, invMonth, generic],
+      value:setOrderFields(generic, account, {group:generic})
+    }
 
   drugs = Object.keys(drugs).map(i => drugs[i])
 
@@ -94,6 +96,14 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
 
 function genericKey(key) {
   return key[4]
+}
+
+function setOrderFields(generic, account, res ) {
+  res.ordered   = true
+  res.price30   = account.ordered[generic].price30   || account.default.price30
+  res.price90   = account.ordered[generic].price90   || account.default.price90
+  res.repackQty = account.ordered[generic].repackQty || account.default.repackQty
+  return res
 }
 
 exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
