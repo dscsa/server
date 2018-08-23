@@ -163,6 +163,11 @@ function defaultFieldOrder(values) {
     'dispensed.value',
     'pended.value',
     'inventory.value'
+  ]).concat([
+    'key.0',
+    'key.1',
+    'key.2',
+    'key.3'
   ])
 }
 
