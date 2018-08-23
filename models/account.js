@@ -74,6 +74,8 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
 
   //Match inventory with ordered when applicable
   for (let i in drugs) {
+
+    delete drugs[i].value.group //we will use key.2 instead
     let generic = drugs[i].key[4]
 
     if (account.ordered[generic]) {
