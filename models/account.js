@@ -88,7 +88,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
   for (let generic in account.ordered)
     drugs[generic] = {
       key:[to_id, '', invYear, invMonth, generic],
-      value:setOrderFields(generic, account, {group:generic})
+      value:setOrderFields(generic, account, {})
     }
 
   drugs = Object.keys(drugs).map(i => drugs[i])
