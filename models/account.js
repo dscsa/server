@@ -196,7 +196,7 @@ async function getRecords(ctx, to_id, suffix) {
   ///We can also reduce the lines of code by doing a for-loop accross the stages
   let group  = ctx.query.group || ''
   let opts   = {
-    group_level:group_level(group).groupByDate,
+    group_level:default_group_level(group).groupByDate,
     startkey:[to_id, group].concat(startkey(ctx.query.startkey)),
     endkey:[to_id, group].concat(endkey(ctx.query.endkey))
   }
@@ -205,15 +205,15 @@ async function getRecords(ctx, to_id, suffix) {
   //the past emit([to_id, 'month', year, month, doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, sortedDrug, doc.bin], val)
   let invDate = group ? [] : currentDate(1, true).slice(0, 2)
   let invOpts = {
-    group_level:group_level(group).groupByInv + invDate.length,
+    group_level:default_group_level(group).groupByInv + invDate.length,
     startkey:[to_id, group || 'month'].concat(invDate).concat(startkey(ctx.query.startkey)),
       endkey:[to_id, group || 'month'].concat(invDate).concat(endkey(ctx.query.endkey))
   }
 
   //Advanced use cases (Form 8283) might call for specifying a custom group level
   if (ctx.query.group_level) {
-    invOpts.group_level += ctx.query.group_level - opts.group_level //we keep the inventory Group level relative to the new, custom group_level
-    opts.group_level = ctx.query.group_level
+    invOpts.group_level = +ctx.query.group_level - opts.group_level + 2 //we keep the inventory Group level relative to the new, custom group_level
+    opts.group_level = +ctx.query.group_level + 2
   }
 
   console.log('getRecords', 'received.'+suffix, 'opts', opts, 'invOpts', invOpts)
@@ -252,11 +252,12 @@ function mergeRecords(opts) {
 //we need it date first for emit order to enable searching etc, but we
 ///need it group first for sorting within node (expired calculations etc)
 function uniqueKey(key, field) {
-  let unique  = key.slice()
+  key = key || []
   let groupBy = field.slice(0, 9) == 'inventory' ? 'groupByInv' : 'groupByDate'
-  let level   = group_level(unique[1])[groupBy] //replace the 'year'/'month'/'day'/'' group of the key
-  unique[1]   = unique[level - 1]
-  return unique.slice(1, level-1).join(',') //remove to_id and anything after grouping just in case GSNs and/or Brands don't match we still want to group
+  let level   = default_group_level(key[1])[groupBy] - 1
+  let unique = key.slice(level).concat(key.slice(2, level)) // remove to_id and group and then move our date prefixes to end of key
+  //console.log('uniqueKey', key, groupBy, level, unique)
+  return unique.join(',') //remove to_id and anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
 function mergeRecord(rows, record, field, groupFn, optional) {
@@ -313,7 +314,7 @@ function sortRecords(rows, excludeExpired) {
 
 function sortRecord(row, suffix, excess, excludeExpired) {
 
-  if (row.key[1] == 'day') { //Expiration dates are only stored by month, not day.  So expired and therefore inventory can not be tracked by day
+  if (row.key[1] != 'month' && row.key[1] != 'year' && row.key[1] != '') { //Expiration dates are only stored by current, year, and, month.  So expired and therefore inventory can not be tracked by day
     row.value['inventory.'+suffix] = ''
     row.value['expired.'+suffix] = ''
   } else if (excludeExpired) {
@@ -334,13 +335,13 @@ function sortRecord(row, suffix, excess, excludeExpired) {
   }
 }
 
-function group_level(group) {
+function default_group_level(group) {
   return {
     ''    :{groupByDate:3, groupByInv:3},
     year  :{groupByDate:4, groupByInv:4},
     month :{groupByDate:5, groupByInv:5},
     day   :{groupByDate:6, groupByInv:1}
-  }[group]
+  }[group] || {groupByDate:2, groupByInv:1} //Default in case they are searching for a specific from/user/generic
 }
 
 exports.validate = function(model) {
