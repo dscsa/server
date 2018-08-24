@@ -201,13 +201,19 @@ async function getRecords(ctx, to_id, suffix) {
     endkey:[to_id, group].concat(endkey(ctx.query.endkey))
   }
 
-  ///Unlike the others inventory dates can be in the future (e.g, emitted every month until they expire).  We only want ones in
+  //Unlike the others inventory dates can be in the future (e.g, emitted every month until they expire).  We only want ones in
   //the past emit([to_id, 'month', year, month, doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, sortedDrug, doc.bin], val)
   let invDate = group ? [] : currentDate(1, true).slice(0, 2)
   let invOpts = {
     group_level:group_level(group).groupByInv + invDate.length,
     startkey:[to_id, group || 'month'].concat(invDate).concat(startkey(ctx.query.startkey)),
       endkey:[to_id, group || 'month'].concat(invDate).concat(endkey(ctx.query.endkey))
+  }
+
+  //Advanced use cases (Form 8283) might call for specifying a custom group level
+  if (ctx.query.group_level) {
+    invOpts.group_level += ctx.query.group_level - opts.group_level //we keep the inventory Group level relative to the new, custom group_level
+    opts.group_level = ctx.query.group_level
   }
 
   console.log('getRecords', 'received.'+suffix, 'opts', opts, 'invOpts', invOpts)
