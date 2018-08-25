@@ -105,6 +105,7 @@ function setOrderFields(generic, account, res ) {
   res.price30   = account.ordered[generic].price30   || (account.ordered[generic].price90 ? '' : account.default.price30)
   res.price90   = account.ordered[generic].price90   || (account.ordered[generic].price30 ? '' : account.default.price90)
   res.repackQty = account.ordered[generic].repackQty || account.default.repackQty
+  res.displayMessage = account.ordered[generic].displayMessage
   return res
 }
 
