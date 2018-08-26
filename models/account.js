@@ -105,6 +105,9 @@ function setOrderFields(generic, account, res ) {
   res['order.price30']   = account.ordered[generic].price30   || (account.ordered[generic].price90 ? '' : account.default.price30)
   res['order.price90']   = account.ordered[generic].price90   || (account.ordered[generic].price30 ? '' : account.default.price90)
   res['order.repackQty'] = account.ordered[generic].repackQty || account.default.repackQty
+  res['order.minQty']    = account.ordered[generic].minQty || account.default.minQty
+  res['order.minDays']   = account.ordered[generic].minDays || account.default.minDays
+  res['order.maxInventory']   = account.ordered[generic].maxInventory || account.default.maxInventory
   res['order.displayMessage'] = account.ordered[generic].displayMessage
   return res
 }
