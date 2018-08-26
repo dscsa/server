@@ -102,10 +102,10 @@ function genericKey(key) {
 
 function setOrderFields(generic, account, res ) {
   res.ordered   = true
-  res.price30   = account.ordered[generic].price30   || (account.ordered[generic].price90 ? '' : account.default.price30)
-  res.price90   = account.ordered[generic].price90   || (account.ordered[generic].price30 ? '' : account.default.price90)
-  res.repackQty = account.ordered[generic].repackQty || account.default.repackQty
-  res.displayMessage = account.ordered[generic].displayMessage
+  res['order.price30']   = account.ordered[generic].price30   || (account.ordered[generic].price90 ? '' : account.default.price30)
+  res['order.price90']   = account.ordered[generic].price90   || (account.ordered[generic].price30 ? '' : account.default.price90)
+  res['order.repackQty'] = account.ordered[generic].repackQty || account.default.repackQty
+  res['order.displayMessage'] = account.ordered[generic].displayMessage
   return res
 }
 
