@@ -553,7 +553,7 @@ exports.history = async function history(ctx, id) {
 
   let result = []
   //console.log('recurse 0', id)
-  ctx.body = recurse (id, result)
+  ctx.body = await recurse(id, result)
 
   async function recurse (_id, list) {
     //console.log('recurse 1', _id, list, ctx.account)
@@ -573,7 +573,7 @@ exports.history = async function history(ctx, id) {
       trans.type = 'Transaction'
     }
 
-    let all = [exports.lib.isReceived(trans) ? ctx.db.shipment.get(trans.shipment._id) : {account:{from:ctx.account}}]
+    let all = [exports.lib.receivedAt(trans) ? ctx.db.shipment.get(trans.shipment._id) : {account:{from:ctx.account}}]
 
     //console.log('recurse 3', all)
     //Recursive call!
@@ -582,7 +582,7 @@ exports.history = async function history(ctx, id) {
       all.push(recurse(prev.id, prevs.length == 1 ? list : indentedList))
     }
     //Search for transaction's ancestors and shipment in parallel
-    all = await all //TODO this is co specific won't work when upgrading to async/await which need Promise.all
+    all = await Promise.all(all) //TODO this is co specific won't work when upgrading to async/await which need Promise.all
     //Now we just fill in full shipment and account info into the transaction
     //console.log('recurse 5', all)
     trans.shipment = all[0]
