@@ -244,9 +244,11 @@ exports.views = {
   },
 
   //Client bin checking and reorganization, & account/bins.csv for use by data loggers needing to pick empty boxes.  Skip reduce with reduce=false.  Alphabatize within bin
+  //Split bin because of weird unicode collation a < A < aa so upper and lower case bins were getting mixed in search results http://docs.couchdb.org/en/stable/ddocs/views/collation.html
+  //Since repacks have length 2 but are not verified they appear as [A, 0, 0, null] whereas inventory will be [A, 0, 0, 0(slot), 2018, 08, 01]
   'inventory-by-bin-verifiedat':{
     map(doc) {
-      require('isInventory')(doc) && emit([require('to_id')(doc), doc.bin, require('verifiedAt')(doc)], require('qty')(doc))
+      require('isInventory')(doc) && emit([require('to_id')(doc)].concat(doc.bin.split('')).concat(require('verifiedAt')(doc)), require('qty')(doc))
     },
     reduce:'_stats'
   },
