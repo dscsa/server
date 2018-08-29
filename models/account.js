@@ -216,11 +216,22 @@ async function getRecords(ctx, to_id, suffix) {
 
   //Advanced use cases (Form 8283) might call for specifying a custom group level
   if (ctx.query.group_level) {
-    invOpts.group_level = +ctx.query.group_level - opts.group_level + 2 //we keep the inventory Group level relative to the new, custom group_level
-    opts.group_level = +ctx.query.group_level + 2
+    console.log('group_level', invOpts.group_level, ctx.query.group_level, opts.group_level)
+    invOpts.group_level += +ctx.query.group_level + 2 - opts.group_level //we keep the inventory Group level relative to the new, custom group_level
+    opts.group_level     = +ctx.query.group_level + 2
   }
 
   console.log('getRecords', 'received.'+suffix, 'opts', opts, 'invOpts', invOpts)
+
+  //Inventory cannot be kept by day because expiration date is kept by month.
+  //Might be possible to eventually get it for custom group_level but doesn't seem worth trying to figure that out now.
+  let inventoryQuery = {rows:[]}
+
+  if ((group === '' || group === 'month' || group === 'year') && ! ctx.query.group_level)
+    inventoryQuery = ctx.db.transaction.query('inventory.'+suffix, invOpts).then(res => {
+      group || res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
+      return res
+    })
 
   let records = await Promise.all([
     ctx.db.transaction.query('received.'+suffix, opts),
@@ -229,10 +240,7 @@ async function getRecords(ctx, to_id, suffix) {
     ctx.db.transaction.query('disposed.'+suffix, opts),
     ctx.db.transaction.query('dispensed.'+suffix, opts),
     ctx.db.transaction.query('pended.'+suffix, opts),
-    ctx.db.transaction.query('inventory.'+suffix, invOpts).then(res => {
-      group || res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
-      return res
-    })
+    inventoryQuery
   ])
   return records
 }
@@ -260,7 +268,6 @@ function uniqueKey(key, field) {
   let groupBy = field.slice(0, 9) == 'inventory' ? 'groupByInv' : 'groupByDate'
   let level   = default_group_level(key[1])[groupBy] - 1
   let unique = key.slice(level).concat(key.slice(2, level)) // remove to_id and group and then move our date prefixes to end of key
-  //console.log('uniqueKey', key, groupBy, level, unique)
   return unique.join(',') //remove to_id and anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
@@ -318,12 +325,9 @@ function sortRecords(rows, excludeExpired) {
 
 function sortRecord(row, suffix, excess, excludeExpired) {
 
-  if (row.key[1] != 'month' && row.key[1] != 'year' && row.key[1] != '') { //Expiration dates are only stored by current, year, and, month.  So expired and therefore inventory can not be tracked by day
-    row.value['inventory.'+suffix] = ''
+  if (excludeExpired) {
     row.value['expired.'+suffix] = ''
-  } else if (excludeExpired) {
-    row.value['expired.'+suffix] = ''
-  } else {
+  } else if (row.value['inventory.'+suffix] != null) { //Can only calculate expired if we have inventory
     //Can't calculate an expired count like this because repacking can split/combine existing items, meaning that more can be dispensed/disposed/expired than what is received.  Would need to do with using the view
     excess[suffix] +=
       (row.value['received.'+suffix] || 0) -
@@ -332,7 +336,7 @@ function sortRecord(row, suffix, excess, excludeExpired) {
       (row.value['dispensed.'+suffix] || 0) -
       (row.value['pended.'+suffix] || 0)
 
-    let inventory = row.value['inventory.'+suffix] || 0
+    let inventory = row.value['inventory.'+suffix]
     let expired   = excess[suffix] - inventory
 
     row.value['expired.'+suffix] = expired ? +expired.toFixed(2) : ''
@@ -344,7 +348,7 @@ function default_group_level(group) {
     ''    :{groupByDate:3, groupByInv:3},
     year  :{groupByDate:4, groupByInv:4},
     month :{groupByDate:5, groupByInv:5},
-    day   :{groupByDate:6, groupByInv:1}
+    day   :{groupByDate:6, groupByInv:5}    //Inventory doesn't have group by day so do group by month instead
   }[group] || {groupByDate:2, groupByInv:1} //Default in case they are searching for a specific from/user/generic
 }
 
