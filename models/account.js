@@ -296,50 +296,45 @@ function mergeRecord(rows, record, field, groupFn, optional) {
 //console.log('recordByGeneric opts, rows', opts, rows)
 //(Re)sort them in ascending order.  And calculate expired
 function sortRecords(rows, excludeExpired) {
-  let oldGroup, excess
-  return Object.keys(rows).sort().map(key => {
-    let row      = rows[key]
-    let group    = row.key[row.key.length - 1]
-    let excluded = excludeExpired == group
 
-    if ( ! excess || group != oldGroup)
-      excess = {count:0, qty:0, value:0}
+  return Object.keys(rows).sort().map((key, i, keys) => {
 
-    //Are count fields included?
-    if (row.value['received.count'] != null)
-      sortRecord(row, 'count', excess, excluded)
+    let nextRow   = rows[key]
+    let nextGroup = nextRow.key[nextRow.key.length - 1]
 
-    //Are qty fields included?
-    if (row.value['received.qty'] != null)
-      sortRecord(row, 'qty', excess, excluded)
+    let lastRow   = rows[keys[i-1]]
+    let lastGroup = i && lastRow.key[lastRow.key.length - 1]
 
-    //Are value fields included?
-    if (row.value['received.value'] != null)
-      sortRecord(row, 'value', excess, excluded)
+    if (nextGroup != lastGroup)
+      lastRow = {value:{}}
 
-    oldGroup = group
+    let excluded = excludeExpired == nextGroup
+    calculateExpired(nextRow.value, lastRow.value, 'count', excluded)
+    calculateExpired(nextRow.value, lastRow.value, 'qty', excluded)
+    calculateExpired(nextRow.value, lastRow.value, 'value', excluded)
 
-    return row
+    return nextRow
   })
 }
 
-function sortRecord(row, suffix, excess, excludeExpired) {
+function calculateExpired(nextValue, lastValue, suffix, excludeExpired) {
 
   if (excludeExpired) {
-    row.value['expired.'+suffix] = ''
-  } else if (row.value['inventory.'+suffix] != null) { //Can only calculate expired if we have inventory
-    //Can't calculate an expired count like this because repacking can split/combine existing items, meaning that more can be dispensed/disposed/expired than what is received.  Would need to do with using the view
-    excess[suffix] +=
-      (row.value['received.'+suffix] || 0) -
-      (row.value['refused.'+suffix] || 0) -
-      (row.value['disposed.'+suffix] || 0) -
-      (row.value['dispensed.'+suffix] || 0) -
-      (row.value['pended.'+suffix] || 0)
 
-    let inventory = row.value['inventory.'+suffix]
-    let expired   = excess[suffix] - inventory
+    nextValue['expired.'+suffix] = ''
 
-    row.value['expired.'+suffix] = expired ? +expired.toFixed(2) : ''
+  } else if (nextValue['inventory.'+suffix] != null) { //Can only calculate expired if we have inventory
+
+    //Can't actually calculate an expired count like this because repacking can split/combine existing items, meaning that more can be dispensed/disposed/expired than what is received.  Would need to do with using the view
+    let expired =
+      (nextValue['verified.'+suffix]  || 0) -
+      (nextValue['disposed.'+suffix]  || 0) -
+      (nextValue['dispensed.'+suffix] || 0) -
+      (nextValue['pended.'+suffix]    || 0) -
+      (nextValue['inventory.'+suffix] || 0) +
+      (lastValue['inventory.'+suffix] || 0)
+
+    nextValue['expired.'+suffix] = expired ? +expired.toFixed(2) : ''
   }
 }
 
