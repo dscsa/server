@@ -297,14 +297,15 @@ exports.views = {
 
   'received.qty-by-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'received', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
+      //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
+      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'received.value-by-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'received', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
+      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -381,14 +382,14 @@ exports.views = {
 
   'received.qty-by-from-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'received', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
+      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'received.value-by-from-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'received', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
+      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -479,7 +480,7 @@ exports.views = {
 
   'received.qty-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'received', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
+      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
