@@ -227,7 +227,7 @@ async function getRecords(ctx, to_id, suffix) {
   //Might be possible to eventually get it for custom group_level but doesn't seem worth trying to figure that out now.
   let inventoryQuery = {rows:[]}
 
-  if ((group === '' || group === 'month' || group === 'year') && ! ctx.query.group_level)
+  if (group === '' || group === 'month' || group === 'year')
     inventoryQuery = ctx.db.transaction.query('inventory.'+suffix, invOpts).then(res => {
       group || res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
       return res
