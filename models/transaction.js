@@ -85,9 +85,18 @@ exports.lib = {
   },
 
   //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
-  expiredAt(doc) {
+  //if months is the number of months to subtract.  Undefined behavior for months >= 12
+  expiredAt(doc, months) {
     var exp = doc.exp.to || doc.exp.from
-    return exp && exp.slice(0, 10).split('-')
+    if ( ! exp) return false
+    exp = exp.slice(0, 10).split('-')
+    months = exp[1] - (months || 0)
+    if (months <= 0) {
+      exp[0] = exp[0] - 1 + ''
+      months += 12
+    }
+    exp[1] = ('0' + months).slice(-2)
+    return exp
   },
 
   //This includes unpulled expired, no-way to remove those from view
@@ -341,38 +350,40 @@ exports.views = {
 
   'expired.qty-by-generic':{
     map(doc) {
-      require('isInventory')(doc) && require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc) || []
+      if (doc.bin && expired.join('-') < disposed.join('-'))
+        require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'expired.value-by-generic':{
     map(doc) {
-      require('isInventory')(doc) && require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc) || []
+      if (doc.bin && expired.join('-') < disposed.join('-'))
+        require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
 
   'disposed.qty-by-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
-      var disposed = require('disposedAt')(doc)
-      if ( ! expired || ! disposed) return
-      expired[1] = ('0' + (expired[1] - 1)).slice(-2)
-      expired = expired.join('-') < disposed.join('-')
-      expired || require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc) || []
+      if (doc.bin && expired.join('-') > disposed.join('-'))
+        require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'disposed.value-by-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
-      var disposed = require('disposedAt')(doc)
-      if ( ! expired || ! disposed) return
-      expired[1] = ('0' + (expired[1] - 1)).slice(-2)
-      expired = expired.join('-') < disposed.join('-')
-      expired || require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc) || []
+      if (doc.bin && expired.join('-') > disposed.join('-'))
+        require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -451,38 +462,40 @@ exports.views = {
 
   'expired.qty-by-from-generic':{
     map(doc) {
-      require('isInventory')(doc) && require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc) || []
+      if (doc.bin && expired.join('-') < disposed.join('-'))
+        require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'expired.value-by-from-generic':{
     map(doc) {
-      require('isInventory')(doc) && require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc) || []
+      if (doc.bin && expired.join('-') < disposed.join('-'))
+        require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
 
   'disposed.qty-by-from-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
-      var disposed = require('disposedAt')(doc)
-      if ( ! expired || ! disposed) return
-      expired[1] = ('0' + (expired[1] - 1)).slice(-2)
-      expired = expired.join('-') < disposed.join('-')
-      expired || require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc) || []
+      if (doc.bin && expired.join('-') > disposed.join('-'))
+        require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'disposed.value-by-from-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
-      var disposed = require('disposedAt')(doc)
-      if ( ! expired || ! disposed) return
-      expired[1] = ('0' + (expired[1] - 1)).slice(-2)
-      expired = expired.join('-') < disposed.join('-')
-      expired || require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc) || []
+      if (doc.bin && expired.join('-') > disposed.join('-'))
+        require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -553,19 +566,20 @@ exports.views = {
 
   'expired.qty-by-user-from-shipment':{
     map(doc) {
-      require('isInventory')(doc) && require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc) || []
+      if (doc.bin && expired.join('-') < disposed.join('-'))
+        require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'disposed.qty-by-user-from-shipment':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
-      var disposed = require('disposedAt')(doc)
-      if ( ! expired || ! disposed) return
-      expired[1] = ('0' + (expired[1] - 1)).slice(-2)
-      expired = expired.join('-') < disposed.join('-')
-      expired || require('groupByDate')(emit, doc, 'disposed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc) || []
+      if (doc.bin && expired.join('-') > disposed.join('-'))
+        require('groupByDate')(emit, doc, 'disposed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
