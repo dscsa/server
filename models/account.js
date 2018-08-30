@@ -237,6 +237,7 @@ async function getRecords(ctx, to_id, suffix) {
     ctx.db.transaction.query('received.'+suffix, opts),
     ctx.db.transaction.query('refused.'+suffix, opts),
     ctx.db.transaction.query('verified.'+suffix, opts),
+    ctx.db.transaction.query('expired.'+suffix, opts),
     ctx.db.transaction.query('disposed.'+suffix, opts),
     ctx.db.transaction.query('dispensed.'+suffix, opts),
     ctx.db.transaction.query('pended.'+suffix, opts),
@@ -252,10 +253,11 @@ function mergeRecords(opts) {
     mergeRecord(records, opts[suffix][0], 'received.'+suffix, uniqueKey)
     mergeRecord(records, opts[suffix][1], 'refused.'+suffix, uniqueKey)
     mergeRecord(records, opts[suffix][2], 'verified.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][3], 'disposed.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][4], 'dispensed.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][5], 'pended.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][6], 'inventory.'+suffix, uniqueKey, true)
+    mergeRecord(records, opts[suffix][3], 'expired.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][4], 'disposed.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][5], 'dispensed.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][6], 'pended.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][7], 'inventory.'+suffix, uniqueKey, true)
   }
   return records
 }
@@ -295,47 +297,8 @@ function mergeRecord(rows, record, field, groupFn, optional) {
 
 //console.log('recordByGeneric opts, rows', opts, rows)
 //(Re)sort them in ascending order.  And calculate expired
-function sortRecords(rows, excludeExpired) {
-
-  return Object.keys(rows).sort().map((key, i, keys) => {
-
-    let nextRow   = rows[key]
-    let nextGroup = nextRow.key[nextRow.key.length - 1]
-
-    let lastRow   = rows[keys[i-1]]
-    let lastGroup = i && lastRow.key[lastRow.key.length - 1]
-
-    if (nextGroup != lastGroup)
-      lastRow = {value:{}}
-
-    let excluded = excludeExpired == nextGroup
-    calculateExpired(nextRow.value, lastRow.value, 'count', excluded)
-    calculateExpired(nextRow.value, lastRow.value, 'qty', excluded)
-    calculateExpired(nextRow.value, lastRow.value, 'value', excluded)
-
-    return nextRow
-  })
-}
-
-function calculateExpired(nextValue, lastValue, suffix, excludeExpired) {
-
-  if (excludeExpired) {
-
-    nextValue['expired.'+suffix] = ''
-
-  } else if (nextValue['inventory.'+suffix] != null) { //Can only calculate expired if we have inventory
-
-    //Can't actually calculate an expired count like this because repacking can split/combine existing items, meaning that more can be dispensed/disposed/expired than what is received.  Would need to do with using the view
-    let expired =
-      (nextValue['verified.'+suffix]  || 0) -
-      (nextValue['disposed.'+suffix]  || 0) -
-      (nextValue['dispensed.'+suffix] || 0) -
-      (nextValue['pended.'+suffix]    || 0) -
-      (nextValue['inventory.'+suffix] || 0) +
-      (lastValue['inventory.'+suffix] || 0)
-
-    nextValue['expired.'+suffix] = expired ? +expired.toFixed(2) : ''
-  }
+function sortRecords(rows) {
+  return Object.keys(rows).sort().map(key => rows[key])
 }
 
 function default_group_level(group) {

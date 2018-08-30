@@ -84,7 +84,7 @@ exports.lib = {
     return nextAt && doc.next[0].pended && nextAt
   },
 
- //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
+  //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
   expiredAt(doc) {
     var exp = doc.exp.to || doc.exp.from
     return exp && exp.slice(0, 10).split('-')
@@ -295,14 +295,15 @@ exports.views = {
     reduce:'_stats'
   },
 
+  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
   'received.qty-by-generic':{
     map(doc) {
-      //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
       require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
+  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
   'received.value-by-generic':{
     map(doc) {
       require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
@@ -338,16 +339,36 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'expired.qty-by-generic':{
+    map(doc) {
+      require('isInventory')(doc) && require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'expired.value-by-generic':{
+    map(doc) {
+      require('isInventory')(doc) && require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
   'disposed.qty-by-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
+      var expired = require('expiredAt')(doc)
+      expired[1] -= 1
+      expired = expired.join('-') < require('disposedAt')(doc).join('-')
+      expired || require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'disposed.value-by-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
+      var expired = require('expiredAt')(doc)
+      expired[1] -= 1
+      expired = expired.join('-') < require('disposedAt')(doc).join('-')
+      expired || require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -380,6 +401,7 @@ exports.views = {
     reduce:'_stats'
   },
 
+  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
   'received.qty-by-from-generic':{
     map(doc) {
       require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
@@ -387,6 +409,7 @@ exports.views = {
     reduce:'_stats'
   },
 
+  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
   'received.value-by-from-generic':{
     map(doc) {
       require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
@@ -422,16 +445,36 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'expired.qty-by-from-generic':{
+    map(doc) {
+      require('isInventory')(doc) && require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'expired.value-by-from-generic':{
+    map(doc) {
+      require('isInventory')(doc) && require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
   'disposed.qty-by-from-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
+      var expired = require('expiredAt')(doc)
+      expired[1] -= 1
+      expired = expired.join('-') < require('disposedAt')(doc).join('-')
+      expired || require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
   'disposed.value-by-from-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
+      var expired = require('expiredAt')(doc)
+      expired[1] -= 1
+      expired = expired.join('-') < require('disposedAt')(doc).join('-')
+      expired || require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedNdc')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -478,6 +521,7 @@ exports.views = {
     reduce:'_stats'
   },
 
+  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
   'received.qty-by-user-from-shipment':{
     map(doc) {
       require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
@@ -499,9 +543,19 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'expired.qty-by-user-from-shipment':{
+    map(doc) {
+      require('isInventory')(doc) && require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
   'disposed.qty-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'disposed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
+      var expired = require('expiredAt')(doc)
+      expired[1] -= 1
+      expired = expired.join('-') < require('disposedAt')(doc).join('-')
+      expired || require('groupByDate')(emit, doc, 'disposed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
