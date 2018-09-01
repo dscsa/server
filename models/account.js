@@ -128,16 +128,27 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
 
 exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  let [qtyRecords, valueRecords] = await Promise.all([
+  let [qtyRecords, valueRecords, accounts] = await Promise.all([
     getRecords(ctx, to_id, 'qty-by-from-generic'),
-    getRecords(ctx, to_id, 'value-by-from-generic')
+    getRecords(ctx, to_id, 'value-by-from-generic'),
+    this.db.account.allDocs({endkey:'_design', include_docs:true})
   ])
 
   let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
 
-  records = sortRecords(records, to_id) //Exclude expired becuase it will be wrong since we every thing "from" the to_id is just a repack and nothing will be received making expired.count/qty/value all negative
+  records = sortRecords(records, to_id)
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true))
+  //Let's add in some demornalized accout data that we can use in the V1 & V2 Merge gSheet
+  let accountMap = {}
+  let groupLevel = default_group_level(ctx.query.group || '').groupByDate - 1
+
+  for (let row of accounts.rows)
+    accountMap[row.id] = row.doc
+
+  for (let record of records)
+    record.value['shipment.from'] = accountMap[record.key[groupLevel]]
+
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true, true))
 }
 
 exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -150,7 +161,7 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
 }
 
-function defaultFieldOrder(values) {
+function defaultFieldOrder(values, shipment) {
   return [
     'group',
     'received.count',
@@ -179,7 +190,17 @@ function defaultFieldOrder(values) {
     'dispensed.value',
     'pended.value',
     'inventory.value'
-  ]).concat([
+  ])
+  .concat(  ! shipment ? [] :
+  [
+    'shipment.from._id',
+    'shipment.from.name',
+    'shipment.from.license',
+    'shipment.from.state',
+    'shipment.from.phone',
+    'shipment.from.createdAt',
+  ])
+  .concat([
     'key.0',
     'key.1',
     'key.2',
