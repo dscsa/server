@@ -151,7 +151,8 @@ exports.lib = {
 
     //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
     for (var y = +fromDate[0], m = +fromDate[1]; y < toDate[0] || m < toDate[1]; m++) {
-      if (m == 13) { y++; m = 1 }
+      console.log('y', y, toDate[0], 'm', m, toDate[1])
+      if (m == 13) { y++; m = 0; continue }
       callback(''+y, ('0'+m).slice(-2))
     }
     callback(''+y, ('0'+m).slice(-2), true)
