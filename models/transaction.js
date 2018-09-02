@@ -571,6 +571,14 @@ exports.views = {
     reduce:'_stats'
   },
 
+  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
+  'received.value-by-user-from-shipment':{
+    map(doc) {
+      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
   'refused.qty-by-user-from-shipment':{
     map(doc) {
       require('groupByDate')(emit, doc, 'refused', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
@@ -578,9 +586,23 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'refused.value-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'refused', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
   'verified.qty-by-user-from-shipment':{
     map(doc) {
       require('groupByDate')(emit, doc, 'verified', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'verified.value-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'verified', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -599,6 +621,20 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'expired.value-by-user-from-shipment':{
+    map(doc) {
+      var expired  = require('expiredAt')(doc, 1) || []
+      var disposed = require('disposedAt')(doc)
+      var next     = require('nextAt')(doc)
+
+      //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed  //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed
+      //if not disposed, dispensed, or repacked then use the expiration date because its still in our inventory.  Without out this the formula previous_inventory + verified != disposed + expired + dispensed + current_inventory for every period
+      if (disposed ? expired.join('-') < disposed.join('-') : ! next)
+        require('groupByDate')(emit, doc, disposed ? 'disposed' : 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
   'disposed.qty-by-user-from-shipment':{
     map(doc) {
       var expired  = require('expiredAt')(doc, 1)
@@ -610,9 +646,27 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'disposed.value-by-user-from-shipment':{
+    map(doc) {
+      var expired  = require('expiredAt')(doc, 1)
+      var disposed = require('disposedAt')(doc)
+
+      if (disposed && ( ! expired || expired.join('-') > disposed.join('-')))
+        require('groupByDate')(emit, doc, 'disposed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
   'dispensed.qty-by-user-from-shipment':{
     map(doc) {
       require('groupByDate')(emit, doc, 'dispensed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'dispensed.value-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'dispensed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -624,9 +678,23 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'pended.value-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'pended', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
+    },
+    reduce:'_stats'
+  },
+
   'inventory.qty-by-user-from-shipment':{
     map(doc) {
       require('inventory')(emit, doc, [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
+    },
+    reduce:'_stats'
+  },
+
+  'inventory.value-by-user-from-shipment':{
+    map(doc) {
+      require('inventory')(emit, doc, [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   }

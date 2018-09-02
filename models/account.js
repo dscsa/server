@@ -123,7 +123,7 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
 
   records = sortRecords(records)
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true))
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
 }
 
 exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -148,20 +148,35 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
   for (let record of records)
     record.value['shipment.from'] = accountMap[record.key[groupLevel]]
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true, true))
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true))
 }
 
 exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
-  let qtyRecords = await getRecords(ctx, to_id, 'qty-by-user-from-shipment')
+
+  let [qtyRecords, valueRecords, accounts] = await Promise.all([
+    getRecords(ctx, to_id, 'qty-by-user-from-shipment'),
+    getRecords(ctx, to_id, 'value-by-user-from-shipment'),
+    this.db.account.allDocs({endkey:'_design', include_docs:true})
+  ])
 
   let records = mergeRecords({qty:qtyRecords,count:qtyRecords})
 
   records = sortRecords(records)
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
+  //Let's add in some demornalized accout data that we can use in the V1 & V2 Merge gSheet
+  let accountMap = {}
+  let groupLevel = default_group_level(ctx.query.group || '').groupByDate
+
+  for (let row of accounts.rows)
+    accountMap[row.id] = row.doc
+
+  for (let record of records)
+    record.value['shipment.from'] = accountMap[record.key[groupLevel]]
+
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true))
 }
 
-function defaultFieldOrder(values, shipment) {
+function defaultFieldOrder(shipment) {
   return [
     'group',
     'received.count',
@@ -179,9 +194,7 @@ function defaultFieldOrder(values, shipment) {
     'disposed.qty',
     'dispensed.qty',
     'pended.qty',
-    'inventory.qty'
-  ].concat( ! values ? [] :
-  [
+    'inventory.qty',
     'received.value',
     'refused.value',
     'verified.value',
@@ -191,7 +204,7 @@ function defaultFieldOrder(values, shipment) {
     'pended.value',
     'inventory.value'
   ])
-  .concat(  ! shipment ? [] :
+  .concat( ! shipment ? [] :
   [
     'shipment.from._id',
     'shipment.from.name',
