@@ -278,7 +278,7 @@ function mergeRecords(opts) {
     mergeRecord(records, opts[suffix][4], 'disposed.'+suffix, uniqueKey)
     mergeRecord(records, opts[suffix][5], 'dispensed.'+suffix, uniqueKey)
     mergeRecord(records, opts[suffix][6], 'pended.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][7], 'inventory.'+suffix, uniqueKey, true)
+    mergeRecord(records, opts[suffix][7], 'inventory.'+suffix, uniqueKey)
   }
   return records
 }
@@ -294,13 +294,11 @@ function uniqueKey(key, field) {
   return unique.join(',') //remove to_id and anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
-function mergeRecord(rows, record, field, groupFn, optional) {
+function mergeRecord(rows, record, field, groupFn) {
 
   for (let row of record.rows) {
 
     let group = groupFn(row.key, field)
-
-    if (optional && ! rows[group]) continue
 
     rows[group] = rows[group] || {key:row.key, value:{group}}
 
