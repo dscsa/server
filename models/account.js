@@ -203,7 +203,7 @@ function defaultFieldOrder(shipment) {
     'dispensed.value',
     'pended.value',
     'inventory.value'
-  ])
+  ]
   .concat( ! shipment ? [] :
   [
     'shipment.from._id',
