@@ -272,25 +272,35 @@ async function getRecords(ctx, to_id, suffix) {
 
   //Inventory cannot be kept by day because expiration date is kept by month.
   //Might be possible to eventually get it for custom group_level but doesn't seem worth trying to figure that out now.
-  let inventoryQuery = {rows:[]}
+  let queries = [
+    optionalField(ctx, 'received.'+suffix, opts),
+    optionalField(ctx, 'refused.'+suffix, opts),
+    optionalField(ctx, 'verified.'+suffix, opts),
+    optionalField(ctx, 'expired.'+suffix, opts),
+    optionalField(ctx, 'disposed.'+suffix, opts),
+    optionalField(ctx, 'dispensed.'+suffix, opts),
+    optionalField(ctx, 'pended.'+suffix, opts)
+  ]
 
   if (group === '' || group === 'month' || group === 'year')
-    inventoryQuery = ctx.db.transaction.query('inventory.'+suffix, invOpts).then(res => {
-      group || res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
+    queries.push(optionalField(ctx, 'inventory.'+suffix, invOpts).then(res => {
+      group || res && res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
       return res
-    })
+    }))
 
-  let records = await Promise.all([
-    ctx.db.transaction.query('received.'+suffix, opts),
-    ctx.db.transaction.query('refused.'+suffix, opts),
-    ctx.db.transaction.query('verified.'+suffix, opts),
-    ctx.db.transaction.query('expired.'+suffix, opts),
-    ctx.db.transaction.query('disposed.'+suffix, opts),
-    ctx.db.transaction.query('dispensed.'+suffix, opts),
-    ctx.db.transaction.query('pended.'+suffix, opts),
-    inventoryQuery
-  ])
+  let records = await Promise.all(queries)
+
   return records
+}
+
+function optionalField(ctx, field, opts) {
+  let fields = ctx.query.fields
+  if (fields) {
+    let fieldType = field.split('-')[0] //Hacky as this relies on consistent naming of fields.  eg.  dispensed.value-by-user-from-shipment -> dispensed.value
+    fields = fields.replace(/\.count/g, '.qty') //qty views use the _stat reduce which supplies the count.  There are no count views
+    if ( ! fields.includes(fieldType)) return Promise.resolve()
+  }
+  return ctx.db.transaction.query(field, opts)
 }
 
 //Something like {qty:records, count:records}
@@ -321,6 +331,8 @@ function uniqueKey(key, field) {
 }
 
 function mergeRecord(rows, record, field, groupFn) {
+
+  if ( ! record) return
 
   for (let row of record.rows) {
 
