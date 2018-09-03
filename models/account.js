@@ -153,16 +153,25 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
 
 exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
 
+  console.time('Get Records')
   let [qtyRecords, valueRecords, accounts] = await Promise.all([
     getRecords(ctx, to_id, 'qty-by-user-from-shipment'),
     getRecords(ctx, to_id, 'value-by-user-from-shipment'),
     this.db.account.allDocs({endkey:'_design', include_docs:true})
   ])
+  console.timeEnd('Get Records')
+  console.time('Merge Records')
 
   let records = mergeRecords({qty:qtyRecords,count:qtyRecords})
 
+  console.timeEnd('Merge Records')
+  console.time('Sort Records')
+
+
   records = sortRecords(records)
 
+  console.timeEnd('Sort Records')
+  console.time('Add Accounts')
   //Let's add in some demornalized accout data that we can use in the V1 & V2 Merge gSheet
   let accountMap = {}
   let groupLevel = default_group_level(ctx.query.group || '').groupByDate
@@ -173,7 +182,11 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   for (let record of records)
     record.value['shipment.from'] = accountMap[record.key[groupLevel]]
 
+  console.timeEnd('Add Accounts')
+  console.time('To CSV')
+
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true))
+  console.timeEnd('To CSV')
 }
 
 function defaultFieldOrder(shipment) {
