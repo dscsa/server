@@ -162,11 +162,10 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   console.timeEnd('Get Records')
   console.time('Merge Records')
 
-  let records = mergeRecords({qty:qtyRecords,count:qtyRecords})
+  let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
 
   console.timeEnd('Merge Records')
   console.time('Sort Records')
-
 
   records = sortRecords(records)
 
@@ -282,8 +281,9 @@ async function getRecords(ctx, to_id, suffix) {
     optionalField(ctx, 'pended.'+suffix, opts)
   ]
 
-  if (group === '' || group === 'month' || group === 'year')
+  if (group === '' || group === 'month' || group === 'year') //inventory is not kept by day and other groupings not listed here
     queries.push(optionalField(ctx, 'inventory.'+suffix, invOpts).then(res => {
+      console.log('res', res && res.rows)
       group || res && res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
       return res
     }))
@@ -294,12 +294,15 @@ async function getRecords(ctx, to_id, suffix) {
 }
 
 function optionalField(ctx, field, opts) {
+
+
   let fields = ctx.query.fields
   if (fields) {
     let fieldType = field.split('-')[0] //Hacky as this relies on consistent naming of fields.  eg.  dispensed.value-by-user-from-shipment -> dispensed.value
     fields = fields.replace(/\.count/g, '.qty') //qty views use the _stat reduce which supplies the count.  There are no count views
     if ( ! fields.includes(fieldType)) return Promise.resolve()
   }
+  console.log(ctx.query.fields, field)
   return ctx.db.transaction.query(field, opts)
 }
 
