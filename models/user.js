@@ -51,7 +51,7 @@ function saveLogin(doc, opts) {
   if (doc.password) {
     //User ._id not .phone since _id has had all extraneous characters removed
     let _user = {name:doc._id, password:doc.password, roles:['allAccounts', doc.account._id]}
-    console.log('saveLogin', _user, doc, admin)
+    console.log('saveLogin', _user, doc, admin, opts.ctx && opts.ctx.ajax)
     delete doc.password //we don't want to save this in the user table
 
     return opts.ctx.db._users.put(_user, admin).catch(err => console.log('new session err', err))
@@ -93,7 +93,7 @@ async function session(ctx, _user) {
   const cookie = JSON.stringify({_id:res.body.name, account:{_id:res.body.roles[1]}})
 
   ctx.cookies.set('AuthUser', cookie, {httpOnly:false})
-  
+
   return cookie
 }
 
