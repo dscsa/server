@@ -30,8 +30,10 @@ exports.validate = function(model) {
 //Context-specific - options MUST have 'this' property in order to work.
 function authorized(doc, opts) {
 
-  if (opts.ctx.account._id)
+  if (opts.ctx.account._id) {
+    console.log('Matching user ctx.account._id with doc.account._id', doc.account._id, opts.ctx.account._id)
     return doc.account._id == opts.ctx.account._id
+  }
 
   if (exports.isNew(doc, opts)) {
     console.log('user is new')
@@ -51,10 +53,10 @@ function saveLogin(doc, opts) {
   if (doc.password) {
     //User ._id not .phone since _id has had all extraneous characters removed
     let _user = {name:doc._id, password:doc.password, roles:['allAccounts', doc.account._id]}
-    console.log('saveLogin', _user, doc, admin, opts.ctx && opts.ctx.ajax)
+    console.log('saveLogin', _user, doc, admin, opts.ctx && opts.ctx.ajax, opts.ctx && opts.ctx.account)
     delete doc.password //we don't want to save this in the user table
 
-    return opts.ctx.db._users.put(_user, admin).catch(err => console.log('new session err', err))
+    return opts.ctx.db._users.put(_user, {force:true, ajax:admin.ajax}).catch(err => console.log('new session err', err))
   }
 
   console.log('saveLogin doc.password not set')
