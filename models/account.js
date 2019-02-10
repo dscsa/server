@@ -441,8 +441,9 @@ exports.pend = {
   },
 
   async delete(ctx, _id, name) {
-    ctx.account = {_id}
-    ctx.body = await updateNext(ctx, [])
+    ctx.req.body = await ctx.db.transaction.query('pended-by-name-bin', {include_docs:true, startkey:[_id, name], endkey:[_id, name, {}]})
+    ctx.account  = {_id}
+    ctx.body     = await updateNext(ctx, [])
   }
 }
 
