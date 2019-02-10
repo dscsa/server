@@ -149,6 +149,7 @@ exports.lib = {
     }
 
     if ( ! toDate) return log('eachMonth NO toDate:'+toDate+' fromDate:'+fromDate.join('-'))
+    if (fromDate > toDate) return log('eachMonth fromDate:'+fromDate.join('-')+' > toDate:'+toDate.join('-')) //these are arrays but that seems to work okay
 
     //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
     for (var y = +fromDate[0], m = +fromDate[1]; y < toDate[0] || m < toDate[1]; m++) {
@@ -171,7 +172,10 @@ exports.lib = {
   inventory(emit, doc, key, val) {
 
     var createdAt  = require('createdAt')(doc)
-    var removedAt  = require('nextAt')(doc) || require('expiredAt')(doc)
+    var nextAt     = require('nextAt')(doc)
+    var expiredAt  = require('expiredAt')(doc)
+    var removedAt  = nextAt < expiredAt ? nextAt : expiredAt
+
     var to_id      = require('to_id')(doc)
 
     require('eachMonth')(createdAt, removedAt, function(year, month, last) {
