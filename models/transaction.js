@@ -87,7 +87,7 @@ exports.lib = {
 
   //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
   //if months is the number of months to subtract. This does not adjust days so subtracting 1 month from March 31st will give Febuaray 31st.
-  expiredAt(doc) {
+  expiredAt(doc, months) {
     var exp = doc.exp.to || doc.exp.from
 
     exp = exp && exp.slice(0, 10).split('-')
