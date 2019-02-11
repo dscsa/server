@@ -89,7 +89,18 @@ exports.lib = {
   //if months is the number of months to subtract. This does not adjust days so subtracting 1 month from March 31st will give Febuaray 31st.
   expiredAt(doc) {
     var exp = doc.exp.to || doc.exp.from
-    return exp && exp.slice(0, 10).split('-')
+
+    exp = exp && exp.slice(0, 10).split('-')
+
+    if ( ! exp || ! months) return exp
+
+    exp[0] -= Math.floor(months/12)
+    exp[1] -= months % 12
+
+    exp[0] = '' + exp[0]
+    exp[1] = ('0' + exp[1]).slice(-2)
+
+    return exp
   },
 
   //This includes unpulled expired, no-way to remove those from view
@@ -334,8 +345,8 @@ exports.views = {
 
   'expired.qty-by-generic':{
     map(doc) {
-      var expired   = require('expiredAt')(doc)
-      var next      = require('nextAt')(doc)
+      var expired   = require('expiredAt')(doc, 1)
+      var next      = require('nextAt')(doc) || [Infinity]
 
       if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
@@ -345,8 +356,8 @@ exports.views = {
 
   'expired.value-by-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
-      var next     = require('nextAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
+      var next     = require('nextAt')(doc) || [Infinity]
 
       //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed  //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed
       //if not disposed, dispensed, or repacked then use the expiration date because its still in our inventory.  Without out this the formula previous_inventory + verified != disposed + expired + dispensed + current_inventory for every period
@@ -358,7 +369,7 @@ exports.views = {
 
   'disposed.qty-by-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
       var disposed = require('disposedAt')(doc)
 
       if (disposed && expired > disposed)
@@ -369,7 +380,7 @@ exports.views = {
 
   'disposed.value-by-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
       var disposed = require('disposedAt')(doc)
 
       if (disposed && expired > disposed)
@@ -452,8 +463,8 @@ exports.views = {
 
   'expired.qty-by-from-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
-      var next     = require('nextAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
+      var next     = require('nextAt')(doc) || [Infinity]
 
       if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
@@ -463,8 +474,8 @@ exports.views = {
 
   'expired.value-by-from-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
-      var next     = require('nextAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
+      var next     = require('nextAt')(doc) || [Infinity]
 
       if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
@@ -474,7 +485,7 @@ exports.views = {
 
   'disposed.qty-by-from-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
       var disposed = require('disposedAt')(doc)
 
       if (disposed && expired > disposed)
@@ -485,7 +496,7 @@ exports.views = {
 
   'disposed.value-by-from-generic':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
       var disposed = require('disposedAt')(doc)
 
       if (disposed && expired > disposed)
@@ -582,8 +593,8 @@ exports.views = {
 
   'expired.qty-by-user-from-shipment':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
-      var next     = require('nextAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
+      var next     = require('nextAt')(doc) || [Infinity]
 
       if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
@@ -593,8 +604,8 @@ exports.views = {
 
   'expired.value-by-user-from-shipment':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
-      var next     = require('nextAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
+      var next     = require('nextAt')(doc) || [Infinity]
 
       if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
@@ -604,7 +615,7 @@ exports.views = {
 
   'disposed.qty-by-user-from-shipment':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
       var disposed = require('disposedAt')(doc)
 
       if (disposed && expired > disposed)
@@ -615,7 +626,7 @@ exports.views = {
 
   'disposed.value-by-user-from-shipment':{
     map(doc) {
-      var expired  = require('expiredAt')(doc)
+      var expired  = require('expiredAt')(doc, 1)
       var disposed = require('disposedAt')(doc)
 
       if (disposed && expired > disposed)
