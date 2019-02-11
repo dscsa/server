@@ -131,9 +131,6 @@ exports.lib = {
   //Inclusive, Callback(yyyy<string>, mm<string>, isLastMonth)
   eachMonth(fromDate, toDate, callback) {
 
-    if ( ! toDate) return log('eachMonth NO toDate:'+toDate+' fromDate:'+fromDate.join('-'))
-    if (fromDate > toDate) return log('eachMonth fromDate:'+fromDate.join('-')+' > toDate:'+toDate.join('-')) //these are arrays but that seems to work okay
-
     //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
     for (var y = +fromDate[0], m = +fromDate[1]; y < toDate[0] || m < toDate[1]; m++) {
       if (m == 13) { y++; m = 0; continue }
@@ -144,12 +141,17 @@ exports.lib = {
 
   inventory(emit, doc, key, val) {
 
+    var to_id      = require('to_id')(doc)
     var createdAt  = require('createdAt')(doc)
     var nextAt     = require('nextAt')(doc)
     var expiredAt  = require('expiredAt')(doc)
     var removedAt  = nextAt < expiredAt ? nextAt : expiredAt
 
-    var to_id      = require('to_id')(doc)
+    if ( ! removedAt)
+      return log(doc._id+' inventory NO toDate:'+removedAt+' fromDate:'+createdAt)
+
+    if (createdAt > removedAt)
+      return log(doc._id+'inventory fromDate:'+createdAt+' > toDate:'+removedAt) //these are arrays but that seems to work okay
 
     require('eachMonth')(createdAt, removedAt, function(year, month, last) {
       if (last) return  //don't count it as inventory in the month that it was removed (expired okay since we use until end of the month)
@@ -335,7 +337,7 @@ exports.views = {
       var expired   = require('expiredAt')(doc)
       var next      = require('nextAt')(doc)
 
-      if (expired <= next)
+      if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
@@ -348,7 +350,7 @@ exports.views = {
 
       //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed  //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed
       //if not disposed, dispensed, or repacked then use the expiration date because its still in our inventory.  Without out this the formula previous_inventory + verified != disposed + expired + dispensed + current_inventory for every period
-      if (expired <= next)
+      if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
@@ -453,7 +455,7 @@ exports.views = {
       var expired  = require('expiredAt')(doc)
       var next     = require('nextAt')(doc)
 
-      if (expired <= next)
+      if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
@@ -464,7 +466,7 @@ exports.views = {
       var expired  = require('expiredAt')(doc)
       var next     = require('nextAt')(doc)
 
-      if (expired <= next)
+      if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
@@ -583,7 +585,7 @@ exports.views = {
       var expired  = require('expiredAt')(doc)
       var next     = require('nextAt')(doc)
 
-      if (expired <= next)
+      if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
@@ -594,7 +596,7 @@ exports.views = {
       var expired  = require('expiredAt')(doc)
       var next     = require('nextAt')(doc)
 
-      if (expired <= next)
+      if (doc.bin && expired <= next)
         require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
