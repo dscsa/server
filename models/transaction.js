@@ -155,7 +155,7 @@ exports.lib = {
     var to_id      = require('to_id')(doc)
     var createdAt  = require('createdAt')(doc)
     var nextAt     = require('nextAt')(doc) || [Infinity]
-    var expiredAt  = require('expiredAt')(doc, 1)
+    var expiredAt  = require('expiredAt')(doc)
     var removedAt  = expiredAt <= nextAt ? expiredAt : nextAt
 
     if ( ! doc.bin)
