@@ -49,13 +49,15 @@ exports.lib = {
 
   verifiedAt(doc) {
     var receivedAt = require('receivedAt')(doc)
-    return doc.bin && receivedAt
+    var createdAt  = require('createdAt')(doc) //Align it with inventory which used createdAt
+    return doc.bin && receivedAt && createdAt
   },
 
   //TODO see above
   refusedAt(doc) {
     var receivedAt = require('receivedAt')(doc)
-    return ! doc.bin && receivedAt
+    var createdAt  = require('createdAt')(doc) //Align it with inventory which used createdAt
+    return doc.bin && receivedAt && createdAt
   },
 
   //TODO In case next.length > 1 we may need to do a loop.  Break at first key with "dispensed" prop?
