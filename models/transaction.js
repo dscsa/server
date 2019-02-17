@@ -88,7 +88,7 @@ exports.lib = {
   //if months is the number of months to subtract. This does not adjust days so subtracting 1 month from March 31st will give Febuaray 31st.
   expiredAt(doc) {
     var exp = doc.exp.to || doc.exp.from
-    return doc.bin && exp && doc.exp.slice(0, 10).split('-')
+    return doc.bin && exp && exp.slice(0, 10).split('-')
   },
 
   addMonths(date, months) {
