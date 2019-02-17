@@ -101,7 +101,7 @@ exports.lib = {
     date[0] = '' + date[0]
     date[1] = ('0' + date[1]).slice(-2)
 
-    return exp
+    return date
   },
 
   //This includes unpulled expired, no-way to remove those from view
