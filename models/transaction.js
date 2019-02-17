@@ -57,7 +57,7 @@ exports.lib = {
   refusedAt(doc) {
     var receivedAt = require('receivedAt')(doc)
     var createdAt  = require('createdAt')(doc) //Align it with inventory which used createdAt
-    return doc.bin && receivedAt && createdAt
+    return ! doc.bin && receivedAt && createdAt
   },
 
   //TODO In case next.length > 1 we may need to do a loop.  Break at first key with "dispensed" prop?
@@ -95,8 +95,8 @@ exports.lib = {
 
     if ( ! date || ! months) return date
 
-    date[0] += Math.floor(months/12)
-    date[1] += months % 12
+    date[0] = +date[0] + Math[months > 0 ? 'floor' : 'ceil'](months/12)
+    date[1] = +date[1] + months % 12
 
     date[0] = '' + date[0]
     date[1] = ('0' + date[1]).slice(-2)
@@ -159,14 +159,10 @@ exports.lib = {
     var expiredAt  = require('expiredAt')(doc)
     var removedAt  = require('addMonths')(expiredAt, -1) <= nextAt ? expiredAt : nextAt
 
-    if ( ! doc.bin)
-      return //log(doc._id+' inventory NO bin:'+removedAt+' fromDate:'+createdAt)
-
-    if ( ! removedAt)
-      return log(doc._id+' inventory NO toDate:'+removedAt+' fromDate:'+createdAt)
+    if ( ! doc.bin) return //log(doc._id+' inventory NO bin:'+removedAt+' fromDate:'+createdAt)
 
     if (createdAt > removedAt)
-      return log(doc._id+'inventory createdAt > removedAt: fromDate:'+createdAt+' > toDate:'+removedAt) //these are arrays but that seems to work okay
+      return log(doc._id+' inventory createdAt > removedAt: createdAt:'+createdAt+' > removedAt:'+removedAt+',  expiredAt:'+expiredAt+',  nextAt:'+nextAt) //these are arrays but that seems to work okay
 
     require('eachMonth')(createdAt, removedAt, function(year, month, last) {
       if (last) return  //don't count it as inventory in the month that it was removed (expired okay since we use until end of the month)
