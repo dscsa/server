@@ -160,7 +160,7 @@ exports.lib = {
     var removedAt  = require('addMonths')(expiredAt, -1) <= nextAt ? expiredAt : nextAt
 
     if ( ! doc.bin)
-      return log(doc._id+' inventory NO bin:'+removedAt+' fromDate:'+createdAt)
+      return //log(doc._id+' inventory NO bin:'+removedAt+' fromDate:'+createdAt)
 
     if ( ! removedAt)
       return log(doc._id+' inventory NO toDate:'+removedAt+' fromDate:'+createdAt)
