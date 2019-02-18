@@ -78,10 +78,12 @@ exports.lib = {
     return nextAt && doc.next[0].pended && nextAt
   },
 
-  //To differentiate from refused, it must have a bin
+  //To differentiate from refused, it must have a bin or have no receivedAt
+  //receivedAt is to account for the disposed section of any repack which has no bin (e.g., 2019-01-18T16:09:27.416600Z)
   disposedAt(doc) {
-    var nextAt = require('nextAt')(doc)
-    return doc.bin && nextAt && doc.next[0].disposed && nextAt
+    var receivedAt = require('receivedAt')(doc)
+    var nextAt     = require('nextAt')(doc)
+    return (doc.bin || ! receivedAt) && nextAt && doc.next[0].disposed && nextAt
   },
 
   //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
