@@ -95,13 +95,10 @@ exports.lib = {
 
     if ( ! date || ! months) return date
 
-    date[0] = +date[0] + Math[months > 0 ? 'floor' : 'ceil'](months/12)
-    date[1] = +date[1] + months % 12
+    date = new Date(date[0], date[1]-1, date[2]) //Month is 0 indexed in Javascriptt
+    date.setMonth(date.getMonth()+months)
 
-    date[0] = '' + date[0]
-    date[1] = ('0' + date[1]).slice(-2)
-
-    return date
+    return date.toJSON().slice(0, 10).split('-')
   },
 
   //This includes unpulled expired, no-way to remove those from view
