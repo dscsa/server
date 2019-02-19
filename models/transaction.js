@@ -47,17 +47,18 @@ exports.lib = {
     return doc.shipment && ~ doc.shipment._id.indexOf('.') && doc.shipment._id.slice(11, 21).split('-')
   },
 
+  //See description for disposedAt to see why we do !== "" instead of ! doc.bin
   verifiedAt(doc) {
     var receivedAt = require('receivedAt')(doc)
     var createdAt  = require('createdAt')(doc) //Align it with inventory which used createdAt
-    return doc.bin && receivedAt && createdAt
+    return doc.bin !== "" && receivedAt && createdAt
   },
 
-  //TODO see above
+  //See description for disposedAt to see why we do === "" instead of doc.bin
   refusedAt(doc) {
     var receivedAt = require('receivedAt')(doc)
     var createdAt  = require('createdAt')(doc) //Align it with inventory which used createdAt
-    return ! doc.bin && receivedAt && createdAt
+    return doc.bin === "" && receivedAt && createdAt
   },
 
   //TODO In case next.length > 1 we may need to do a loop.  Break at first key with "dispensed" prop?
@@ -78,19 +79,24 @@ exports.lib = {
     return nextAt && doc.next[0].pended && nextAt
   },
 
-  //To differentiate from refused, it must have a bin or have no receivedAt
+  //To differentiate from refused, it must have a bin or have no receivedAt.  Can't just use doc.bin (like expiredAt) ve
   //receivedAt is to account for the disposed section of any repack which has no bin (e.g., 2019-01-18T16:09:27.416600Z)
+  //but you do want to exclude items logged without a donor (e.g., 2019-01-24T17:24:21.063700Z) since those are not counted towards received or verified
+  //This is a little hacky but the only way I could see to do this is that the former has bin === undefined and the latter bin === ""
+  //so bin !== "" excludes only the latter scenario in which an item is refused when logged without a donor
   disposedAt(doc) {
-    var receivedAt = require('receivedAt')(doc)
-    var nextAt     = require('nextAt')(doc)
-    return (doc.bin || ! receivedAt) && nextAt && doc.next[0].disposed && nextAt
+
+    var createdAt     = require('createdAt')(doc)
+    var nextAt        = require('nextAt')(doc)
+
+    return doc.bin !== "" && ! refusedNoFrom && doc.next[0].disposed && nextAt
   },
 
   //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
   //if months is the number of months to subtract. This does not adjust days so subtracting 1 month from March 31st will give Febuaray 31st.
   expiredAt(doc) {
     var exp = doc.exp.to || doc.exp.from
-    return doc.bin && exp && exp.slice(0, 10).split('-')
+    return doc.bin !== "" && exp && exp.slice(0, 10).split('-')
   },
 
   addMonths(date, months) {
