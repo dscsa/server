@@ -39,12 +39,26 @@ exports.lib = {
     return doc.shipment && doc.shipment._id.slice(-10)
   },
 
-  enteredAt(doc) {
+
+  createdAt(doc) {
     return doc._id.slice(0, 10).split('-')
   },
 
   receivedAt(doc) {
     return doc.shipment && ~ doc.shipment._id.indexOf('.') && doc.shipment._id.slice(11, 21).split('-')
+  },
+
+  //Want:
+  //1. Logged and refused (next.disposed, no verified, bin === "")
+  //2. Logged and verified (verified, bin.length === 4)
+  //3. Logged No From/Shipment (next.disposed, bin === "", otherwise looks very similar to autodisposed repack surplus)
+
+  //Do not want:
+  //1. Repacked     (no verified, bin.length === 3, no shipment)
+  //2. Repack Surplus - Autodisposed (next.disposed, bin is undefined, no verified, no shipmentt)
+  enteredAt(doc) {
+    var receivedAt = require('receivedAt')(doc)
+    return receivedAt || (doc.bin === "" && require('createdAt')(doc))
   },
 
   //See description for disposedAt to see why we do !== "" instead of ! doc.bin
@@ -53,41 +67,41 @@ exports.lib = {
   //Unlike the disposed example we do have to count it somewhere since it needs to become inventory and will appear there
   verifiedAt(doc) {
     var enteredAt  = require('enteredAt')(doc) //Align it with inventory which used enteredAt
-    return doc.bin !== "" && enteredAt
+    return doc.bin && enteredAt
   },
 
-  //See description for disposedAt to see why we do === "" instead of doc.bin
+
   refusedAt(doc) {
-    var enteredAt  = require('enteredAt')(doc) //Align it with inventory which used enteredAt
-    return doc.bin === "" && enteredAt
+    var enteredAt = require('enteredAt')(doc) //Align it with inventory which used enteredAt
+    return ! doc.bin && enteredAt
   },
 
   //TODO In case next.length > 1 we may need to do a loop.  Break at first key with "dispensed" prop?
   //see 'next.transaction._id' view for an example
   nextAt(doc) {
-    return doc.bin !== "" && doc.next[0] && doc.next[0].createdAt.slice(0, 10).split('-')
+    return doc.next[0] && doc.next[0].createdAt.slice(0, 10).split('-')
   },
 
   //TODO see above
   dispensedAt(doc) {
     var nextAt = require('nextAt')(doc)
-    return nextAt && doc.next[0].dispensed && nextAt
+    return doc.bin !== "" && nextAt && doc.next[0].dispensed && nextAt
   },
 
   //TODO see above
   pendedAt(doc) {
     var nextAt = require('nextAt')(doc)
-    return nextAt && doc.next[0].pended && nextAt
+    return doc.bin !== "" && nextAt && doc.next[0].pended && nextAt
   },
 
-  //To differentiate from refused, it must have a bin or have no receivedAt.  Can't just use doc.bin (like expiredAt) ve
+  //To differentiate from refused, it must have a bin or have no enteredAt.  Can't just use doc.bin (like expiredAt) ve
   //receivedAt is to account for the disposed section of any repack which has no bin (e.g., 2019-01-18T16:09:27.416600Z)
   //but you do want to exclude items logged without a donor (e.g., 2019-01-24T17:24:21.063700Z) since those are not counted towards received or verified
   //This is a little hacky but the only way I could see to do this is that the former has bin === undefined and the latter bin === ""
   //so bin !== "" excludes only the latter scenario in which an item is refused when logged without a donor
   disposedAt(doc) {
     var nextAt = require('nextAt')(doc)
-    return nextAt && doc.next[0].disposed && nextAt
+    return doc.bin !== "" && nextAt && doc.next[0].disposed && nextAt
   },
 
   //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
