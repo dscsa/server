@@ -39,7 +39,7 @@ exports.lib = {
     return doc.shipment && doc.shipment._id.slice(-10)
   },
 
-  createdAt(doc) {
+  enteredAt(doc) {
     return doc._id.slice(0, 10).split('-')
   },
 
@@ -48,23 +48,24 @@ exports.lib = {
   },
 
   //See description for disposedAt to see why we do !== "" instead of ! doc.bin
+
+  //TODO what do we do about 2019-01-24T17:19:48.798700Z where we log in inventory that is not from a donor?
+  //Unlike the disposed example we do have to count it somewhere since it needs to become inventory and will appear there
   verifiedAt(doc) {
-    var receivedAt = require('receivedAt')(doc)
-    var createdAt  = require('createdAt')(doc) //Align it with inventory which used createdAt
-    return doc.bin !== "" && receivedAt && createdAt
+    var enteredAt  = require('enteredAt')(doc) //Align it with inventory which used enteredAt
+    return doc.bin !== "" && enteredAt
   },
 
   //See description for disposedAt to see why we do === "" instead of doc.bin
   refusedAt(doc) {
-    var receivedAt = require('receivedAt')(doc)
-    var createdAt  = require('createdAt')(doc) //Align it with inventory which used createdAt
-    return doc.bin === "" && receivedAt && createdAt
+    var enteredAt  = require('enteredAt')(doc) //Align it with inventory which used enteredAt
+    return doc.bin === "" && enteredAt
   },
 
   //TODO In case next.length > 1 we may need to do a loop.  Break at first key with "dispensed" prop?
   //see 'next.transaction._id' view for an example
   nextAt(doc) {
-    return doc.next[0] && doc.next[0].createdAt.slice(0, 10).split('-')
+    return doc.bin !== "" && doc.next[0] && doc.next[0].createdAt.slice(0, 10).split('-')
   },
 
   //TODO see above
@@ -85,11 +86,8 @@ exports.lib = {
   //This is a little hacky but the only way I could see to do this is that the former has bin === undefined and the latter bin === ""
   //so bin !== "" excludes only the latter scenario in which an item is refused when logged without a donor
   disposedAt(doc) {
-
-    var createdAt     = require('createdAt')(doc)
-    var nextAt        = require('nextAt')(doc)
-
-    return doc.bin !== "" && ! refusedNoFrom && doc.next[0].disposed && nextAt
+    var nextAt = require('nextAt')(doc)
+    return nextAt && doc.next[0].disposed && nextAt
   },
 
   //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
@@ -159,17 +157,17 @@ exports.lib = {
   inventory(emit, doc, key, val) {
 
     var to_id      = require('to_id')(doc)
-    var createdAt  = require('createdAt')(doc)
+    var enteredAt  = require('enteredAt')(doc)
     var nextAt     = require('nextAt')(doc) || [Infinity]
     var expiredAt  = require('expiredAt')(doc)
     var removedAt  = require('addMonths')(expiredAt, -1) <= nextAt ? expiredAt : nextAt
 
-    if ( ! doc.bin) return //log(doc._id+' inventory NO bin:'+removedAt+' fromDate:'+createdAt)
+    if ( ! doc.bin) return //log(doc._id+' inventory NO bin:'+removedAt+' fromDate:'+enteredAt)
 
-    if (createdAt > removedAt)
-      return log(doc._id+' inventory createdAt > removedAt: createdAt:'+createdAt+' > removedAt:'+removedAt+',  expiredAt:'+expiredAt+',  nextAt:'+nextAt) //these are arrays but that seems to work okay
+    if (enteredAt > removedAt)
+      return log(doc._id+' inventory enteredAt > removedAt: enteredAt:'+enteredAt+' > removedAt:'+removedAt+',  expiredAt:'+expiredAt+',  nextAt:'+nextAt) //these are arrays but that seems to work okay
 
-    require('eachMonth')(createdAt, removedAt, function(year, month, last) {
+    require('eachMonth')(enteredAt, removedAt, function(year, month, last) {
       if (last) return  //don't count it as inventory in the month that it was removed (expired okay since we use until end of the month)
       emit([to_id, 'month', year, month].concat(key), val) //gsns and brand are used by the live inventory page
       if (month == 12) emit([to_id, 'year', year].concat(key), val) //gsns and brand are used by the live inventory page
@@ -277,11 +275,11 @@ exports.views = {
   },
 
   //Inventory at the end of each month (so we do not count the last month)
-  //An item is in inventory from the moment it is created (not verified because verified is unset once destroyed) until the moment it is removed (next property is set) or until it expires
+  //An item is in inventory from the moment it is entered (not verified because verified is unset once destroyed) until the moment it is removed (next property is set) or until it expires
   //We do a loop because couchdb cannot filter and group on different fields.  Emitting [exp, drug] would filter and group on exp.
   //Emitting [drug, exp] would filter and group by drug.  We want to group by drug and filter by exp.  To achieve this we emit
   //every month between the item being added and when it leaves inventory (see above).  This way search for [2018, 06] doesn't just
-  //give us 2018-06 items but all items before that too e.g 2018-05, 2018-04 .... until createdAt date.  In this way the Exp filter
+  //give us 2018-06 items but all items before that too e.g 2018-05, 2018-04 .... until enteredAt date.  In this way the Exp filter
   //is built into the view itself and doesn't require us to use start and end keys to filter by exp, and in this way we can group by drug
 
   //Live Inventory [to_id, year, month+2]?group_level=4
@@ -304,18 +302,16 @@ exports.views = {
     reduce:'_stats'
   },
 
-  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
-  'received.qty-by-generic':{
+  'entered.qty-by-generic':{
     map(doc) {
-      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+      require('groupByDate')(emit, doc, 'entered', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
-  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
-  'received.value-by-generic':{
+  'entered.value-by-generic':{
     map(doc) {
-      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
+      require('groupByDate')(emit, doc, 'entered', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -422,18 +418,16 @@ exports.views = {
     reduce:'_stats'
   },
 
-  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
-  'received.qty-by-from-generic':{
+  'entered.qty-by-from-generic':{
     map(doc) {
-      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+      require('groupByDate')(emit, doc, 'entered', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
-  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
-  'received.value-by-from-generic':{
+  'entered.value-by-from-generic':{
     map(doc) {
-      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
+      require('groupByDate')(emit, doc, 'entered', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },
@@ -552,18 +546,16 @@ exports.views = {
     reduce:'_stats'
   },
 
-  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
-  'received.qty-by-user-from-shipment':{
+  'entered.qty-by-user-from-shipment':{
     map(doc) {
-      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
+      require('groupByDate')(emit, doc, 'entered', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
   },
 
-  //ReceivedAt not equal to CreatedAt (and therefore not Verified+Refused) because shipment could be created one day but items not logged until the following day(s)
-  'received.value-by-user-from-shipment':{
+  'entered.value-by-user-from-shipment':{
     map(doc) {
-      require('receivedAt')(doc) && require('groupByDate')(emit, doc, 'created', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
+      require('groupByDate')(emit, doc, 'entered', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
   },

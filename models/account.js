@@ -191,7 +191,7 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
 function defaultFieldOrder(shipment) {
   return [
     'group',
-    'received.count',
+    'entered.count',
     'refused.count',
     'verified.count',
     'expired.count',
@@ -199,7 +199,7 @@ function defaultFieldOrder(shipment) {
     'dispensed.count',
     'pended.count',
     'inventory.count',
-    'received.qty',
+    'entered.qty',
     'refused.qty',
     'verified.qty',
     'expired.qty',
@@ -207,7 +207,7 @@ function defaultFieldOrder(shipment) {
     'dispensed.qty',
     'pended.qty',
     'inventory.qty',
-    'received.value',
+    'entered.value',
     'refused.value',
     'verified.value',
     'expired.value',
@@ -267,12 +267,12 @@ async function getRecords(ctx, to_id, suffix) {
     opts.group_level     = +ctx.query.group_level + 2
   }
 
-  console.log('getRecords', 'received.'+suffix, 'opts', opts, 'invOpts', invOpts)
+  console.log('getRecords', 'entered.'+suffix, 'opts', opts, 'invOpts', invOpts)
 
   //Inventory cannot be kept by day because expiration date is kept by month.
   //Might be possible to eventually get it for custom group_level but doesn't seem worth trying to figure that out now.
   let queries = [
-    optionalField(ctx, 'received.'+suffix, opts),
+    optionalField(ctx, 'entered.'+suffix, opts),
     optionalField(ctx, 'refused.'+suffix, opts),
     optionalField(ctx, 'verified.'+suffix, opts),
     optionalField(ctx, 'expired.'+suffix, opts),
@@ -310,7 +310,7 @@ function optionalField(ctx, field, opts) {
 function mergeRecords(opts) {
   let records = {}
   for (let suffix in opts) {
-    mergeRecord(records, opts[suffix][0], 'received.'+suffix, uniqueKey)
+    mergeRecord(records, opts[suffix][0], 'entered.'+suffix, uniqueKey)
     mergeRecord(records, opts[suffix][1], 'refused.'+suffix, uniqueKey)
     mergeRecord(records, opts[suffix][2], 'verified.'+suffix, uniqueKey)
     mergeRecord(records, opts[suffix][3], 'expired.'+suffix, uniqueKey)
