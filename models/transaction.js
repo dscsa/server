@@ -171,7 +171,7 @@ exports.lib = {
   inventory(emit, doc, key, val) {
 
     var to_id      = require('to_id')(doc)
-    var enteredAt  = require('enteredAt')(doc)
+    var enteredAt  = require('createdAt')(doc) //Rather than enteredAt to account for repacks that were not "entered" docs like 2019-01-15T14:43:33.378000Z
     var nextAt     = require('nextAt')(doc) || [Infinity]
     var expiredAt  = require('expiredAt')(doc)
     var removedAt  = require('addMonths')(expiredAt, -1) <= nextAt ? expiredAt : nextAt
