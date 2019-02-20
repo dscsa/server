@@ -304,19 +304,19 @@ function updateTransactionsWithGeneric(drug, opts) {
   const delayed = () => {
 
     Promise.all([
-      ctx.db.transaction.query('by-ndc-generic', {startkey:[drug._id], endkey:[drug._id, drug.generic], include_docs:true, inclusive_end:false}),
-      ctx.db.transaction.query('by-ndc-generic', {startkey:[drug._id, drug.generic, {}], endkey:[drug._id, {}], include_docs:true}),
+      ctx.db.transaction.query('by-ndc-generic', {startkey:[drug._id], endkey:[drug._id, drug.generic, drug.form], include_docs:true, inclusive_end:false}),
+      ctx.db.transaction.query('by-ndc-generic', {startkey:[drug._id, drug.generic, drug.form, {}], endkey:[drug._id, {}], include_docs:true}),
       ctx.db.transaction.query('by-ndc-generic', {startkey:[drug._id], endkey:[drug._id, {}]})
     ]).then(([ltGeneric, gtGeneric, allGeneric]) => {
 
       let wrongGeneric = ltGeneric.rows.concat(gtGeneric.rows)
-      console.log('Updating', wrongGeneric.length, 'of', allGeneric.rows.length, 'transactions with generic name', drug.generic)
+      console.log('Updating', wrongGeneric.length, 'of', allGeneric.rows.length, 'transactions with generic name and form', drug.generic, drug.form)
 
       if ( ! wrongGeneric.length) return
 
       //TODO this will miss an update of Tablets <--> Capsules because that won't cause a change in the generic name.  I think this is okay at least for now
       wrongGeneric = wrongGeneric.map(row => {
-        console.log( row.doc.drug.generic,  '-->', drug.generic, row.doc._id, row.doc.drug._id)
+        console.log( row.doc.drug.generic,  '-->', drug.generic, ' | ', row.doc.drug.form,  '-->', drug.form, row.doc._id, row.doc.drug._id)
         row.doc.drug.generic  = drug.generic
         row.doc.drug.generics = drug.generics
         row.doc.drug.form     = drug.form

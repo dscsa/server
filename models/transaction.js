@@ -238,7 +238,7 @@ exports.views = {
 
   //Used by drug endpoint to update transactions on drug name/form updates
   'by-ndc-generic':function(doc) {
-    emit([doc.drug._id, doc.drug.generic])
+    emit([doc.drug._id, doc.drug.generic, doc.drug.form])
   },
 
   'by-generic-price':function(doc) {
