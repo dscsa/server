@@ -59,12 +59,17 @@ exports.lib = {
   //3. Logged No From/Shipment (next.disposed, bin === "" or bin === null, otherwise looks very similar to autodisposed repack surplus)
 
   //Do not want:
-  //1. Repacked     (no verified, bin.length === 3, no shipment)
+  //1. Repacked (no verified, bin.length === 3, no shipment) e.g 2019-01-15T14:43:33.378000Z
   //2. Repack Surplus - Autodisposed (next.disposed, bin is undefined, no verified, no shipmentt)
 
   //doc.verifiedAt because for drugs like 2018-12-04T16:08:34.722200Z and 2019-01-24T17:19:48.798700Z that were bulk entered might not have a receivedAt date
   enteredAt(doc) {
-    return doc.verifiedAt || require('receivedAt')(doc)
+
+    var receivedAt = require('receivedAt')(doc)
+    var createdAt  = require('createdAt')(doc)
+    var refusedAt  = doc.bin === "" || doc.bin === null //doc.bin === undefined happen on autodisposal of repack surplus
+
+    return (doc.verifiedAt || receivedAt || refusedAt) && createdAt
   },
 
   //MECE breakdown of entered into verified and refused
@@ -86,8 +91,6 @@ exports.lib = {
     var exp       = doc.exp.to || doc.exp.from
     return ! refusedAt && exp && exp.slice(0, 10).split('-')
   },
-
-
 
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   //This category must include any repacking surplus which has bin === undefined (e.g., 2019-01-18T16:09:27.416600Z is incuded because enteredAt is false)
