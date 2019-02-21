@@ -63,7 +63,7 @@ exports.lib = {
   //2. Repack Surplus - Autodisposed (next.disposed, bin is undefined, no verified, no shipmentt)
   enteredAt(doc) {
     var receivedAt = require('receivedAt')(doc)
-    return receivedAt || (doc.bin !== undefined && require('createdAt')(doc))
+    return receivedAt || ((doc.bin === "" || doc.bin === null) && require('createdAt')(doc))
   },
 
   //See description for disposedAt to see why we do !== "" instead of ! doc.bin
@@ -88,7 +88,7 @@ exports.lib = {
     return ! refusedAt && exp && exp.slice(0, 10).split('-')
   },
 
-  //To differentiate from refused, it must have a bin or have no enteredAt.  Can't just use doc.bin (like expiredAt) ve
+  //Must differentiate from refused.  Can't just use doc.bin (like expiredAt) ve
   //receivedAt is to account for the disposed section of any repack which has no bin (e.g., 2019-01-18T16:09:27.416600Z)
   //but you do want to exclude items logged without a donor (e.g., 2019-01-24T17:24:21.063700Z) since those are not counted towards received or verified
   //This is a little hacky but the only way I could see to do this is that the former has bin === undefined and the latter bin === ""
