@@ -61,20 +61,19 @@ exports.lib = {
   //Do not want:
   //1. Repacked     (no verified, bin.length === 3, no shipment)
   //2. Repack Surplus - Autodisposed (next.disposed, bin is undefined, no verified, no shipmentt)
+
+  //doc.verifiedAt because for drugs like 2018-12-04T16:08:34.722200Z and 2019-01-24T17:19:48.798700Z that were bulk entered might not have a receivedAt date
   enteredAt(doc) {
-    var receivedAt = require('receivedAt')(doc)
-    return receivedAt || ((doc.bin === "" || doc.bin === null) && require('createdAt')(doc))
+    return doc.verifiedAt || require('receivedAt')(doc)
   },
 
-  //See description for disposedAt to see why we do !== "" instead of ! doc.bin
-
-  //TODO what do we do about 2019-01-24T17:19:48.798700Z where we log in inventory that is not from a donor?
-  //Unlike the disposed example we do have to count it somewhere since it needs to become inventory and will appear there
+  //MECE breakdown of entered into verified and refused
   verifiedAt(doc) {
     var enteredAt  = require('enteredAt')(doc) //Align it with inventory which used enteredAt
     return doc.bin && enteredAt
   },
 
+  //MECE breakdown of entered into verified and refused
   refusedAt(doc) {
     var enteredAt = require('enteredAt')(doc) //Align it with inventory which used enteredAt
     return ! doc.bin && enteredAt
@@ -88,27 +87,29 @@ exports.lib = {
     return ! refusedAt && exp && exp.slice(0, 10).split('-')
   },
 
-  //Must differentiate from refused.  Can't just use doc.bin (like expiredAt) ve
-  //receivedAt is to account for the disposed section of any repack which has no bin (e.g., 2019-01-18T16:09:27.416600Z)
-  //but you do want to exclude items logged without a donor (e.g., 2019-01-24T17:24:21.063700Z) since those are not counted towards received or verified
-  //This is a little hacky but the only way I could see to do this is that the former has bin === undefined and the latter bin === ""
-  //so bin !== "" excludes only the latter scenario in which an item is refused when logged without a donor
+
+
+  //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
+  //This category must include any repacking surplus which has bin === undefined (e.g., 2019-01-18T16:09:27.416600Z is incuded because enteredAt is false)
+  //and exlude any items without a donor that were refused (e.g., 2019-01-24T17:24:21.063700Z because bin === "")
   disposedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
     var nextAt    = require('nextAt')(doc)
     return ! refusedAt && nextAt && doc.next[0].disposed && nextAt
   },
 
-  //Assume that this was not refused
+  //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   dispensedAt(doc) {
+    var refusedAt = require('refusedAt')(doc)
     var nextAt = require('nextAt')(doc)
-    return nextAt && doc.next[0].dispensed && nextAt
+    return ! refusedAt && nextAt && doc.next[0].dispensed && nextAt
   },
 
-  //Assume that this was not refused
+  //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   pendedAt(doc) {
+    var refusedAt = require('refusedAt')(doc)
     var nextAt = require('nextAt')(doc)
-    return nextAt && doc.next[0].pended && nextAt
+    return ! refusedAt && nextAt && doc.next[0].pended && nextAt
   },
 
   addMonths(date, months) {
@@ -137,18 +138,18 @@ exports.lib = {
 
   isExpired(doc) {
     var expired  = require('addMonths')(require('expiredAt')(doc), -1)
-    var next     = require('nextAt')(doc) || [Infinity]
+    var next     = require('nextAt')(doc)
 
     //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed  //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed
     //if not disposed, dispensed, or repacked then use the expiration date because its still in our inventory.  Without out this the formula previous_inventory + verified != disposed + expired + dispensed + current_inventory for every period
-    return expired <= next
+    return ! next || expired <= next
   },
 
   isDisposed(doc) {
-    var expired  = require('addMonths')(require('expiredAt')(doc), -1) || [Infinity]
+    var expired  = require('addMonths')(require('expiredAt')(doc), -1)
     var disposed = require('disposedAt')(doc)
 
-    return expired > disposed
+    return disposed && expired > disposed
   },
 
   //Because of Unicode collation order would be a000, A000, a001 even if I put delimiters like a space or comma inbetween characters
