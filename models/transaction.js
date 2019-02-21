@@ -39,7 +39,6 @@ exports.lib = {
     return doc.shipment && doc.shipment._id.slice(-10)
   },
 
-
   createdAt(doc) {
     return doc._id.slice(0, 10).split('-')
   },
@@ -48,17 +47,23 @@ exports.lib = {
     return doc.shipment && ~ doc.shipment._id.indexOf('.') && doc.shipment._id.slice(11, 21).split('-')
   },
 
+  //TODO In case next.length > 1 we may need to do a loop.  Break at first key with "dispensed" prop?
+  //see 'next.transaction._id' view for an example
+  nextAt(doc) {
+    return doc.next[0] && doc.next[0].createdAt.slice(0, 10).split('-')
+  },
+
   //Want:
-  //1. Logged and refused (next.disposed, no verified, bin === "")
+  //1. Logged and refused (next.disposed, no verified, bin === "", or bin === null)
   //2. Logged and verified (verified, bin.length === 4)
-  //3. Logged No From/Shipment (next.disposed, bin === "", otherwise looks very similar to autodisposed repack surplus)
+  //3. Logged No From/Shipment (next.disposed, bin === "" or bin === null, otherwise looks very similar to autodisposed repack surplus)
 
   //Do not want:
   //1. Repacked     (no verified, bin.length === 3, no shipment)
   //2. Repack Surplus - Autodisposed (next.disposed, bin is undefined, no verified, no shipmentt)
   enteredAt(doc) {
     var receivedAt = require('receivedAt')(doc)
-    return receivedAt || (doc.bin === "" && require('createdAt')(doc))
+    return receivedAt || (doc.bin !== undefined && require('createdAt')(doc))
   },
 
   //See description for disposedAt to see why we do !== "" instead of ! doc.bin
@@ -70,28 +75,17 @@ exports.lib = {
     return doc.bin && enteredAt
   },
 
-
   refusedAt(doc) {
     var enteredAt = require('enteredAt')(doc) //Align it with inventory which used enteredAt
     return ! doc.bin && enteredAt
   },
 
-  //TODO In case next.length > 1 we may need to do a loop.  Break at first key with "dispensed" prop?
-  //see 'next.transaction._id' view for an example
-  nextAt(doc) {
-    return doc.next[0] && doc.next[0].createdAt.slice(0, 10).split('-')
-  },
-
-  //TODO see above
-  dispensedAt(doc) {
-    var nextAt = require('nextAt')(doc)
-    return doc.bin !== "" && nextAt && doc.next[0].dispensed && nextAt
-  },
-
-  //TODO see above
-  pendedAt(doc) {
-    var nextAt = require('nextAt')(doc)
-    return doc.bin !== "" && nextAt && doc.next[0].pended && nextAt
+  //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
+  //if months is the number of months to subtract. This does not adjust days so subtracting 1 month from March 31st will give Febuaray 31st.
+  expiredAt(doc) {
+    var refusedAt = require('refusedAt')(doc)
+    var exp       = doc.exp.to || doc.exp.from
+    return ! refusedAt && exp && exp.slice(0, 10).split('-')
   },
 
   //To differentiate from refused, it must have a bin or have no enteredAt.  Can't just use doc.bin (like expiredAt) ve
@@ -100,15 +94,21 @@ exports.lib = {
   //This is a little hacky but the only way I could see to do this is that the former has bin === undefined and the latter bin === ""
   //so bin !== "" excludes only the latter scenario in which an item is refused when logged without a donor
   disposedAt(doc) {
-    var nextAt = require('nextAt')(doc)
-    return doc.bin !== "" && nextAt && doc.next[0].disposed && nextAt
+    var refusedAt = require('refusedAt')(doc)
+    var nextAt    = require('nextAt')(doc)
+    return ! refusedAt && nextAt && doc.next[0].disposed && nextAt
   },
 
-  //This is when we no longer count the item as part of our inventory because it has expired (even if it hasn't been disposed) or it has a next value (disposed, dispensed, pended, etc)
-  //if months is the number of months to subtract. This does not adjust days so subtracting 1 month from March 31st will give Febuaray 31st.
-  expiredAt(doc) {
-    var exp = doc.exp.to || doc.exp.from
-    return doc.bin !== "" && exp && exp.slice(0, 10).split('-')
+  //Assume that this was not refused
+  dispensedAt(doc) {
+    var nextAt = require('nextAt')(doc)
+    return nextAt && doc.next[0].dispensed && nextAt
+  },
+
+  //Assume that this was not refused
+  pendedAt(doc) {
+    var nextAt = require('nextAt')(doc)
+    return nextAt && doc.next[0].pended && nextAt
   },
 
   addMonths(date, months) {
@@ -133,6 +133,22 @@ exports.lib = {
 
   isRepacked(doc) {
     return require('isInventory')(doc) && doc.bin.length != 4
+  },
+
+  isExpired(doc) {
+    var expired  = require('addMonths')(require('expiredAt')(doc), -1)
+    var next     = require('nextAt')(doc) || [Infinity]
+
+    //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed  //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed
+    //if not disposed, dispensed, or repacked then use the expiration date because its still in our inventory.  Without out this the formula previous_inventory + verified != disposed + expired + dispensed + current_inventory for every period
+    return expired <= next
+  },
+
+  isDisposed(doc) {
+    var expired  = require('addMonths')(require('expiredAt')(doc), -1) || [Infinity]
+    var disposed = require('disposedAt')(doc)
+
+    return expired > disposed
   },
 
   //Because of Unicode collation order would be a000, A000, a001 even if I put delimiters like a space or comma inbetween characters
@@ -171,17 +187,25 @@ exports.lib = {
   inventory(emit, doc, key, val) {
 
     var to_id      = require('to_id')(doc)
-    var enteredAt  = require('createdAt')(doc) //Rather than enteredAt to account for repacks that were not "entered" docs like 2019-01-15T14:43:33.378000Z
-    var nextAt     = require('nextAt')(doc) || [Infinity]
+    var createdAt  = require('createdAt')(doc) //Rather than enteredAt to account for repacks that were not "entered" docs like 2019-01-15T14:43:33.378000Z
+    var nextAt     = require('nextAt')(doc)
     var expiredAt  = require('expiredAt')(doc)
-    var removedAt  = require('addMonths')(expiredAt, -1) <= nextAt ? expiredAt : nextAt
+    var disposedAt = require('disposedAt')(doc)
 
-    if ( ! doc.bin) return //log(doc._id+' inventory NO bin:'+removedAt+' fromDate:'+enteredAt)
+    // Can't just do require('addMonths')(expiredAt, -1) <= nextAt ? expiredAt : nextAt because 2019-01-03T21:02:25.368700Z counts as both inventory and dispensed in same time period
+    var removedAt = nextAt
 
-    if (enteredAt > removedAt)
-      return log(doc._id+' inventory enteredAt > removedAt: enteredAt:'+enteredAt+' > removedAt:'+removedAt+',  expiredAt:'+expiredAt+',  nextAt:'+nextAt) //these are arrays but that seems to work okay
+    if (require('isDisposed')(doc)) //Match disposed view
+      removedAt = disposedAt
+    else if (require('isExpired')(doc)) //Match expired view
+      removedAt = expiredAt
 
-    require('eachMonth')(enteredAt, removedAt, function(year, month, last) {
+    if ( ! doc.bin) return
+
+    if (createdAt > removedAt)
+      return log(doc._id+' inventory createdAt > removedAt: createdAt:'+createdAt+' > removedAt:'+removedAt+',  expiredAt:'+expiredAt+',  nextAt:'+nextAt+', disposedAt:'+disposedAt) //these are arrays but that seems to work okay
+
+    require('eachMonth')(createdAt, removedAt, function(year, month, last) {
       if (last) return  //don't count it as inventory in the month that it was removed (expired okay since we use until end of the month)
       emit([to_id, 'month', year, month].concat(key), val) //gsns and brand are used by the live inventory page
       if (month == 12) emit([to_id, 'year', year].concat(key), val) //gsns and brand are used by the live inventory page
@@ -360,10 +384,7 @@ exports.views = {
 
   'expired.qty-by-generic':{
     map(doc) {
-      var expired   = require('addMonths')(require('expiredAt')(doc), -1)
-      var next      = require('nextAt')(doc) || [Infinity]
-
-      if (expired <= next)
+      if (require('isExpired')(doc))
         require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
@@ -371,12 +392,7 @@ exports.views = {
 
   'expired.value-by-generic':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1)
-      var next     = require('nextAt')(doc) || [Infinity]
-
-      //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed  //If we remove something a month before the expiration date, use the disposed date not the expired date, but still label it as expired rather than disposed
-      //if not disposed, dispensed, or repacked then use the expiration date because its still in our inventory.  Without out this the formula previous_inventory + verified != disposed + expired + dispensed + current_inventory for every period
-      if (expired <= next)
+      if (require('isExpired')(doc))
         require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
@@ -384,10 +400,7 @@ exports.views = {
 
   'disposed.qty-by-generic':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1) || [Infinity]
-      var disposed = require('disposedAt')(doc)
-
-      if (expired > disposed)
+      if (require('isDisposed')(doc))
         require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
@@ -395,10 +408,7 @@ exports.views = {
 
   'disposed.value-by-generic':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1) || [Infinity]
-      var disposed = require('disposedAt')(doc)
-
-      if (expired > disposed)
+      if (require('isDisposed')(doc))
         require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
@@ -476,10 +486,7 @@ exports.views = {
 
   'expired.qty-by-from-generic':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1)
-      var next     = require('nextAt')(doc) || [Infinity]
-
-      if (expired <= next)
+      if (require('isExpired')(doc))
         require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
@@ -487,10 +494,7 @@ exports.views = {
 
   'expired.value-by-from-generic':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1)
-      var next     = require('nextAt')(doc) || [Infinity]
-
-      if (expired <= next)
+      if (require('isExpired')(doc))
         require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
@@ -498,10 +502,7 @@ exports.views = {
 
   'disposed.qty-by-from-generic':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1) || [Infinity]
-      var disposed = require('disposedAt')(doc)
-
-      if (expired > disposed)
+      if (require('isDisposed')(doc))
         require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
@@ -509,10 +510,7 @@ exports.views = {
 
   'disposed.value-by-from-generic':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1) || [Infinity]
-      var disposed = require('disposedAt')(doc)
-
-      if (expired > disposed)
+      if (require('isDisposed')(doc))
         require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
@@ -604,10 +602,7 @@ exports.views = {
 
   'expired.qty-by-user-from-shipment':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1)
-      var next     = require('nextAt')(doc) || [Infinity]
-
-      if (expired <= next)
+      if (require('isExpired')(doc))
         require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
@@ -615,10 +610,7 @@ exports.views = {
 
   'expired.value-by-user-from-shipment':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1)
-      var next     = require('nextAt')(doc) || [Infinity]
-
-      if (expired <= next)
+      if (require('isExpired')(doc))
         require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
@@ -626,10 +618,7 @@ exports.views = {
 
   'disposed.qty-by-user-from-shipment':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1) || [Infinity]
-      var disposed = require('disposedAt')(doc)
-
-      if (expired > disposed)
+      if (require('isDisposed')(doc))
         require('groupByDate')(emit, doc, 'disposed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
     },
     reduce:'_stats'
@@ -637,10 +626,7 @@ exports.views = {
 
   'disposed.value-by-user-from-shipment':{
     map(doc) {
-      var expired  = require('addMonths')(require('expiredAt')(doc), -1) || [Infinity]
-      var disposed = require('disposedAt')(doc)
-
-      if (expired > disposed)
+      if (require('isDisposed')(doc))
         require('groupByDate')(emit, doc, 'disposed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
     },
     reduce:'_stats'
