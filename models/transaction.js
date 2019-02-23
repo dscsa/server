@@ -161,7 +161,7 @@ exports.lib = {
     var dispensed = require('dispensedAt')(doc)
 
     return dispensed && expired > disposed
-  }
+  },
 
   //Because of Unicode collation order would be a000, A000, a001 even if I put delimiters like a space or comma inbetween characters
   //putting into an array seemed like the only remaining option http://docs.couchdb.org/en/stable/ddocs/views/collation.html#collation-specification
