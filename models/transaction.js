@@ -160,7 +160,7 @@ exports.lib = {
     var expired  = require('addMonths')(require('expiredAt')(doc), -1)
     var dispensed = require('dispensedAt')(doc)
 
-    return dispensed && expired > disposed
+    return dispensed && expired > dispensed
   },
 
   //Because of Unicode collation order would be a000, A000, a001 even if I put delimiters like a space or comma inbetween characters
