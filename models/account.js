@@ -283,7 +283,7 @@ async function getRecords(ctx, to_id, suffix) {
 
   if (group === '' || group === 'month' || group === 'year') //inventory is not kept by day and other groupings not listed here
     queries.push(optionalField(ctx, 'inventory.'+suffix, invOpts).then(res => {
-      console.log('res', res && res.rows)
+      //console.log('res', res && res.rows)
       group || res && res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
       return res
     }))
@@ -443,7 +443,7 @@ exports.pend = {
   async delete(ctx, _id, name) {
     const pendId = name.split(' - ')[0] //mirron client's inventory.js hacky getPendId method
     const result = await ctx.db.transaction.query('pended-by-name-bin', {include_docs:true, startkey:[_id, name], endkey:[_id, name+'\uffff']})
-    ctx.req.body = result.rows
+    ctx.req.body = result.rows.map(row => row.doc)
     ctx.account  = {_id}
     ctx.body     = await updateNext(ctx, [])
   }
