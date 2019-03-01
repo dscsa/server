@@ -441,7 +441,9 @@ exports.pend = {
   },
 
   async delete(ctx, _id, name) {
-    ctx.req.body = await ctx.db.transaction.query('pended-by-name-bin', {include_docs:true, startkey:[_id, name], endkey:[_id, name, {}]})
+    const pendId = name.split(' - ')[0] //mirron client's inventory.js hacky getPendId method
+    const result = await ctx.db.transaction.query('pended-by-name-bin', {include_docs:true, startkey:[_id, name], endkey:[_id, name+'\uffff']})
+    ctx.req.body = result.rows
     ctx.account  = {_id}
     ctx.body     = await updateNext(ctx, [])
   }
@@ -474,6 +476,7 @@ exports.dispose = {
 }
 
 function updateNext(ctx, next) {
+  console.log('account.updateNext', ctx.req.body.length, next, ctx.req.body)
   for (let transaction of ctx.req.body) {
     transaction.next = next
   }
