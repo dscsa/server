@@ -87,12 +87,51 @@ keys(function() {
   //CouchDB/PouchDB Replication API
   //
 
+  /*
+  Legit
+  Request Headersview source
+	.	Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,**;q=0.8
+	.	Accept-Encoding: gzip, deflate
+	.	Accept-Language: en-US,en;q=0.9
+	.	Cache-Control: no-cache
+	.	Connection: keep-alive
+	.	Cookie: AuthUser={"_id":"8889875187","account":{"_id":"8889875187"}}; AuthSession=YWRtaW46NUM1Rjc0ODg6rM3QMLVAtsVKQsgiWSCHt4kCE9A
+	.	Host: 54.153.119.5
+	.	Pragma: no-cache
+	.	Referer: http://54.153.119.5/
+	.	Upgrade-Insecure-Requests: 1
+	.	User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.119 Safari/537.36
+
+  Legit
+  Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,**;q=0.8
+  Accept-Encoding: gzip, deflate
+  Accept-Language: en-US,en;q=0.9
+  Cache-Control: no-cache
+  Connection: keep-alive
+  Cookie: AuthUser={"_id":"8889875187","account":{"_id":"8889875187"}}; AuthSession=YWRtaW46NUM1Rjc0ODg6rM3QMLVAtsVKQsgiWSCHt4kCE9A
+  Host: 54.153.119.5
+  Pragma: no-cache
+  Upgrade-Insecure-Requests: 1
+  User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.119 Safari/537.36
+
+  Accept: application/json
+  Accept-Encoding: gzip, deflate
+  Accept-Language: en-US,en;q=0.9
+  Cache-Control: no-cache
+  Connection: keep-alive
+  Cookie: AuthUser={"_id":"8889875187","account":{"_id":"8889875187"}}; AuthSession=YWRtaW46NUM1Rjc0ODg6rM3QMLVAtsVKQsgiWSCHt4kCE9A
+  Host: 54.153.119.5
+  Pragma: no-cache
+  Referer: http://54.153.119.5/
+  User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.119 Safari/537.36
+  */
+
   r('/')
     .get(async function(ctx) {
-      if(ctx.headers.origin || ctx.headers.referer) //Not sure why pouchdb checks ctx.  Shows welcome UUID & Version
-        return await proxy(ctx)
+      if(ctx.accepts('html')) //Not sure why pouchdb checks ctx.  Shows welcome UUID & Version
+        return await get_asset(ctx)
 
-      await get_asset(ctx)
+      await proxy(ctx)
     })
 
   //Serve the application and assets
