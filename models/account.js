@@ -148,7 +148,7 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
   //for (let record of records)
   //  record.value['shipment.from'] = accountMap[record.key[groupLevel]]
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true))
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
 }
 
 exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -181,7 +181,7 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   console.timeEnd('Add Accounts')
   console.time('To CSV')
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true))
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
   console.timeEnd('To CSV')
 }
 
@@ -213,7 +213,7 @@ function defaultFieldOrder(shipment) {
     'pended.value',
     'inventory.value'
   ]
-  .concat( ! shipment ? [] :
+  /*.concat( ! shipment ? [] :
   [
     'shipment.from._id',
     'shipment.from.name',
@@ -221,7 +221,7 @@ function defaultFieldOrder(shipment) {
     'shipment.from.state',
     'shipment.from.phone',
     'shipment.from.createdAt',
-  ])
+  ])*/
   .concat([
     'key.0',
     'key.1',
