@@ -145,8 +145,8 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
   for (let row of accounts.rows)
     accountMap[row.id] = row.doc
 
-  for (let record of records)
-    record.value['shipment.from'] = accountMap[record.key[groupLevel]]
+  //for (let record of records)
+  //  record.value['shipment.from'] = accountMap[record.key[groupLevel]]
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(true))
 }
@@ -177,9 +177,6 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
 
   for (let row of accounts.rows)
     accountMap[row.id] = row.doc
-
-  for (let record of records)
-    record.value['shipment.from'] = accountMap[record.key[groupLevel]]
 
   console.timeEnd('Add Accounts')
   console.time('To CSV')
