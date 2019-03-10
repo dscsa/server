@@ -172,16 +172,14 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   //Baseline is group by [to_id, user], we need at least [to_id, user, from] in order to add account data.
   //NULL group_level will just result in a negative integer
   let defaultLevel = default_group_level(ctx.query.group || '').groupByDate
-  let includeAccts = ctx.query.group_level - defaultLevel
-
-  console.log('recordByUser',ctx.query.group, ctx.query.group_level, defaultLevel, includeAccts, JSON.stringify(ctx.query))
+  let includeFrom  = ctx.query.group_level - defaultLevel >= 1
 
   console.time('Get recordByUser')
 
   let [qtyRecords, valueRecords, accounts] = await Promise.all([
     getRecords(ctx, to_id, 'qty-by-user-from-shipment'),
     getRecords(ctx, to_id, 'value-by-user-from-shipment'),
-    includeAccts >= 1 ? this.db.account.allDocs({endkey:'_design', include_docs:true}) : null
+    includeFrom ? this.db.account.allDocs({endkey:'_design', include_docs:true}) : null
   ])
 
   console.timeEnd('Get recordByUser')
@@ -200,17 +198,19 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   if (accounts) {
     let accountMap = {}
 
-    for (let row of accounts.rows)
-      accountMap[row.id] = row.doc
+    for (let from of accounts.rows)
+      accountMap[from.id] = from.doc
 
-    for (let record of records)
+    for (let record of records) {
+      console.log('Denormalizing recordByUser', record.key[defaultLevel+1], defaultLevel, record.key)
       record.value['shipment.from'] = accountMap[record.key[defaultLevel+1]] //default key level is "user", so we need +1 to get to "from"
+    }
   }
 
   console.timeEnd('Add Accounts recordByUser')
   console.time('To CSV recordByUser')
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(accounts))
   console.timeEnd('To CSV recordByUser')
 }
 
@@ -242,7 +242,7 @@ function defaultFieldOrder(shipment) {
     'pended.value',
     'inventory.value'
   ]
-  /*.concat( ! shipment ? [] :
+  .concat( ! shipment ? [] :
   [
     'shipment.from._id',
     'shipment.from.name',
@@ -250,7 +250,7 @@ function defaultFieldOrder(shipment) {
     'shipment.from.state',
     'shipment.from.phone',
     'shipment.from.createdAt',
-  ])*/
+  ])
   .concat([
     'key.0',
     'key.1',
