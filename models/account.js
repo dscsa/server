@@ -171,7 +171,7 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   //If group_level by From or Shipment, let's add in some demornalized accout data that we can use in the V1 & V2 Merge gSheet
   //Baseline is group by [to_id, user], we need at least [to_id, user, from] in order to add account data.
   //NULL group_level will just result in a negative integer
-  let defaultLevel = default_group_level(ctx.query.group).groupByDate
+  let defaultLevel = default_group_level(ctx.query.group || '').groupByDate
   let includeAccts = ctx.query.group_level - defaultLevel
 
   console.log('recordByUser',ctx.query.group, ctx.query.group_level, defaultLevel, includeAccts, JSON.stringify(ctx.query))
@@ -390,11 +390,11 @@ function sortRecords(rows) {
 
 function default_group_level(key) {
   return {
-    ''    : {groupByDate:3, groupByInv:3}, //[to_id:1, '':2, group:3...]
+    ''    : {groupByDate:3, groupByInv:3}, //(default) [to_id:1, '':2, group:3...]
     year  : {groupByDate:4, groupByInv:4}, //[to_id:1, 'year':2, year:3, group:4...]
     month : {groupByDate:5, groupByInv:5}, //[to_id:1, 'month':2, year:3, month:4, group:5...]
     day   : {groupByDate:6, groupByInv:5}  //[to_id:1, 'day':2, year:3, month:4, day:5, group:6...]   //Inventory doesn't have group by day so do group by month instead
-  }[key] || {groupByDate:2, groupByInv:1}  //[to_id:1, group:2...] //Default in case they are searching for a specific from/user/generic
+  }[key] || {groupByDate:2, groupByInv:1}  //[to_id:1, group[1]:2, year:3, month:4, day:5, group[2+]:6...] //Default in case they are searching for a specific from/user/generic
 }
 
 exports.validate = function(model) {
