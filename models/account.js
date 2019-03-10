@@ -325,7 +325,7 @@ function optionalField(ctx, field, opts) {
     fields = fields.replace(/\.count/g, '.qty') //qty views use the _stat reduce which supplies the count.  There are no count views
     if ( ! fields.includes(fieldType)) return Promise.resolve()
   }
-  console.log(ctx.query.fields, field)
+  console.log('optionalField', ctx.query.fields, field)
   return ctx.db.transaction.query(field, opts)
 }
 
