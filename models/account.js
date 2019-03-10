@@ -326,12 +326,17 @@ async function getRecords(ctx, to_id, suffix) {
 
 function optionalField(ctx, field, opts) {
 
-
   let fields = ctx.query.fields
+
   if (fields) {
+
     let fieldType = field.split('-')[0] //Hacky as this relies on consistent naming of fields.  eg.  dispensed.value-by-user-from-shipment -> dispensed.value
-    fields = fields.replace(/\.count/g, '.qty') //qty views use the _stat reduce which supplies the count.  There are no count views
-    if ( ! fields.includes(fieldType)) return Promise.resolve()
+
+    //qty views use the _stat reduce which supplies the count.  There are no count views
+    if ( ! fields.replace(/\.count/g, '.qty').includes(fieldType)) {
+      console.log('Fields specified so able to skip query for '+fieldType, field)
+      return Promise.resolve()
+    }
   }
   //console.log('optionalField', ctx.query.fields, field)
   return ctx.db.transaction.query(field, opts)
