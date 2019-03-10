@@ -290,7 +290,7 @@ async function getRecords(ctx, to_id, suffix) {
     opts.group_level     = +ctx.query.group_level + 2
   }
 
-  console.log('getRecords', 'entered.'+suffix, 'opts', opts, 'invOpts', invOpts)
+  console.log('getRecords', 'opts', opts)
 
   //Inventory cannot be kept by day because expiration date is kept by month.
   //Might be possible to eventually get it for custom group_level but doesn't seem worth trying to figure that out now.
@@ -305,6 +305,7 @@ async function getRecords(ctx, to_id, suffix) {
   ]
 
   if (group === '' || group === 'month' || group === 'year') //inventory is not kept by day and other groupings not listed here
+    console.log('getRecords', 'invOpts', invOpts)
     queries.push(optionalField(ctx, 'inventory.'+suffix, invOpts).then(res => {
       //console.log('res', res && res.rows)
       group || res && res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
@@ -325,7 +326,7 @@ function optionalField(ctx, field, opts) {
     fields = fields.replace(/\.count/g, '.qty') //qty views use the _stat reduce which supplies the count.  There are no count views
     if ( ! fields.includes(fieldType)) return Promise.resolve()
   }
-  console.log('optionalField', ctx.query.fields, field)
+  //console.log('optionalField', ctx.query.fields, field)
   return ctx.db.transaction.query(field, opts)
 }
 
