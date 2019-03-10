@@ -172,9 +172,11 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   //Baseline is group by [to_id, user], we need at least [to_id, user, from] in order to add account data.
   //NULL group_level will just result in a negative integer
   let defaultLevel = default_group_level(ctx.query.group || '').groupByDate
-  let denormalize  = ctx.query.group_level + 2 - defaultLevel  //+2 because we don't make user group by first two keys [to_id, ''/'year'/'month'/'day']
 
-  console.log('START: recordByUser',ctx.query.group, ctx.query.group_level, defaultLevel, denormalize)
+  //For example, group_level == 1 for user, so 1 + 2 - 3 == 0 and we can't show accounts, but group_level 2+ we would want to show accounts
+  let denormalize  = +ctx.query.group_level + 2 - defaultLevel  //+2 because we don't make user group by first two keys [to_id, ''/'year'/'month'/'day']
+
+  console.log('START: recordByUser','group:', ctx.query.group, 'group_level:', +ctx.query.group_level, 'default_level:', defaultLevel, 'denormalize:', denormalize)
 
   console.time('Get recordByUser')
 
