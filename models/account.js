@@ -114,75 +114,101 @@ function setOrderFields(generic, account, res ) {
 
 exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
 
+  console.time('Get recordByGeneric')
+
   let [qtyRecords, valueRecords] = await Promise.all([
     getRecords(ctx, to_id, 'qty-by-generic'),
     getRecords(ctx, to_id, 'value-by-generic')
   ])
 
+  console.timeEnd('Get recordByGeneric')
+  console.time('Merge recordByGeneric')
+
   let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
+
+  console.timeEnd('Merge recordByGeneric')
+  console.time('Sort recordByGeneric')
 
   records = sortRecords(records)
 
+  console.timeEnd('Sort recordByGeneric')
+  console.time('To CSV recordByGeneric')
+
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
+
+  console.timeEnd('To CSV recordByGeneric')
 }
 
 exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  let [qtyRecords, valueRecords, accounts] = await Promise.all([
+  console.time('Get recordByFrom')
+
+  let [qtyRecords, valueRecords] = await Promise.all([
     getRecords(ctx, to_id, 'qty-by-from-generic'),
-    getRecords(ctx, to_id, 'value-by-from-generic'),
-    this.db.account.allDocs({endkey:'_design', include_docs:true})
+    getRecords(ctx, to_id, 'value-by-from-generic')
   ])
+
+  console.timeEnd('Get recordByFrom')
+  console.time('Merge recordByFrom')
 
   let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
 
+  console.timeEnd('Merge recordByFrom')
+  console.time('Sort recordByFrom')
+
   records = sortRecords(records, to_id)
 
-  //Let's add in some demornalized accout data that we can use in the V1 & V2 Merge gSheet
-  let accountMap = {}
-  let groupLevel = default_group_level(ctx.query.group || '').groupByDate - 1
-
-  for (let row of accounts.rows)
-    accountMap[row.id] = row.doc
-
-  //for (let record of records)
-  //  record.value['shipment.from'] = accountMap[record.key[groupLevel]]
+  console.timeEnd('Sort recordByFrom')
+  console.time('To CSV recordByFrom')
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
+
+  console.timeEnd('To CSV recordByFrom')
 }
 
 exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  console.time('Get Records')
+  //If group_level by From or Shipment, let's add in some demornalized accout data that we can use in the V1 & V2 Merge gSheet
+  //Baseline is group by [to_id, user], we need at least [to_id, user, from] in order to add account data.
+  //NULL group_level will just result in a negative integer
+  let groupLevel = ctx.query.group_level - default_group_level(ctx.query.group || '').groupByDate
+
+  console.time('Get recordByUser')
+
   let [qtyRecords, valueRecords, accounts] = await Promise.all([
     getRecords(ctx, to_id, 'qty-by-user-from-shipment'),
     getRecords(ctx, to_id, 'value-by-user-from-shipment'),
-    this.db.account.allDocs({endkey:'_design', include_docs:true})
+    groupLevel >= 1 ? this.db.account.allDocs({endkey:'_design', include_docs:true}) : null
   ])
-  console.timeEnd('Get Records')
-  console.time('Merge Records')
+
+  console.timeEnd('Get recordByUser')
+  console.time('Merge recordByUser')
 
   let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
 
-  console.timeEnd('Merge Records')
-  console.time('Sort Records')
+  console.timeEnd('Merge recordByUser')
+  console.time('Sort recordByUser')
 
   records = sortRecords(records)
 
-  console.timeEnd('Sort Records')
-  console.time('Add Accounts')
-  //Let's add in some demornalized accout data that we can use in the V1 & V2 Merge gSheet
-  let accountMap = {}
-  let groupLevel = default_group_level(ctx.query.group || '').groupByDate
+  console.timeEnd('Sort recordByUser')
+  console.time('Add Accounts recordByUser')
 
-  for (let row of accounts.rows)
-    accountMap[row.id] = row.doc
+  if (accounts) {
+    let accountMap = {}
 
-  console.timeEnd('Add Accounts')
-  console.time('To CSV')
+    for (let row of accounts.rows)
+      accountMap[row.id] = row.doc
+
+    for (let record of records)
+      record.value['shipment.from'] = accountMap[record.key[2]]
+  }
+
+  console.timeEnd('Add Accounts recordByUser')
+  console.time('To CSV recordByUser')
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
-  console.timeEnd('To CSV')
+  console.timeEnd('To CSV recordByUser')
 }
 
 function defaultFieldOrder(shipment) {
