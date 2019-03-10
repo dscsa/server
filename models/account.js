@@ -205,10 +205,8 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
     for (let account of accounts.rows)
       accountMap[account.id] = account.doc
 
-    for (let record of records) {
-      console.log('Denormalizing recordByUser', record.key[defaultLevel], defaultLevel, record.key)
+    for (let record of records)
       record.value['shipment.from'] = accountMap[record.key[defaultLevel]]
-    }
   }
 
   console.timeEnd('Add Accounts recordByUser')
@@ -333,12 +331,10 @@ function optionalField(ctx, field, opts) {
     let fieldType = field.split('-')[0] //Hacky as this relies on consistent naming of fields.  eg.  dispensed.value-by-user-from-shipment -> dispensed.value
 
     //qty views use the _stat reduce which supplies the count.  There are no count views
-    if ( ! fields.replace(/\.count/g, '.qty').includes(fieldType)) {
-      console.log('Fields specified so able to skip query for '+fieldType, field)
+    if ( ! fields.replace(/\.count/g, '.qty').includes(fieldType))
       return Promise.resolve()
-    }
   }
-  //console.log('optionalField', ctx.query.fields, field)
+  console.log('optionalField specified', field, fields)
   return ctx.db.transaction.query(field, opts)
 }
 
