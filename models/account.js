@@ -171,7 +171,7 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   //If group_level by From or Shipment, let's add in some demornalized accout data that we can use in the V1 & V2 Merge gSheet
   //Baseline is group by [to_id, user], we need at least [to_id, user, from] in order to add account data.
   //NULL group_level will just result in a negative integer
-  let groupLevel = ctx.query.group_level - default_group_level(ctx.query.group || '').groupByDate
+  let groupLevel = ctx.query.group_level - default_group_level(ctx.query.group).groupByDate
 
   console.time('Get recordByUser')
 
