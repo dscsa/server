@@ -206,8 +206,8 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
       accountMap[account.id] = account.doc
 
     for (let record of records) {
-      console.log('Denormalizing recordByUser', record.key[defaultLevel+1], defaultLevel, record.key)
-      record.value['shipment.from'] = accountMap[record.key[defaultLevel+1]] //default key level is "user", so we need +1 to get to "from"
+      console.log('Denormalizing recordByUser', record.key[defaultLevel], defaultLevel, record.key)
+      record.value['shipment.from'] = accountMap[record.key[defaultLevel]]
     }
   }
 
