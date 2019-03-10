@@ -173,6 +173,8 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   //NULL group_level will just result in a negative integer
   let groupLevel = ctx.query.group_level - default_group_level(ctx.query.group).groupByDate
 
+  console.log('recordByUser',ctx.query.group, ctx.query.group_level, default_group_level(ctx.query.group), groupLevel, JSON.stringify(ctx.query))
+
   console.time('Get recordByUser')
 
   let [qtyRecords, valueRecords, accounts] = await Promise.all([
@@ -385,13 +387,13 @@ function sortRecords(rows) {
   return Object.keys(rows).sort().map(key => rows[key])
 }
 
-function default_group_level(group) {
+function default_group_level(key) {
   return {
-    ''    :{groupByDate:3, groupByInv:3},
-    year  :{groupByDate:4, groupByInv:4},
-    month :{groupByDate:5, groupByInv:5},
-    day   :{groupByDate:6, groupByInv:5}    //Inventory doesn't have group by day so do group by month instead
-  }[group] || {groupByDate:2, groupByInv:1} //Default in case they are searching for a specific from/user/generic
+    ''    : {groupByDate:3, groupByInv:3}, //[to_id:1, '':2, group:3]
+    year  : {groupByDate:4, groupByInv:4}, //[to_id:1, 'year':2, year:3, group:4]
+    month : {groupByDate:5, groupByInv:5}, //[to_id:1, 'month':2, year:3, month:4, group:5]
+    day   : {groupByDate:6, groupByInv:5}  //[to_id:1, 'day':2, year:3, month:4, day:5, group:6]   //Inventory doesn't have group by day so do group by month instead
+  }[key] || {groupByDate:2, groupByInv:1}  //Default in case they are searching for a specific from/user/generic
 }
 
 exports.validate = function(model) {
