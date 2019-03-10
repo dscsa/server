@@ -172,14 +172,16 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   //Baseline is group by [to_id, user], we need at least [to_id, user, from] in order to add account data.
   //NULL group_level will just result in a negative integer
   let defaultLevel = default_group_level(ctx.query.group || '').groupByDate
-  let includeFrom  = ctx.query.group_level - defaultLevel >= 1
+  let denormalize  = ctx.query.group_level - defaultLevel
+
+  console.log('START: recordByUser',ctx.query.group, ctx.query.group_level, defaultLevel, denormalize)
 
   console.time('Get recordByUser')
 
   let [qtyRecords, valueRecords, accounts] = await Promise.all([
     getRecords(ctx, to_id, 'qty-by-user-from-shipment'),
     getRecords(ctx, to_id, 'value-by-user-from-shipment'),
-    includeFrom ? this.db.account.allDocs({endkey:'_design', include_docs:true}) : null
+    denormalize >= 1 ? this.db.account.allDocs({endkey:'_design', include_docs:true}) : null
   ])
 
   console.timeEnd('Get recordByUser')
@@ -198,8 +200,8 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   if (accounts) {
     let accountMap = {}
 
-    for (let from of accounts.rows)
-      accountMap[from.id] = from.doc
+    for (let account of accounts.rows)
+      accountMap[account.id] = account.doc
 
     for (let record of records) {
       console.log('Denormalizing recordByUser', record.key[defaultLevel+1], defaultLevel, record.key)
