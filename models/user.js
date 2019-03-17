@@ -53,7 +53,7 @@ function saveLogin(doc, opts) {
   if (doc.password) {
     //User ._id not .phone since _id has had all extraneous characters removed
     let _user = {name:doc._id, password:doc.password, roles:['allAccounts', doc.account._id]}
-    console.log('saveLogin', '_user', _user, 'doc', doc, 'admin', admin, 'account', opts.ctx && opts.ctx.account, 'headers', opts.ctx && opts.ctx.headers, 'cookies', opts.ctx && opts.ctx.cookies.get())
+    console.log('saveLogin', '_user', _user, 'doc', doc, 'admin', admin, 'account', opts.ctx && opts.ctx.account, 'headers', opts.ctx && opts.ctx.headers)
     delete doc.password //we don't want to save this in the user table
 
     return opts.ctx.db._users.put(_user, {auth:admin.ajax.auth, ajax:admin.ajax}).catch(err => console.log('new session err', err))
