@@ -45,10 +45,18 @@ keys(function() {
     if (ctx.method == 'OPTIONS')
       return ctx.status = 204
 
-    let cookie  = JSON.parse(ctx.cookies.get('AuthUser') || 'null')
+    let basic   = ctx.get('authorization')
+    let cookie  = ctx.cookies.get('AuthUser')
 
-    ctx.user    = {_id:cookie && cookie._id}
-    ctx.account = {_id:cookie && cookie.account._id}
+    if (cookie) {
+      cookie  = JSON.parse(cookie)
+      ctx.user    = {_id:cookie._id}
+      ctx.account = {_id:cookie.account._id}
+    } else if (basic) {
+      basic = Buffer.from(basic.slice(6), 'base64').toString() //Get rid of "Basic " and then decode
+      ctx.user    = {_id:basic.split(':')[0]}
+      ctx.account = {_id:false}
+    } 
 
     await body(ctx.req)
     await next()
