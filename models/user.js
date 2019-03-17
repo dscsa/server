@@ -69,7 +69,7 @@ function saveLogin(doc, opts) {
     opts.ctx && opts.ctx.cookies.set('AuthSession', null, {overwrite:true})
     console.log('cookie 2', opts.ctx && opts.ctx.cookies.get('AuthSession'))
 
-    opts.ctx && opts.ctx.request.headers.cookie = '';
+    opts.ctx && (opts.ctx.request.headers.cookie = '');
     console.log('cookie 3', opts.ctx && opts.ctx.cookies.get('AuthSession'))
 
     delete opts.ctx.request.headers.cookie;
