@@ -3,7 +3,7 @@
 //defaults
 module.exports = exports = Object.create(require('../helpers/model'))
 
-let admin = {ajax:{cookie:'', auth:require('../../../keys/dev')}}
+let admin = {ajax:{jar:false, auth:require('../../../keys/dev')}}
 let csv = require('csv/server')
 
 exports.views = {
