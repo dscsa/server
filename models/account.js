@@ -466,7 +466,7 @@ exports.pend = {
 
   async post(ctx, _id, name) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, [{pended:{_id:name}, user:{_id}, createdAt:new Date().toJSON()}])
+    ctx.body = await updateNext(ctx, [{pended:{_id:name}, user:ctx.user, createdAt:new Date().toJSON()}])
   },
 
   async delete(ctx, _id, name) {
@@ -482,7 +482,7 @@ exports.dispense = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, [{dispensed:{}, user:{_id}, createdAt:new Date().toJSON()}])
+    ctx.body = await updateNext(ctx, [{dispensed:{}, user:ctx.user, createdAt:new Date().toJSON()}])
   },
 
   // async delete(ctx, _id) {
@@ -495,7 +495,7 @@ exports.dispose = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, [{disposed:{}, user:{_id}, createdAt:new Date().toJSON()}])
+    ctx.body = await updateNext(ctx, [{disposed:{}, user:ctx.user, createdAt:new Date().toJSON()}])
   },
 
   // async delete(ctx, _id) {
