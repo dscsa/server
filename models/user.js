@@ -63,12 +63,24 @@ function saveLogin(doc, opts) {
 
     delete doc.password //we don't want to save this in the user table
 
-    opts.ctx.cookies.set('AuthSession', null)
-    opts.ctx.cookies.set('AuthSession')
+    opts.ctx && opts.ctx.cookies.set('AuthSession', {overwrite:true})
+    console.log('cookie 1', opts.ctx && opts.ctx.cookies.get('AuthSession'))
+
+    opts.ctx && opts.ctx.cookies.set('AuthSession', null, {overwrite:true})
+    console.log('cookie 2', opts.ctx && opts.ctx.cookies.get('AuthSession'))
+
+    opts.ctx && opts.ctx.request.headers.cookie = '';
+    console.log('cookie 3', opts.ctx && opts.ctx.cookies.get('AuthSession'))
+
+    delete opts.ctx.request.headers.cookie;
+    console.log('cookie 4', opts.ctx && opts.ctx.cookies.get('AuthSession'))
+
+    delete opts.ctx.req.headers.cookie;
+    console.log('cookie 5', opts.ctx && opts.ctx.cookies.get('AuthSession'))
 
     console.log('cookie after', opts.ctx && opts.ctx.cookies.get('AuthSession'))
     console.log('headers after', opts.ctx && opts.ctx.headers)
-    
+
     return opts.ctx.db._users.put(_user, {ajax:admin.ajax}).catch(err => console.log('new session err', err))
   }
 
