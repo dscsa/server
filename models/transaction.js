@@ -12,7 +12,7 @@ let drug     = require('./drug')
 let shipment = require('./shipment')
 let csv = require('csv/server')
 let crypto = require('crypto')
-let admin  = {ajax:{auth:require('../../../keys/dev.js')}}
+let admin  = {ajax:{jar:false, auth:require('../../../keys/dev.js')}}
 
 
 exports.lib = {

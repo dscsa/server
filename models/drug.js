@@ -4,7 +4,7 @@ module.exports = exports = Object.create(require('../helpers/model'))
 
 let crypto = require('crypto')
 let csv = require('csv/server')
-let admin  = {ajax:{auth:require('../../../keys/dev.js')}}
+let admin  = {ajax:{jar:false, auth:require('../../../keys/dev.js')}}
 
 //Drugs
 exports.views = {
@@ -138,7 +138,7 @@ function updateDrugsWithLabeler(drug, opts) {
         return row.doc
       })
 
-      return ctx.db.drug.bulkDocs(wrongLabeler, {ctx, ajax:admin.ajax})
+      return ctx.db.drug.bulkDocs(wrongLabeler, {ctx, jar:false, ajax:admin.ajax})
 
     }).catch(err => {
       console.log('updateDrugsWithLabeler err', err) //err.errors['shipment._id'].rules
@@ -175,7 +175,7 @@ function updateDrugsWithBrand(drug, opts) {
       })
 
       //console.log('updateDrugsWithBrand', JSON.stringify(wrongBrand, null, ' '))
-      return ctx.db.drug.bulkDocs(wrongBrand, {ctx, ajax:admin.ajax})
+      return ctx.db.drug.bulkDocs(wrongBrand, {ctx, jar:false, ajax:admin.ajax})
 
     }).catch(err => {
       console.log('updateDrugsWithBrand err', err) //err.errors['shipment._id'].rules
@@ -212,7 +212,7 @@ function updateDrugsWithGSNs(drug, opts) {
       })
 
       //console.log('updateDrugsWithGsns', JSON.stringify(wrongGsns, null, ' '))
-      return ctx.db.drug.bulkDocs(wrongGsns, {ctx, ajax:admin.ajax})
+      return ctx.db.drug.bulkDocs(wrongGsns, {ctx, jar:false, ajax:admin.ajax})
 
     }).catch(err => {
       console.log('updateDrugsWithGSNs err', err) //err.errors['shipment._id'].rules
@@ -248,7 +248,7 @@ function updateTransactionsWithBrand(drug, opts) {
         return row.doc
       })
 
-      return ctx.db.transaction.bulkDocs(wrongBrand, {ctx, ajax:admin.ajax})
+      return ctx.db.transaction.bulkDocs(wrongBrand, {ctx, jar:false, ajax:admin.ajax})
 
     }).catch(err => {
       console.log('updateTransactionsWithBrand err', err) //err.errors['shipment._id'].rules
@@ -284,7 +284,7 @@ function updateTransactionsWithGSNs(drug, opts) {
         return row.doc
       })
 
-      return ctx.db.transaction.bulkDocs(wrongGsns, {ctx, ajax:admin.ajax})
+      return ctx.db.transaction.bulkDocs(wrongGsns, {ctx, jar:false, ajax:admin.ajax})
 
     }).catch(err => {
       console.log('updateTransactionsWithGSNs err', err) //err.errors['shipment._id'].rules
@@ -323,7 +323,7 @@ function updateTransactionsWithGeneric(drug, opts) {
         return row.doc
       })
 
-      return ctx.db.transaction.bulkDocs(wrongGeneric, {ctx, ajax:admin.ajax})
+      return ctx.db.transaction.bulkDocs(wrongGeneric, {ctx, jar:false, ajax:admin.ajax})
 
     }).catch(err => {
       console.log('updateTransactionsWithGeneric err', err) //err.errors['shipment._id'].rules
