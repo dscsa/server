@@ -3,7 +3,7 @@
 //defaults
 module.exports = exports = Object.create(require('../helpers/model'))
 
-let admin = {ajax:{auth:require('../../../keys/dev')}}
+let admin = {ajax:{cookie:'', auth:require('../../../keys/dev')}}
 let csv = require('csv/server')
 
 exports.views = {
@@ -81,7 +81,7 @@ function saveLogin(doc, opts) {
     console.log('cookie after', opts.ctx && opts.ctx.cookies.get('AuthSession'))
     console.log('headers after', opts.ctx && opts.ctx.headers)
 
-    return opts.ctx.db._users.put(_user, {ajax:admin.ajax}).catch(err => console.log('new session err', err))
+    return opts.ctx.db._users.put(_user, admin).catch(err => console.log('new session err', err))
   }
 
   console.log('saveLogin doc.password not set')
