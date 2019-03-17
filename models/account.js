@@ -65,9 +65,6 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
     ctx.db.account.get(to_id)
   ])
 
-  console.log('inventory.csv', 'invOpts', invOpts, inventory.rows.length)
-  console.log('inventory.csv', 'disOpts', disOpts, dispensed.rows.length)
-
   let drugs = {}
   mergeRecord(drugs, inventory, 'inventory.qty', genericKey)
   mergeRecord(drugs, dispensed, 'dispensed.qty', genericKey)
@@ -122,21 +119,21 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
   ])
 
   console.timeEnd('Get recordByGeneric')
-  console.time('Merge recordByGeneric')
+  //console.time('Merge recordByGeneric')
 
   let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
 
-  console.timeEnd('Merge recordByGeneric')
-  console.time('Sort recordByGeneric')
+  //console.timeEnd('Merge recordByGeneric')
+  //console.time('Sort recordByGeneric')
 
   records = sortRecords(records)
 
-  console.timeEnd('Sort recordByGeneric')
-  console.time('To CSV recordByGeneric')
+  //console.timeEnd('Sort recordByGeneric')
+  //console.time('To CSV recordByGeneric')
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
 
-  console.timeEnd('To CSV recordByGeneric')
+  //console.timeEnd('To CSV recordByGeneric')
 }
 
 exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -149,21 +146,21 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
   ])
 
   console.timeEnd('Get recordByFrom')
-  console.time('Merge recordByFrom')
+  //console.time('Merge recordByFrom')
 
   let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
 
-  console.timeEnd('Merge recordByFrom')
-  console.time('Sort recordByFrom')
+  //console.timeEnd('Merge recordByFrom')
+  //console.time('Sort recordByFrom')
 
   records = sortRecords(records, to_id)
 
-  console.timeEnd('Sort recordByFrom')
-  console.time('To CSV recordByFrom')
+  //console.timeEnd('Sort recordByFrom')
+  //console.time('To CSV recordByFrom')
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
 
-  console.timeEnd('To CSV recordByFrom')
+  //console.timeEnd('To CSV recordByFrom')
 }
 
 exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -176,7 +173,7 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   //For example, group_level == 1 for user, so 1 + 2 - 3 == 0 and we can't show accounts, but group_level 2+ we would want to show accounts
   let denormalize  = +ctx.query.group_level + 2 - defaultLevel  //+2 because we don't make user group by first two keys [to_id, ''/'year'/'month'/'day']
 
-  console.log('START: recordByUser','group:', ctx.query.group, 'group_level:', +ctx.query.group_level, 'default_level:', defaultLevel, 'denormalize:', denormalize)
+  //console.log('START: recordByUser','group:', ctx.query.group, 'group_level:', +ctx.query.group_level, 'default_level:', defaultLevel, 'denormalize:', denormalize)
 
   console.time('Get recordByUser')
 
@@ -187,17 +184,17 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
   ])
 
   console.timeEnd('Get recordByUser')
-  console.time('Merge recordByUser')
+  //console.time('Merge recordByUser')
 
   let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
 
-  console.timeEnd('Merge recordByUser')
-  console.time('Sort recordByUser')
+  //console.timeEnd('Merge recordByUser')
+  //console.time('Sort recordByUser')
 
   records = sortRecords(records)
 
-  console.timeEnd('Sort recordByUser')
-  console.time('Add Accounts recordByUser')
+  //console.timeEnd('Sort recordByUser')
+  //console.time('Add Accounts recordByUser')
 
   if (accounts) {
     let accountMap = {}
@@ -209,11 +206,11 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
       record.value['shipment.from'] = accountMap[record.key[defaultLevel]]
   }
 
-  console.timeEnd('Add Accounts recordByUser')
-  console.time('To CSV recordByUser')
+  //console.timeEnd('Add Accounts recordByUser')
+  //console.time('To CSV recordByUser')
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(accounts))
-  console.timeEnd('To CSV recordByUser')
+  //console.timeEnd('To CSV recordByUser')
 }
 
 function defaultFieldOrder(shipment) {
@@ -290,12 +287,12 @@ async function getRecords(ctx, to_id, suffix) {
 
   //Advanced use cases (Form 8283) might call for specifying a custom group level
   if (ctx.query.group_level) {
-    console.log('group_level', invOpts.group_level, ctx.query.group_level, opts.group_level)
+    //console.log('group_level', invOpts.group_level, ctx.query.group_level, opts.group_level)
     invOpts.group_level += +ctx.query.group_level + 2 - opts.group_level //we keep the inventory Group level relative to the new, custom group_level
     opts.group_level     = +ctx.query.group_level + 2
   }
 
-  console.log('getRecords', 'opts', opts)
+  //console.log('getRecords', 'opts', opts)
 
   //Inventory cannot be kept by day because expiration date is kept by month.
   //Might be possible to eventually get it for custom group_level but doesn't seem worth trying to figure that out now.
@@ -310,7 +307,7 @@ async function getRecords(ctx, to_id, suffix) {
   ]
 
   if (group === '' || group === 'month' || group === 'year') //inventory is not kept by day and other groupings not listed here
-    console.log('getRecords', 'invOpts', invOpts)
+    //console.log('getRecords', 'invOpts', invOpts)
     queries.push(optionalField(ctx, 'inventory.'+suffix, invOpts).then(res => {
       //console.log('res', res && res.rows)
       group || res && res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
@@ -334,7 +331,7 @@ function optionalField(ctx, field, opts) {
     if ( ! fields.replace(/\.count/g, '.qty').includes(fieldType))
       return Promise.resolve()
   }
-  console.log('optionalField specified', field, fields)
+  //console.log('optionalField specified', field, fields)
   return ctx.db.transaction.query(field, opts)
 }
 
