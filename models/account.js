@@ -407,7 +407,7 @@ exports.validate = function(model) {
 //Context-specific - options MUST have 'ctx' property in order to work.
 function authorized(doc, opts) {
 
-  if (opts.ctx.account._id)
+  if (opts.ctx.account && opts.ctx.account._id)
     return doc._id == opts.ctx.account._id
 
   if (exports.isNew(doc, opts)) {

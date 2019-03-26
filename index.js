@@ -48,6 +48,9 @@ keys(function() {
     let basic   = ctx.get('authorization')
     let cookie  = ctx.cookies.get('AuthUser')
 
+    ctx.user    = {}
+    ctx.account = {}
+    
     if (cookie) {
       cookie  = JSON.parse(cookie)
       ctx.user    = {_id:cookie._id}
@@ -56,7 +59,7 @@ keys(function() {
       basic = Buffer.from(basic.slice(6), 'base64').toString() //Get rid of "Basic " and then decode
       ctx.user    = {_id:basic.split(':')[0]}
       ctx.account = {_id:false}
-    } 
+    }
 
     await body(ctx.req)
     await next()

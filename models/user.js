@@ -30,7 +30,7 @@ exports.validate = function(model) {
 //Context-specific - options MUST have 'this' property in order to work.
 function authorized(doc, opts) {
 
-  if (opts.ctx.account._id) {
+  if (opts.ctx.account && opts.ctx.account._id) {
     console.log('Matching user ctx.account._id with doc.account._id', doc.account._id, opts.ctx.account._id)
     return doc.account._id == opts.ctx.account._id
   }
