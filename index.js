@@ -66,14 +66,14 @@ keys(function() {
 
       console.log('Looking up Authorizaiton', res.body, res.status)
 
-      if (res.status == 200) {
+      if (res.status == 200 && res.body.userCtx.name) {
         ctx.user    = {_id:res.body.userCtx.name}
         ctx.account = {_id:res.body.userCtx.roles[1]}
         ctx.cookies.set('AuthUser', JSON.stringify({_id:ctx.user._id, account:ctx.account}), {httpOnly:false})
       }
     }
 
-    console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'cookie', cookie, 'basic', basic)
+    console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'cookie', cookie, 'basic', basic, 'session', session)
 
     await body(ctx.req)
     await next()
