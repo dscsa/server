@@ -40,6 +40,7 @@ function authorized(doc, opts) {
     return true //enable user to be created even though current user doesn't exist and therefor doesn't have allAccounts role
   }
 
+  console.log('doc.account._id', doc.account && doc.account._id, 'opts.ctx.account._id', opts.ctx.account && opts.ctx.account._id,  'doc.user._id', doc.user && doc.user._id, 'opts.ctx.user._id', opts.ctx.user && opts.ctx.user._id)
   return false
 }
 

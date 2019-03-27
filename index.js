@@ -50,7 +50,7 @@ keys(function() {
 
     ctx.user    = {}
     ctx.account = {}
-    
+
     if (cookie) {
       cookie  = JSON.parse(cookie)
       ctx.user    = {_id:cookie._id}
@@ -60,6 +60,8 @@ keys(function() {
       ctx.user    = {_id:basic.split(':')[0]}
       ctx.account = {_id:false}
     }
+
+    console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'cookie', cookie, 'basic', basic)
 
     await body(ctx.req)
     await next()
