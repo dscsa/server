@@ -47,18 +47,30 @@ keys(function() {
 
     let basic   = ctx.get('authorization')
     let cookie  = ctx.cookies.get('AuthUser')
+    let session = ctx.cookies.get('AuthSession')
 
     ctx.user    = {}
     ctx.account = {}
 
-    if (cookie) {
-      cookie  = JSON.parse(cookie)
-      ctx.user    = {_id:cookie._id}
-      ctx.account = {_id:cookie.account._id}
-    } else if (basic) {
+    if (basic) {
       basic = Buffer.from(basic.slice(6), 'base64').toString() //Get rid of "Basic " and then decode
       ctx.user    = {_id:basic.split(':')[0]}
       ctx.account = {_id:false}
+    } else if (cookie) {
+      cookie  = JSON.parse(cookie)
+      ctx.user    = {_id:cookie._id}
+      ctx.account = {_id:cookie.account._id}
+    } else if (session) {
+
+      let res = await ctx.ajax({url:'/_session'})
+
+      console.log('Looking up Authorizaiton', res.body, res.status)
+
+      if (res.status == 200) {
+        ctx.user    = {_id:res.body.name}
+        ctx.account = {_id:res.body.roles[1]}
+        ctx.cookies.set('AuthUser', JSON.stringify({_id:ctx.user._id, account:ctx.account}), {httpOnly:false})
+      }
     }
 
     console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'cookie', cookie, 'basic', basic)
