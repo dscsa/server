@@ -62,13 +62,13 @@ keys(function() {
       ctx.account = {_id:cookie.account._id}
     } else if (session) {
 
-      let res = await ctx.ajax({url:'/_session'})
+      let res = await ctx.ajax({url:'/_session', auth:ctx.auth})
 
       console.log('Looking up Authorizaiton', res.body, res.status)
 
       if (res.status == 200) {
-        ctx.user    = {_id:res.body.name}
-        ctx.account = {_id:res.body.roles[1]}
+        ctx.user    = {_id:res.body.userCtx.name}
+        ctx.account = {_id:res.body.userCtx.roles[1]}
         ctx.cookies.set('AuthUser', JSON.stringify({_id:ctx.user._id, account:ctx.account}), {httpOnly:false})
       }
     }
