@@ -55,13 +55,13 @@ exports.get_csv = async function (ctx, db) {
 //Server-side validation methods to supplement shared ones.
 exports.validate = function(model) {
   return model
+    .ensure('_rev').trigger(updatePrice).withMessage('Could not update the price of this drug')
     .ensure('_rev').trigger(updateTransactionsWithBrand).withMessage('Could not update drug.brand on all transactions')
     .ensure('_rev').trigger(updateTransactionsWithGeneric).withMessage('Could not update drug.generic on all transactions')
     .ensure('_rev').trigger(updateTransactionsWithGSNs).withMessage('Could not update GSNs on all transactions')
     .ensure('_rev').trigger(updateDrugsWithBrand).withMessage('Could not update brand name on all drugs')
     .ensure('_rev').trigger(updateDrugsWithLabeler).withMessage('Could not update labeler on all drugs')
     .ensure('_rev').trigger(updateDrugsWithGSNs).withMessage('Could not update GSNs on all drugs')
-    .ensure('_rev').trigger(updatePrice).withMessage('Could not update the price of this drug')
 }
 
 function updatePrice(drug, opts) {
