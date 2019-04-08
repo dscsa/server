@@ -388,7 +388,9 @@ function nadacNameUrl(drug) {
 function goodrxUrl(endpoint, name, dosage) {
   let qs  =`name=${name}&dosage=${dosage}&api_key=f46cd9446f`.replace(/ /g, '%20')
   let sig = crypto.createHmac('sha256', 'c9lFASsZU6MEu1ilwq+/Kg==').update(qs).digest('base64').replace(/\/|\+/g, '_')
-  return `https://api.goodrx.com/${endpoint}?${qs}&sig=${sig}`
+  let url = `https://api.goodrx.com/${endpoint}?${qs}&sig=${sig}`
+  console.log(url)
+  return url
 }
 
 function nadacCalculatePrice(nadac, drug) {
@@ -463,7 +465,7 @@ function goodrxApi(ctx, endpoint, drug, strength) {
   let url = goodrxUrl(endpoint, drug, strength)
   return ctx.ajax({url}).then(goodrx => {
      if (goodrx.body) return goodrx.body.data
-     let candidate = goodrx.error.errors && goodrx.error.errors[0].candidates && goodrx.error.errors[0].candidates[0]
+     let candidate = goodrx.error.errors && goodrx.error.errors[0] && goodrx.error.errors[0].candidates && goodrx.error.errors[0].candidates[0]
      return {url, candidate, error:goodrx.error}
   })
 }
