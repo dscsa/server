@@ -386,7 +386,7 @@ function nadacNameUrl(drug) {
 }
 
 function goodrxUrl(endpoint, name, dosage) {
-  let qs  =`name=${name}&dosage=${dosage}&api_key=d049602abc`.replace(/ /g, '%20')
+  let qs  =`name=${name}&dosage=${dosage}&api_key=2a6c42b0aa`.replace(/ /g, '%20')
   let sig = crypto.createHmac('sha256', 'WxSJvMBRd0IcVw').update(qs).digest('base64').replace(/\/|\+/g, '_')
   let url = `https://api.goodrx.com/${endpoint}?${qs}&sig=${sig}`
   console.log(url)
