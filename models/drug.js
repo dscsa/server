@@ -3,8 +3,9 @@
 module.exports = exports = Object.create(require('../helpers/model'))
 
 let crypto = require('crypto')
-let csv = require('csv/server')
-let admin  = {ajax:{jar:false, auth:require('../../../keys/dev.js')}}
+let csv    = require('csv/server')
+let keys   = require('../../../keys/dev.js')
+let admin  = {ajax:{jar:false, auth:keys.couch}}
 
 //Drugs
 exports.views = {
@@ -386,8 +387,8 @@ function nadacNameUrl(drug) {
 }
 
 function goodrxUrl(endpoint, name, dosage) {
-  let qs  =`name=${name}&dosage=${dosage}&api_key=2a6c42b0aa`.replace(/ /g, '%20')
-  let sig = crypto.createHmac('sha256', 'WxSJvMBRd0IcVw').update(qs).digest('base64').replace(/\/|\+/g, '_')
+  let qs  =`name=${name}&dosage=${dosage}&api_key=${keys.goodrx.username}`.replace(/ /g, '%20')
+  let sig = crypto.createHmac('sha256', keys.goodrx.password).update(qs).digest('base64').replace(/\/|\+/g, '_')
   let url = `https://api.goodrx.com/${endpoint}?${qs}&sig=${sig}`
   console.log(url)
   return url

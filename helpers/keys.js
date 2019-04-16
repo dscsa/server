@@ -10,15 +10,6 @@ module.exports = function keys(done) {
     fs.accessSync(__dirname+'/../../../keys/dev.js')
     done()
   } catch(e) {
-    let rl = require('readline').createInterface({input:process.stdin, output:process.stdout})
-    fs.mkdir(__dirname+'/../../../keys', err => {
-      rl.question(`What is the CouchDB admin username?`, username => {
-        rl.question(`What is the CouchDB admin password?`, password => {
-          fs.writeFileSync(__dirname+'/../../../keys/dev.js', `exports.username = '${username}'\nexports.password = '${password}'`)
-          rl.close()
-          done()
-        })
-      })
-    })
+    console.log('Error: Missing Key File! Please create to continue')
   }
 }

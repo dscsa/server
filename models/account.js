@@ -3,7 +3,7 @@
 module.exports = exports = Object.create(require('../helpers/model'))
 
 let csv = require('csv/server')
-let admin = {ajax:{jar:false, auth:require('../../../keys/dev')}}
+let admin = {ajax:{jar:false, auth:require('../../../keys/dev').couch}}
 
 exports.views = {
   //Use _bulk_get here instead? Not supported in 1.6
