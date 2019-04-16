@@ -298,7 +298,7 @@ keys(function() {
   //
 
   async function adminProxy(ctx, db) {
-    ctx.req.auth = require('../../keys/dev')
+    ctx.req.auth = require('../../keys/dev').couch
     return await proxy(ctx, db)
   }
 
