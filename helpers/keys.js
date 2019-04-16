@@ -10,6 +10,6 @@ module.exports = function keys(done) {
     fs.accessSync(__dirname+'/../../../keys/dev.js')
     done()
   } catch(e) {
-    console.log('Error: Missing Key File! Please create to continue')
+    console.log('Error: Missing Key File! Please create to continue', e)
   }
 }
