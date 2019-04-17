@@ -8,14 +8,8 @@ exports.get = async function (ctx, name) {
   ctx.body = await ctx.db[name].get(ctx.query.selector.id, ctx.query)
 }
 
-//TODO replace this shim with a proxy once migrated to couchdb 2.0
 exports.bulk_get = async function (ctx, name) {
   ctx.body = await ctx.db[name].bulkGet(Object.assign(ctx.query, ctx.req.body))
-  //ctx.status = 400
-  //ctx.body = '_bulk_get not implemented yet'
-  // ctx.body = await ctx.req.body.docs.map(doc => {
-  //   return ctx.db.user.get(doc.id, {rev:doc.rev,latest:true,revs:true})
-  // })
 }
 
 exports.all_docs = async function (ctx, name) {
