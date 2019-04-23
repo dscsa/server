@@ -59,7 +59,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
     endkey:[to_id, 'month', dispensedYear, {}]
   }
 
-  let [enteredYear, enteredMonth] = currentDate(-ctx.query.dispensed_months, true)
+  let [enteredYear, enteredMonth] = currentDate(-ctx.query.entered_months, true)
 
   let enteredOpts = {
     group_level:7, //by drug.generic, drug.gsns, drug.brand,
