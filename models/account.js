@@ -51,14 +51,6 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
     endkey:[to_id, 'month', invYear, invMonth+'\uffff']
   }
 
-  let [dispensedYear, dispensedMonth] = currentDate(-ctx.query.dispensed_months, true)
-
-  let dispensedOpts = {
-    group_level:7, //by drug.generic, drug.gsns, drug.brand,
-    startkey:[to_id, 'month', dispensedYear, dispensedMonth],
-    endkey:[to_id, 'month', dispensedYear, {}]
-  }
-
   let [enteredYear, enteredMonth] = currentDate(-ctx.query.entered_months, true)
 
   let enteredOpts = {
@@ -67,17 +59,25 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
     endkey:[to_id, 'month', enteredYear, {}]
   }
 
-  const [inventory, dispensed, entered, account] = await Promise.all([
-    ctx.db.transaction.query('inventory.qty-by-generic', invOpts),
-    ctx.db.transaction.query('dispensed.qty-by-generic', dispensedOpts),
+  let [dispensedYear, dispensedMonth] = currentDate(-ctx.query.dispensed_months, true)
+
+  let dispensedOpts = {
+    group_level:7, //by drug.generic, drug.gsns, drug.brand,
+    startkey:[to_id, 'month', dispensedYear, dispensedMonth],
+    endkey:[to_id, 'month', dispensedYear, {}]
+  }
+
+  const [entered, dispensed, inventory, account] = await Promise.all([
     ctx.db.transaction.query('entered.qty-by-generic', enteredOpts),
+    ctx.db.transaction.query('dispensed.qty-by-generic', dispensedOpts),
+    ctx.db.transaction.query('inventory.qty-by-generic', invOpts),
     ctx.db.account.get(to_id)
   ])
 
   let drugs = {}
-  mergeRecord(drugs, inventory, 'inventory.qty', genericKey)
-  mergeRecord(drugs, dispensed, 'dispensed.qty', genericKey)
   mergeRecord(drugs, entered, 'entered.qty', genericKey)
+  mergeRecord(drugs, dispensed, 'dispensed.qty', genericKey)
+  mergeRecord(drugs, inventory, 'inventory.qty', genericKey)
 
   //Match inventory with ordered when applicable
   for (let i in drugs) {
