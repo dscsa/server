@@ -100,7 +100,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
 
   drugs = Object.keys(drugs).map(i => drugs[i])
 
-  ctx.body = csv.fromJSON(drugs, ctx.query.fields || defaultFieldOrder())
+  ctx.body = csv.fromJSON(drugs, ctx.query.fields || ['entered.qty','dispensed.qty','inventory.qty'])
 }
 
 function genericKey(key) {
