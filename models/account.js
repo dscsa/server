@@ -76,8 +76,8 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
 
   let drugs = {}
 
-  mergeRecord(drugs, dispensed, 'dispensed.qty', genericKey)
   mergeRecord(drugs, inventory, 'inventory.qty', genericKey)
+  mergeRecord(drugs, dispensed, 'dispensed.qty', genericKey)
   mergeRecord(drugs, entered, 'entered.qty', genericKey, true)
 
   //Match inventory with ordered when applicable
