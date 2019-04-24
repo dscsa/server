@@ -75,9 +75,10 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
   ])
 
   let drugs = {}
-  mergeRecord(drugs, entered, 'entered.qty', genericKey)
+
   mergeRecord(drugs, dispensed, 'dispensed.qty', genericKey)
   mergeRecord(drugs, inventory, 'inventory.qty', genericKey)
+  mergeRecord(drugs, entered, 'entered.qty', genericKey, true)
 
   //Match inventory with ordered when applicable
   for (let i in drugs) {
@@ -372,7 +373,7 @@ function uniqueKey(key, field) {
   return unique.join(',') //remove to_id and anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
-function mergeRecord(rows, record, field, groupFn) {
+function mergeRecord(rows, record, field, groupFn, updateOnly) {
 
   if ( ! record) return
 
@@ -380,15 +381,11 @@ function mergeRecord(rows, record, field, groupFn) {
 
     let group = groupFn(row.key, field)
 
-    rows[group] = rows[group] || {key:row.key, value:{group}}
+    if ( ! rows[group]) {
+      if (updateOnly) continue
+      rows[group] = {key:row.key, value:{group}}
+    }
 
-    /*
-    incrementing shouldn't be necessary in long run, but differing GSNs and Brand names are overwriting one another right now.  For example, inventory CSV is showing inventory.qty as 713 (2nd row oeverwrite the first)
-    http://13.57.226.134:5984/transaction/_design/inventory.qty-by-generic/_view/inventory.qty-by-generic?group_level=7&startkey=[%228889875187%22,%22month%22,%222018%22,%2209%22,%22Acetaminophen%20500mg%22]&endkey=[%228889875187%22,%22month%22,%222018%22,%2209%22,%22Acetaminophen%20500mg{}%22]
-    {"rows":[
-    {"key":["8889875187","month","2018","09","Acetaminophen 500mg",null,null],"value":{"sum":2675,"count":85,"min":10,"max":62,"sumsqr":98313}},
-    {"key":["8889875187","month","2018","09","Acetaminophen 500mg",null,""],"value":{"sum":713,"count":7,"min":56,"max":200,"sumsqr":86385}}
-    ]}*/
     rows[group].value[field] = rows[group].value[field] || 0
     rows[group].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
   }
