@@ -2,7 +2,7 @@ const ajax = require('../../pouchdb-ajax')
 
 module.exports = defaults => {
   return ctx => {
-    const options = Object.assign(defaults || {}, {
+    const options = Object.assign({}, defaults, {
       url:ctx.url,
       headers:ctx.headers,
       method:ctx.method,
