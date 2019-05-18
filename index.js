@@ -73,7 +73,7 @@ keys(function() {
       }
     }
 
-    console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'cookie', cookie, 'basic', basic, 'session', session)
+    //console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'cookie', cookie, 'basic', basic, 'session', session)
 
     await body(ctx.req)
     await next()

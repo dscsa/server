@@ -11,7 +11,7 @@ module.exports = function(app) {
       app.use(route[method](url, wrapper, options))
 
       async function wrapper(ctx, ...args) {
-        ctx.set('x-endpoint', method+' '+url+' for '+ctx.url)
+        ctx.set('x-endpoint', ctx.headers.host+' '+method+' '+url+' for '+ctx.url)
         await handler.apply(this, [ctx, ...args])
       }
     }
