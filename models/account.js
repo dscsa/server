@@ -471,15 +471,22 @@ exports.authorized = {
 
 exports.pend = {
 
+  //List of items pended with a given name
+  async get(ctx, _id, name) {
+    const pendId = name.split(' - ')[0] //mirron client's inventory.js hacky getPendId method
+    const result = await ctx.db.transaction.query('pended-by-name-bin', {include_docs:true, startkey:[_id, name], endkey:[_id, name+'\uffff']})
+    ctx.req.body = result.rows.map(row => row.doc)
+  },
+
+  //Body of request has all the transaction that you wish to pend under a name
   async post(ctx, _id, name) {
     ctx.account = {_id}
     ctx.body = await updateNext(ctx, [{pended:{_id:name}, user:ctx.user, createdAt:new Date().toJSON()}])
   },
 
+  //Unpend all requests that match a name
   async delete(ctx, _id, name) {
-    const pendId = name.split(' - ')[0] //mirron client's inventory.js hacky getPendId method
-    const result = await ctx.db.transaction.query('pended-by-name-bin', {include_docs:true, startkey:[_id, name], endkey:[_id, name+'\uffff']})
-    ctx.req.body = result.rows.map(row => row.doc)
+    this.get(ctx, _id, name)
     ctx.account  = {_id}
     ctx.body     = await updateNext(ctx, [])
   }

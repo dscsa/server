@@ -64,7 +64,7 @@ keys(function() {
 
       let res = await ctx.ajax({url:'/_session', auth:ctx.auth})
 
-      console.log('Looking up Authorizaiton', res.body, res.status)
+      console.log('Looking up Authorizaiton', 'res.status', res.status, 'ctx.auth', ctx.auth, 'res.body', res.body, 'session', session)
 
       if (res.status == 200 && res.body.userCtx.name) {
         ctx.user    = {_id:res.body.userCtx.name}
