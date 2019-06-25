@@ -30,7 +30,7 @@ module.exports = function(stream) {
           try {
             stream.body = JSON.parse(stream.body || '{}')
           } catch (err) {
-            reject('Error: Invalid JSON\n'+err.stack+'\n'+stream.body)
+            reject('Error: Invalid JSON\\n'+err.stack+'\\n'+stream.body)
           }
         }
         resolve(stream.body)
