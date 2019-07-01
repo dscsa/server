@@ -486,7 +486,7 @@ exports.pend = {
 
   //Unpend all requests that match a name
   async delete(ctx, _id, name) {
-    this.get(ctx, _id, name)
+    exports.pend.get(ctx, _id, name)
     ctx.account  = {_id}
     ctx.body     = await updateNext(ctx, [])
   }
@@ -519,7 +519,7 @@ exports.dispose = {
 }
 
 function updateNext(ctx, next) {
-  console.log('account.updateNext', ctx.req.body.length, next, ctx.req.body)
+  //console.log('account.updateNext', ctx.req.body.length, next, ctx.req.body)
   for (let transaction of ctx.req.body) {
     transaction.next = next
   }
