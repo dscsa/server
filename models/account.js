@@ -486,7 +486,7 @@ exports.pend = {
 
   //Unpend all requests that match a name
   async delete(ctx, _id, name) {
-    exports.pend.get(ctx, _id, name)
+    await exports.pend.get(ctx, _id, name)
     ctx.account  = {_id}
     ctx.body     = await updateNext(ctx, [])
   }
