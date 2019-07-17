@@ -70,6 +70,8 @@ keys(function() {
         ctx.user    = {_id:res.body.userCtx.name}
         ctx.account = {_id:res.body.userCtx.roles[1]}
         ctx.cookies.set('AuthUser', JSON.stringify({_id:ctx.user._id, account:ctx.account}), {httpOnly:false})
+      } else {
+        ctx.cookies.set('AuthSession', '');
       }
     }
 
