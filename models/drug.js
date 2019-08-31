@@ -38,7 +38,7 @@ exports.views = {
   //Ensure that all GSN codes are the same for a generic
   'by-generic-gsns':{
     map(doc) {
-      emit([doc.generic, doc.gsns])
+      emit([doc.generic, doc.gsns], doc.price.nadac ? doc.price.goodrx/doc.price.nadac : 0)
     },
     reduce:'_stats'
   },
