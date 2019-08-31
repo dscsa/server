@@ -39,7 +39,7 @@ exports.views = {
   //Get rid of null values so we don't have duplicated names first with "null" and second with ""
   'by-generic-gsns':{
     map(doc) {
-      emit([doc.generic, doc.gsns || "", doc.brand || ""], [doc.price.nadac, doc.price.goodrx, doc.price.retail])
+      emit([doc.generic, doc.gsns || "", doc.brand || ""], [doc.price.nadac || 0, doc.price.goodrx || 0, doc.price.retail || 0])
     },
     reduce:'_stats'
   },
