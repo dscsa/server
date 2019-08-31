@@ -41,7 +41,7 @@ exports.views = {
       emit([doc.generic, doc.gsns])
     },
     reduce:'_stats'
-  }
+  },
 
   //Ensure that all labeler codes have the same manufacturer
   'by-labelcode-labeler':function(doc) {
