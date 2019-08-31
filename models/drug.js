@@ -36,9 +36,12 @@ exports.views = {
   },
 
   //Ensure that all GSN codes are the same for a generic
-  'by-generic-gsns':function(doc) {
-    emit([doc.generic, doc.gsns])
-  },
+  'by-generic-gsns':{
+    map(doc) {
+      emit([doc.generic, doc.gsns])
+    },
+    reduce:'_stats'
+  }
 
   //Ensure that all labeler codes have the same manufacturer
   'by-labelcode-labeler':function(doc) {
@@ -196,9 +199,9 @@ function updateDrugsWithGSNs(drug, opts) {
   const delayed = () => {
 
     Promise.all([
-      ctx.db.drug.query('by-generic-gsns', {startkey:[drug.generic], endkey:[drug.generic, drug.gsns], include_docs:true, inclusive_end:false}),
-      ctx.db.drug.query('by-generic-gsns', {startkey:[drug.generic, drug.gsns, {}], endkey:[drug.generic, {}], include_docs:true}),
-      ctx.db.drug.query('by-generic-gsns', {startkey:[drug.generic], endkey:[drug.generic, {}]})
+      ctx.db.drug.query('by-generic-gsns', {startkey:[drug.generic], endkey:[drug.generic, drug.gsns], reduce:false, include_docs:true, inclusive_end:false}),
+      ctx.db.drug.query('by-generic-gsns', {startkey:[drug.generic, drug.gsns, {}], endkey:[drug.generic, {}], reduce:false, include_docs:true}),
+      ctx.db.drug.query('by-generic-gsns', {startkey:[drug.generic], endkey:[drug.generic, {}], reduce:false})
     ]).then(([ltGsns, gtGsns, allGsns]) => {
 
       let wrongGsns = ltGsns.rows.concat(gtGsns.rows)
