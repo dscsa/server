@@ -57,7 +57,7 @@ keys(function() {
 
     //User Id is saved in a user_id.account_id format
     if (/^\d{10}\.\d{10}($|:)/.test(session)) {
-      ctx.user._id    = session.slice(0, 10)
+      ctx.user._id    = session.slice(0, 21)
       ctx.account._id = session.slice(11, 21)
       cookie = JSON.stringify({_id:ctx.user._id, account:ctx.account})
     }
