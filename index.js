@@ -51,17 +51,15 @@ keys(function() {
     ctx.user    = {}
     ctx.account = {}
 
+    //CouchDB saves Authsession like this https://github.com/apache/couchdb/blob/1347806d2feebce53325070b475f9e211d240ddf/src/couch/src/couch_httpd_auth.erl#L267
+    session = Buffer.from(basic ? basic.slice(6) : session, 'base64').toString()
+
     //User Id is saved in a user_id.account_id format
-    if (basic) {
-      basic = Buffer.from(basic.slice(6), 'base64').toString() //Get rid of "Basic " and then decode
-      ctx.user    = {_id:basic.slice(0, 10)}
-      ctx.account = {_id:basic.slice(11, 21)}
-    } else if (session) {
-      //CouuchDB saves Authsession like this https://github.com/apache/couchdb/blob/1347806d2feebce53325070b475f9e211d240ddf/src/couch/src/couch_httpd_auth.erl#L267
-      session = Buffer.from(session, 'base64').toString()
-      ctx.user    = {_id:session.slice(0, 10)}
-      ctx.account = {_id:session.slice(11, 21)}
+    if (/^\d{10}\.\d{10}($|:)/.test(session)) {
+      ctx.user._id    = session.slice(0, 10)
+      ctx.account._id = session.slice(11, 21)
     }
+
     //console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'basic', basic, 'session', session)
 
     await body(ctx.req)
