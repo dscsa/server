@@ -46,7 +46,7 @@ function authorized(doc, opts) {
 
 //Context-specific - options MUST have 'this' property in order to work.
 function deleteLogin(doc, opts) {
-  return opts.ctx.db._users.delete('org.couchdb.user:'+doc.phone, doc._rev, admin)
+  return opts.ctx.db._users.delete('org.couchdb.user:'+doc._id, doc._rev, admin)
 }
 
 function saveLogin(doc, opts) {
@@ -72,24 +72,9 @@ function saveLogin(doc, opts) {
   return true
 }
 
-function session(ctx, _user) {
-  const body = {name:_user.name, password:_user.password} //including roles with cause a couchdb badarg err
-  return ctx.ajax({url:'/_session', method:'post', body}).then(res => {
-    console.log('body', res.body, res.status)
-    //ctx.status = 201
-    if (res.status !== 200)
-      ctx.throw(res.status, res.body)//401 status should not log us in
+async function session(ctx, name, password) {
 
-    ctx.set(res.headers)
-    const cookie = JSON.stringify({_id:res.body.name, account:{_id:res.body.roles[1]}})
-    ctx.cookies.set('AuthUser', cookie, {httpOnly:false})
-    return cookie
-  })
-}
-
-async function session(ctx, _user) {
-
-  const body = {name:_user.name, password:_user.password} //including roles with cause a couchdb badarg err
+  const body = {name, password} //including roles with cause a couchdb badarg err
 
   const res = await ctx.ajax({url:'/_session', method:'post', body})
 
@@ -110,15 +95,12 @@ async function session(ctx, _user) {
 exports.session = {
   async post(ctx) {
 
-    const _user = {
-      name:ctx.req.body.phone.replace(/[^\d]/g, ''),
-      password:ctx.req.body.password
-    }
-    const user = await ctx.db.user.get(_user.name)
+    const phone = ctx.req.body.phone.replace(/[^\d]/g, '')
+    const login = await ctx.db.user.allDocs({startkey:phone, endkey:phone+'\uffff', include_docs:true})
 
-    user.error
-      ? ctx.throw(404, 'No user exists with the phone '+_user.name)
-      : ctx.body = await session(ctx, _user)
+    login.rows.length
+      ? ctx.body = await session(ctx, phone+'.'+login.rows[0].doc.account._id, ctx.req.body.password)
+      : ctx.throw(404, 'No user exists with the phone '+phone)
 
       console.log('ctx.body', ctx.body)
   },

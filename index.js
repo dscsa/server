@@ -46,40 +46,28 @@ keys(function() {
       return ctx.status = 204
 
     let basic   = ctx.get('authorization')
-    let cookie  = ctx.cookies.get('AuthUser')
     let session = ctx.cookies.get('AuthSession')
 
     ctx.user    = {}
     ctx.account = {}
 
+    //User Id is saved in a user_id.account_id format
     if (basic) {
       basic = Buffer.from(basic.slice(6), 'base64').toString() //Get rid of "Basic " and then decode
-      ctx.user    = {_id:basic.split(':')[0]}
-      ctx.account = {_id:false}
-    } else if (cookie) {
-      cookie  = JSON.parse(cookie)
-      ctx.user    = {_id:cookie._id}
-      ctx.account = {_id:cookie.account._id}
+      ctx.user    = {_id:basic.slice(0, 10)}
+      ctx.account = {_id:basic.slice(11, 21)}
     } else if (session) {
-
-      let res = await ctx.ajax({url:'/_session', auth:ctx.auth})
-
-      console.log('Looking up Authorizaiton', 'res.status', res.status, 'ctx.auth', ctx.auth, 'res.body', res.body, 'session', session)
-
-      if (res.status == 200 && res.body.userCtx.name) {
-        ctx.user    = {_id:res.body.userCtx.name}
-        ctx.account = {_id:res.body.userCtx.roles[1]}
-        ctx.cookies.set('AuthUser', JSON.stringify({_id:ctx.user._id, account:ctx.account}), {httpOnly:false})
-      } else {
-        ctx.cookies.set('AuthSession', '');
-      }
+      //CouuchDB saves Authsession like this https://github.com/apache/couchdb/blob/1347806d2feebce53325070b475f9e211d240ddf/src/couch/src/couch_httpd_auth.erl#L267
+      session = Buffer.from(session, 'base64').toString()
+      ctx.user    = {_id:session.slice(0, 10)}
+      ctx.account = {_id:session.slice(11, 21)}
     }
-
-    //console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'cookie', cookie, 'basic', basic, 'session', session)
+    //console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'basic', basic, 'session', session)
 
     await body(ctx.req)
     await next()
 
+    ctx.cookies.set('AuthUser', JSON.stringify({_id:ctx.user._id, account:ctx.account}), {httpOnly:false})
     ctx.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
     ctx.set('transfer-encoding', 'chunked') //This was sometimes causing errors when Jess/Adam logged in with a PC ERR: Content Length Mismatch
   })
