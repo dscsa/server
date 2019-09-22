@@ -111,6 +111,6 @@ exports.session = {
     ctx.status = res.status
     ctx.body   = res.body
     console.log('user.session.delete', ctx.body)
-    ctx.cookies.set('AuthUser', '') //This has to be set after the proxy since proxy will overwrite our cookie
+    ctx.cookies.set('AuthUser', '', {httpOnly:false}) //This has to be set after the proxy since proxy will overwrite our cookie
   }
 }
