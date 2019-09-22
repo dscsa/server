@@ -47,7 +47,7 @@ keys(function() {
 
     let cookie  = ''
     let basic   = ctx.get('authorization')
-    let session = ctx.cookies.get('AuthSession')
+    let session = ctx.cookies.get('AuthSession') || ''
 
     ctx.user    = {}
     ctx.account = {}
