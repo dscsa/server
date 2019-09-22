@@ -45,6 +45,7 @@ keys(function() {
     if (ctx.method == 'OPTIONS')
       return ctx.status = 204
 
+    let cookie  = ''
     let basic   = ctx.get('authorization')
     let session = ctx.cookies.get('AuthSession')
 
@@ -58,14 +59,16 @@ keys(function() {
     if (/^\d{10}\.\d{10}($|:)/.test(session)) {
       ctx.user._id    = session.slice(0, 10)
       ctx.account._id = session.slice(11, 21)
+      cookie = JSON.stringify({_id:ctx.user._id, account:ctx.account})
     }
+
+    ctx.cookies.set('AuthUser', cookie, {httpOnly:false})
 
     //console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'basic', basic, 'session', session)
 
     await body(ctx.req)
     await next()
 
-    ctx.cookies.set('AuthUser', JSON.stringify({_id:ctx.user._id, account:ctx.account}), {httpOnly:false})
     ctx.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
     ctx.set('transfer-encoding', 'chunked') //This was sometimes causing errors when Jess/Adam logged in with a PC ERR: Content Length Mismatch
   })
