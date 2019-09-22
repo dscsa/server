@@ -62,12 +62,13 @@ keys(function() {
       cookie = JSON.stringify({_id:ctx.user._id, account:ctx.account})
     }
 
+    ctx.cookies.set('AuthUser', cookie, {httpOnly:false}) //if this is already set in "next()" then this 2nd call will be ignored by browser
+
     //console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'basic', basic, 'session', session)
 
     await body(ctx.req)
     await next()
 
-    ctx.cookies.set('AuthUser', cookie, {httpOnly:false}) //if this is already set in "next()" then this 2nd call will be ignored by browser
     ctx.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
     ctx.set('transfer-encoding', 'chunked') //This was sometimes causing errors when Jess/Adam logged in with a PC ERR: Content Length Mismatch
   })
