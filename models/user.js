@@ -108,6 +108,8 @@ exports.session = {
   async delete(ctx) {
     console.log('user.session.delete')
     let res = await ctx.ajax({url:'/_session',  method:'delete'})
+
+    ctx.set(res.headers)
     ctx.status = res.status
     ctx.body   = res.body
     console.log('user.session.delete', ctx.body)
