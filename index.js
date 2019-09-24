@@ -62,7 +62,7 @@ keys(function() {
       cookie = JSON.stringify({_id:ctx.user._id, account:ctx.account})
     }
 
-    ctx.cookies.set('AuthUser', cookie, {httpOnly:false}) //if this is already set in "next()" then this 2nd call will be ignored by browser
+    ctx.cookies.set('AuthUser', cookie, {httpOnly:false}) //if this is set again in "next()" then 2nd call needs to be called with the overwrite:true option
 
     //console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'basic', basic, 'session', session)
 
