@@ -25,13 +25,6 @@ exports.get_csv = async function (ctx, db) {
   ctx.type = 'text/csv'
 }
 
-//This is to find the emptiest bins
-exports.binned = async function  (ctx, id) { //account._id will not be set because google does not send cookie
-  const view = await ctx.db.transaction.query('inventory-by-bin-verifiedat', {group_level:3, startkey:[id, 'binned'], endkey:[id, 'binned', {}]}) //exclude repack bins from empty bins
-  let sortAsc = view.rows.sort((a, b) => a.value.count - b.value.count)
-  ctx.body  = csv.fromJSON(sortAsc, ctx.query.fields && ctx.query.fields.split(','))
-}
-
 function currentDate(months, split) {
   let minExp   = new Date()
   let minMonth = minExp.getMonth() + (+months || 0) // TODO exlcudes expireds in the last month because they are set to the 1st of the month
@@ -68,9 +61,9 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
   }
 
   const [entered, dispensed, inventory, account] = await Promise.all([
-    ctx.db.transaction.query('entered.qty-by-generic', enteredOpts),
-    ctx.db.transaction.query('dispensed.qty-by-generic', dispensedOpts),
-    ctx.db.transaction.query('inventory.qty-by-generic', invOpts),
+    ctx.db.transaction.query('entered-by-generic', enteredOpts),
+    ctx.db.transaction.query('dispensed-by-generic', dispensedOpts),
+    ctx.db.transaction.query('inventory-by-generic', invOpts),
     ctx.db.account.get(to_id)
   ])
 
@@ -124,15 +117,12 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
 
   console.time('Get recordByGeneric')
 
-  let [qtyRecords, valueRecords] = await Promise.all([
-    getRecords(ctx, to_id, 'qty-by-generic'),
-    getRecords(ctx, to_id, 'value-by-generic')
-  ])
+  let records = await getRecords(ctx, to_id, 'by-generic')
 
   console.timeEnd('Get recordByGeneric')
   //console.time('Merge recordByGeneric')
 
-  let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
+  records = mergeRecords(records)
 
   //console.timeEnd('Merge recordByGeneric')
   //console.time('Sort recordByGeneric')
@@ -151,15 +141,12 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
 
   console.time('Get recordByFrom')
 
-  let [qtyRecords, valueRecords] = await Promise.all([
-    getRecords(ctx, to_id, 'qty-by-from-generic'),
-    getRecords(ctx, to_id, 'value-by-from-generic')
-  ])
+  let records = await getRecords(ctx, to_id, 'by-from-generic')
 
   console.timeEnd('Get recordByFrom')
   //console.time('Merge recordByFrom')
 
-  let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
+  records = mergeRecords(records)
 
   //console.timeEnd('Merge recordByFrom')
   //console.time('Sort recordByFrom')
@@ -188,16 +175,15 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
 
   console.time('Get recordByUser')
 
-  let [qtyRecords, valueRecords, accounts] = await Promise.all([
-    getRecords(ctx, to_id, 'qty-by-user-from-shipment'),
-    getRecords(ctx, to_id, 'value-by-user-from-shipment'),
+  let [records, accounts] = await Promise.all([
+    getRecords(ctx, to_id, 'by-user-from-shipment'),
     denormalize >= 1 ? this.db.account.allDocs({endkey:'_design', include_docs:true}) : null
   ])
 
   console.timeEnd('Get recordByUser')
   //console.time('Merge recordByUser')
 
-  let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
+  records = mergeRecords(records)
 
   //console.timeEnd('Merge recordByUser')
   //console.time('Sort recordByUser')
@@ -227,30 +213,33 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
 function defaultFieldOrder(shipment) {
   return [
     'group',
-    'entered.count',
-    'refused.count',
-    'verified.count',
-    'expired.count',
-    'disposed.count',
-    'dispensed.count',
-    'pended.count',
-    'inventory.count',
-    'entered.qty',
-    'refused.qty',
-    'verified.qty',
-    'expired.qty',
-    'disposed.qty',
-    'dispensed.qty',
-    'pended.qty',
-    'inventory.qty',
-    'entered.value',
-    'refused.value',
-    'verified.value',
-    'expired.value',
-    'disposed.value',
-    'dispensed.value',
-    'pended.value',
-    'inventory.value'
+    'count.entered',
+    'count.refused',
+    'count.verified',
+    'count.expired',
+    'count.disposed',
+    'count.dispensed',
+    'count.pended',
+    'count.repacked',
+    'count.inventory',
+    'qty.entered',
+    'qty.refused',
+    'qty.verified',
+    'qty.expired',
+    'qty.disposed',
+    'qty.dispensed',
+    'qty.pended',
+    'qty.repacked',
+    'qty.inventory',
+    'value.entered',
+    'value.refused',
+    'value.verified',
+    'value.expired',
+    'value.disposed',
+    'value.dispensed',
+    'value.pended',
+    'value.repacked',
+    'value.inventory'
   ]
   .concat( ! shipment ? [] :
   [
@@ -308,18 +297,19 @@ async function getRecords(ctx, to_id, suffix) {
   //Inventory cannot be kept by day because expiration date is kept by month.
   //Might be possible to eventually get it for custom group_level but doesn't seem worth trying to figure that out now.
   let queries = [
-    optionalField(ctx, 'entered.'+suffix, opts),
-    optionalField(ctx, 'refused.'+suffix, opts),
-    optionalField(ctx, 'verified.'+suffix, opts),
-    optionalField(ctx, 'expired.'+suffix, opts),
-    optionalField(ctx, 'disposed.'+suffix, opts),
-    optionalField(ctx, 'dispensed.'+suffix, opts),
-    optionalField(ctx, 'pended.'+suffix, opts)
+    optionalField(ctx, 'entered-'+suffix, opts),
+    optionalField(ctx, 'refused-'+suffix, opts),
+    optionalField(ctx, 'verified-'+suffix, opts),
+    optionalField(ctx, 'expired-'+suffix, opts),
+    optionalField(ctx, 'disposed-'+suffix, opts),
+    optionalField(ctx, 'dispensed-'+suffix, opts),
+    optionalField(ctx, 'pended-'+suffix, opts),
+    optionalField(ctx, 'repacked-'+suffix, opts),
   ]
 
   if (group === '' || group === 'month' || group === 'year') //inventory is not kept by day and other groupings not listed here
     //console.log('getRecords', 'invOpts', invOpts)
-    queries.push(optionalField(ctx, 'inventory.'+suffix, invOpts).then(res => {
+    queries.push(optionalField(ctx, 'inventory-'+suffix, invOpts).then(res => {
       //console.log('res', res && res.rows)
       group || res && res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
       return res
@@ -336,30 +326,30 @@ function optionalField(ctx, field, opts) {
 
   if (fields) {
 
-    let fieldType = field.split('-')[0] //Hacky as this relies on consistent naming of fields.  eg.  dispensed.value-by-user-from-shipment -> dispensed.value
+    let fieldType = field.split('-')[0] //Hacky as this relies on consistent naming of fields.  eg.  dispensed-by-user-from-shipment -> dispensed
 
-    //qty views use the _stat reduce which supplies the count.  There are no count views
-    if ( ! fields.replace(/\.count/g, '.qty').includes(fieldType))
+    //views have values of [qty _stat, value _stat] _stats also supplies the count, so here are no count views
+    if ( ! fields.includes(fieldType))
       return Promise.resolve()
   }
   //console.log('optionalField specified', field, fields)
   return ctx.db.transaction.query(field, opts)
 }
 
-//Something like {qty:records, count:records}
-function mergeRecords(opts) {
-  let records = {}
-  for (let suffix in opts) {
-    mergeRecord(records, opts[suffix][0], 'entered.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][1], 'refused.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][2], 'verified.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][3], 'expired.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][4], 'disposed.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][5], 'dispensed.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][6], 'pended.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][7], 'inventory.'+suffix, uniqueKey)
-  }
-  return records
+function mergeRecords(records) {
+  let merged = {}
+
+  mergeRecord(merged, records[0], 'entered', uniqueKey)
+  mergeRecord(merged, records[1], 'refused', uniqueKey)
+  mergeRecord(merged, records[2], 'verified', uniqueKey)
+  mergeRecord(merged, records[3], 'expired', uniqueKey)
+  mergeRecord(merged, records[4], 'disposed', uniqueKey)
+  mergeRecord(merged, records[5], 'dispensed', uniqueKey)
+  mergeRecord(merged, records[6], 'pended', uniqueKey)
+  mergeRecord(merged, records[7], 'repacked', uniqueKey)
+  mergeRecord(merged, records[8], 'inventory', uniqueKey)
+
+  return merged
 }
 
 //Move primary group (Generic/User/From) to the first key of the array instead of the last
@@ -383,11 +373,16 @@ function mergeRecord(rows, record, field, groupFn, updateOnly) {
 
     if ( ! rows[group]) {
       if (updateOnly) continue
-      rows[group] = {key:row.key, value:{group}}
+      rows[group] = {key:row.key, value:{
+        ['count.'+field]:0,
+        ['qty.'+field]:0,
+        ['val.'+field]:0
+      }}
     }
 
-    rows[group].value[field] = rows[group].value[field] || 0
-    rows[group].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
+    rows[group].value['count.'+field] += +(row.value[0].count || 0).toFixed(2)
+    rows[group].value['qty.'+field]   += +(row.value[0].sum || 0).toFixed(2)
+    rows[group].value['val.'+field]   += +(row.value[1].sum || 0).toFixed(2)
   }
 }
 
