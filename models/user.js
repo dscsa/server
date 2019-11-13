@@ -15,7 +15,7 @@ exports.views = {
 exports.get_csv = async function (ctx, db) {
   const opts = {startkey:ctx.account._id, endkey:ctx.account._id+'\uffff', include_docs:true}
   let view = await ctx.db.user.query('account._id', opts)
-  ctx.body = csv.fromJSON(view.rows)
+  ctx.body = csv.fromJSON(view.rows, ctx.query.fields)
   ctx.type = 'text/csv'
 }
 
