@@ -496,7 +496,7 @@ exports.dispense = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, 'dispensed',{_id:new Date().toJSON(), user:{_id:ctx.user}}}])
+    ctx.body = await updateNext(ctx, 'dispensed',{_id:new Date().toJSON(), user:{_id:ctx.user}})
   },
 
   // async delete(ctx, _id) {
@@ -509,7 +509,7 @@ exports.dispose = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, 'disposed',{_id:new Date().toJSON(), user:{_id:ctx.user}}}])
+    ctx.body = await updateNext(ctx, 'disposed',{_id:new Date().toJSON(), user:{_id:ctx.user}})
   },
 
   // async delete(ctx, _id) {
