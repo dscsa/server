@@ -92,24 +92,24 @@ exports.lib = {
   //and exlude any items without a donor that were refused (e.g., 2019-01-24T17:24:21.063700Z because bin === "")
   disposedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].disposed && doc.next[0].disposed.createdAt.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].disposed && doc.next[0].disposed._id.slice(0, 10).split('-')
   },
 
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   dispensedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].dispensed && doc.next[0].dispensed.createdAt.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].dispensed && doc.next[0].dispensed._id.slice(0, 10).split('-')
   },
 
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   pendedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].pended && doc.next[0].pended.createdAt.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].pended && doc.next[0].pended._id.slice(0, 10).split('-')
   },
 
   repackedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].transaction && doc.next[0].transaction.createdAt.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].repacked && doc.next[0].repacked._id.slice(0, 10).split('-')
   },
 
   nextAt(doc) {
@@ -268,8 +268,9 @@ exports.views = {
   //*** 2. Server (Private) Endpoints ***
   //Used by history
   'next.transaction._id':function(doc) {
-    for (var i in doc.next)
-      doc.next[i].transaction && emit(doc.next[i].transaction._id)
+    var transaction_arr = doc.next[0].repacked ? doc.next[0].repacked.transactions : []
+    for (var i in transaction_arr)
+      transaction_arr[i] && emit(transaction_arr[i]._id)
   },
 
   //Used by drug endpoint to update transactions on drug name/form updates
@@ -429,6 +430,7 @@ exports.views = {
 
   'dispensed-by-from-generic':{
     map(doc) {
+      console.log("here")
       if (require('isDispensed')(doc))
         require('groupByDate')(emit, doc, 'dispensed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
@@ -488,7 +490,7 @@ exports.views = {
   'disposed-by-user-from-shipment':{
     map(doc) {
       if (require('isDisposed')(doc))
-        require('groupByDate')(emit, doc, 'disposed', [doc.next[0].user ? doc.next[0].user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+        require('groupByDate')(emit, doc, 'disposed', [doc.next[0].disposed ? doc.next[0].disposed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
@@ -496,14 +498,14 @@ exports.views = {
   'dispensed-by-user-from-shipment':{
     map(doc) {
       if (require('isDispensed')(doc))
-        require('groupByDate')(emit, doc, 'dispensed', [doc.next[0].user ? doc.next[0].user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+        require('groupByDate')(emit, doc, 'dispensed', [doc.next[0].dispensed ? doc.next[0].dispensed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
   'pended-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [doc.next[0].user ? doc.next[0].user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+      require('groupByDate')(emit, doc, 'pended', [doc.next[0].pended ? doc.next[0].pended.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },

@@ -474,24 +474,29 @@ exports.pend = {
   },
 
   //Body of request has all the transaction that you wish to pend under a name
+  //wrap name array into tranactiond
+  //in the ctx object the query paramaters
   async post(ctx, _id, name) {
+    const group = ''
+    const qty = ''//TODO: how do we get these out of the ctx
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, [{pended:{_id:name}, user:ctx.user, createdAt:new Date().toJSON()}])
+    ctx.body = await updateNext(ctx, 'pended', {_id:new Date().toJSON(), group:group, repackQty:qty, user:{_id:ctx.user}})
   },
 
   //Unpend all requests that match a name
   async delete(ctx, _id, name) {
     await exports.pend.get(ctx, _id, name)
     ctx.account  = {_id}
-    ctx.body     = await updateNext(ctx, [])
+    ctx.body     = await updateNext(ctx, 'pended', null)
   }
+
 }
 
 exports.dispense = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, [{dispensed:{}, user:ctx.user, createdAt:new Date().toJSON()}])
+    ctx.body = await updateNext(ctx, 'dispensed',{_id:new Date().toJSON(), user:{_id:ctx.user}}}])
   },
 
   // async delete(ctx, _id) {
@@ -504,7 +509,7 @@ exports.dispose = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, [{disposed:{}, user:ctx.user, createdAt:new Date().toJSON()}])
+    ctx.body = await updateNext(ctx, 'disposed',{_id:new Date().toJSON(), user:{_id:ctx.user}}}])
   },
 
   // async delete(ctx, _id) {
@@ -513,7 +518,23 @@ exports.dispose = {
   // }
 }
 
-function updateNext(ctx, next) {
+
+function updateNext(ctx, key, object){
+
+  for (let transaction of ctx.req.body) {
+    if(object){
+      transaction.next[0][key] = object
+    } else {
+      delete transaction.next[0][key]
+    }
+  }
+
+  return ctx.db.transaction.bulkDocs(ctx.req.body, {ctx})
+
+}
+
+function replaceNext(ctx, next) {
+
   //console.log('account.updateNext', ctx.req.body.length, next, ctx.req.body)
   for (let transaction of ctx.req.body) {
     transaction.next = next
