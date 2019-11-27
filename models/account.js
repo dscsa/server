@@ -485,6 +485,10 @@ exports.pend = {
 
   //Unpend all requests that match a name
   async delete(ctx, _id, name) {
+
+    const group = ''
+    const qty = ''//TODO: how do we get these out of the ctx
+
     await exports.pend.get(ctx, _id, name)
     ctx.account  = {_id}
     ctx.body     = await updateNext(ctx, 'pended', null)
