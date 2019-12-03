@@ -101,6 +101,12 @@ exports.lib = {
     return ! refusedAt && doc.next[0] && doc.next[0].dispensed && doc.next[0].dispensed._id.slice(0, 10).split('-')
   },
 
+  pickedAt(doc) {
+    var refusedAt = require('refusedAt')(doc)
+    return ! refusedAt && doc.next[0] && doc.next[0].picked && doc.next[0].picked._id.slice(0, 10).split('-')
+  },
+
+
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   pendedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
@@ -154,6 +160,11 @@ exports.lib = {
     var dispensed = require('dispensedAt')(doc)
 
     return dispensed && expired > dispensed
+  },
+
+  isPicked(doc){
+    var picked = require('pickedAt')(doc)
+    return picked
   },
 
   //Because of Unicode collation order would be a000, A000, a001 even if I put delimiters like a space or comma inbetween characters
@@ -294,6 +305,7 @@ exports.views = {
 
   //*** 2. Filtered View  ***
   'pended-by-name-bin':function(doc) {
+    if(require('isPicked')(doc)) return;
     require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended._id || doc.next[0].createdAt, doc.exp.to || doc.exp.from, require('sortedBin')(doc)])
   },
 
