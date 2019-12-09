@@ -106,6 +106,10 @@ exports.lib = {
     return ! refusedAt && doc.next[0] && doc.next[0].picked && doc.next[0].picked._id.slice(0, 10).split('-')
   },
 
+  isLocked(doc){
+    return doc.next[0] && doc.next[0].picked && (Object.keys(doc.next[0].picked).length == 0)
+  },
+
 
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   pendedAt(doc) {
@@ -163,6 +167,9 @@ exports.lib = {
   },
 
   isPicked(doc){
+    var locked = require('isLocked')(doc)
+    if(locked) return false
+    
     var picked = require('pickedAt')(doc)
     return picked
   },
