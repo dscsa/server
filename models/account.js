@@ -344,11 +344,6 @@ function mergeRecords(records) {
   let merged = {}
 
   mergeRecord(merged, records[0], 'entered', uniqueKey)
-  console.log("2_")
-  console.log(records[0].rows[records[0].rows.length-1].key)
-  console.log(records[0].rows[records[0].rows.length-1].value)
-  console.log("2_end")
-
   mergeRecord(merged, records[1], 'refused', uniqueKey)
   mergeRecord(merged, records[2], 'verified', uniqueKey)
   mergeRecord(merged, records[3], 'expired', uniqueKey)
@@ -356,14 +351,6 @@ function mergeRecords(records) {
   mergeRecord(merged, records[5], 'dispensed', uniqueKey)
   mergeRecord(merged, records[6], 'pended', uniqueKey)
   mergeRecord(merged, records[7], 'picked', uniqueKey)
-<<<<<<< HEAD
-  console.log("3_")
-  console.log(records[7].rows[records[7].rows.length-1].key)
-  console.log(records[7].rows[records[7].rows.length-1].value)
-  console.log("3_end")
-
-=======
->>>>>>> 0286fb3dbc0c61301ecc00e8f2d70893dbaba433
   mergeRecord(merged, records[8], 'repacked', uniqueKey)
   mergeRecord(merged, records[9], 'inventory', uniqueKey)
 
