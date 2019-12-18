@@ -101,15 +101,11 @@ exports.lib = {
     return ! refusedAt && doc.next[0] && doc.next[0].dispensed && doc.next[0].dispensed._id.slice(0, 10).split('-')
   },
 
+  //Locked when currently being pick if picked === {} so there might not be an _id yet
   pickedAt(doc) {
-    var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].picked && doc.next[0].picked._id.slice(0, 10).split('-')
+    var refusedAt = require('refusedAt')(doc) //
+    return ! refusedAt && doc.next[0] && doc.next[0].picked && doc.next[0].picked._id && doc.next[0].picked._id.slice(0, 10).split('-')
   },
-
-  isLocked(doc){
-    return doc.next[0] && doc.next[0].picked && (Object.keys(doc.next[0].picked).length == 0)
-  },
-
 
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   pendedAt(doc) {
@@ -164,14 +160,6 @@ exports.lib = {
     var dispensed = require('dispensedAt')(doc)
 
     return dispensed && expired > dispensed
-  },
-
-  isPicked(doc){
-    var locked = require('isLocked')(doc)
-    if(locked) return false
-    
-    var picked = require('pickedAt')(doc)
-    return picked
   },
 
   //Because of Unicode collation order would be a000, A000, a001 even if I put delimiters like a space or comma inbetween characters
@@ -311,8 +299,8 @@ exports.views = {
   },
 
   //*** 2. Filtered View  ***
-  'pended-by-name-bin':function(doc) {
-    if(require('isPicked')(doc)) return;
+  'currently-pended-by-name-bin':function(doc) {
+    if (require('nextAt')(doc)) return;
     require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended._id || doc.next[0].createdAt, doc.exp.to || doc.exp.from, require('sortedBin')(doc)])
   },
 
@@ -396,6 +384,13 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'picked-by-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'picked', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
   'repacked-by-generic':{
     map(doc) {
       require('groupByDate')(emit, doc, 'repacked', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
@@ -463,6 +458,13 @@ exports.views = {
     reduce:'_stats'
   },
 
+  'picked-by-from-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'picked', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
   'repacked-by-from-generic':{
     map(doc) {
       require('groupByDate')(emit, doc, 'repacked', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
@@ -524,7 +526,14 @@ exports.views = {
 
   'pended-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [doc.next[0].pended ? doc.next[0].pended.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+      require('groupByDate')(emit, doc, 'pended', [doc.next[0].picked && doc.next[0].picked.user ? doc.next[0].picked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'picked-by-user-from-shipment':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'picked', [doc.next[0].picked && doc.next[0].picked.user ? doc.next[0].picked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },

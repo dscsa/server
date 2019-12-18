@@ -220,6 +220,7 @@ function defaultFieldOrder(shipment) {
     'count.disposed',
     'count.dispensed',
     'count.pended',
+    'count.picked',
     'count.repacked',
     'count.inventory',
     'qty.entered',
@@ -229,6 +230,7 @@ function defaultFieldOrder(shipment) {
     'qty.disposed',
     'qty.dispensed',
     'qty.pended',
+    'qty.picked',
     'qty.repacked',
     'qty.inventory',
     'value.entered',
@@ -238,6 +240,7 @@ function defaultFieldOrder(shipment) {
     'value.disposed',
     'value.dispensed',
     'value.pended',
+    'value.picked',
     'value.repacked',
     'value.inventory'
   ]
@@ -304,6 +307,7 @@ async function getRecords(ctx, to_id, suffix) {
     optionalField(ctx, 'disposed-'+suffix, opts),
     optionalField(ctx, 'dispensed-'+suffix, opts),
     optionalField(ctx, 'pended-'+suffix, opts),
+    optionalField(ctx, 'picked-'+suffix, opts),
     optionalField(ctx, 'repacked-'+suffix, opts),
   ]
 
@@ -346,8 +350,9 @@ function mergeRecords(records) {
   mergeRecord(merged, records[4], 'disposed', uniqueKey)
   mergeRecord(merged, records[5], 'dispensed', uniqueKey)
   mergeRecord(merged, records[6], 'pended', uniqueKey)
-  mergeRecord(merged, records[7], 'repacked', uniqueKey)
-  mergeRecord(merged, records[8], 'inventory', uniqueKey)
+  mergeRecord(merged, records[7], 'picked', uniqueKey)
+  mergeRecord(merged, records[8], 'repacked', uniqueKey)
+  mergeRecord(merged, records[9], 'inventory', uniqueKey)
 
   return merged
 }
