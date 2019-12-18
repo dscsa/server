@@ -169,7 +169,7 @@ exports.lib = {
   isPicked(doc){
     var locked = require('isLocked')(doc)
     if(locked) return false
-    
+
     var picked = require('pickedAt')(doc)
     return picked
   },
@@ -502,6 +502,14 @@ exports.views = {
     map(doc) {
       if (require('isExpired')(doc))
         require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'picked-by-user-from-shipment':{
+    map(doc) {
+      if (require('isPicked')(doc))
+        require('groupByDate')(emit, doc, 'picked', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
