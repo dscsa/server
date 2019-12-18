@@ -356,11 +356,14 @@ function mergeRecords(records) {
   mergeRecord(merged, records[5], 'dispensed', uniqueKey)
   mergeRecord(merged, records[6], 'pended', uniqueKey)
   mergeRecord(merged, records[7], 'picked', uniqueKey)
+<<<<<<< HEAD
   console.log("3_")
   console.log(records[7].rows[records[7].rows.length-1].key)
   console.log(records[7].rows[records[7].rows.length-1].value)
   console.log("3_end")
 
+=======
+>>>>>>> 0286fb3dbc0c61301ecc00e8f2d70893dbaba433
   mergeRecord(merged, records[8], 'repacked', uniqueKey)
   mergeRecord(merged, records[9], 'inventory', uniqueKey)
 
