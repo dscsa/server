@@ -121,15 +121,9 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
 
   console.timeEnd('Get recordByGeneric')
 
-  console.log('AFTER getRecords', records)
-
   records = mergeRecords(records)
 
-  console.log('AFTER mergeRecords', records)
-
   records = sortRecords(records)
-
-  console.log('AFTER sortRecords', records)
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
 }
