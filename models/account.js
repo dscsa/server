@@ -332,6 +332,8 @@ function optionalField(ctx, field, opts) {
 
     let fieldType = field.split('-')[0] //Hacky as this relies on consistent naming of fields.  eg.  dispensed-by-user-from-shipment -> dispensed
 
+    console.log('optionalField', field, fieldType, fields.includes(fieldType), fields)
+
     //views have values of [qty _stat, value _stat] _stats also supplies the count, so here are no count views
     if ( ! fields.includes(fieldType))
       return Promise.resolve()
@@ -375,7 +377,7 @@ function mergeRecord(rows, record, field, groupFn, updateOnly) {
   for (let row of record.rows) {
 
     let group = groupFn(row.key, field)
-    
+
     if ( ! rows[group]) {
       if (updateOnly) continue
       rows[group] = {key:row.key, value:{}}
