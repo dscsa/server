@@ -375,24 +375,15 @@ function mergeRecord(rows, record, field, groupFn, updateOnly) {
   for (let row of record.rows) {
 
     let group = groupFn(row.key, field)
-    console.log("5_")
-    console.log(group)
-    console.log("5_end")
+    
     if ( ! rows[group]) {
       if (updateOnly) continue
       rows[group] = {key:row.key, value:{}}
     }
 
-    console.log("1_")
-    console.log(field)
-    console.log(+(row.value[0].count).toFixed(2))
-    console.log(rows[group].value)
-    console.log('count.'+field)
-    console.log(rows[group].value['count.'+field])
-    console.log("1_end")
-    rows[group].value['count.'+field] = (rows[group].value['count.'+field] || 0) + (row.value[0].count || 0).toFixed(2)
-    rows[group].value['qty.'+field]   = (rows[group].value['qty.'+field] || 0) + (row.value[0].sum || 0).toFixed(2)
-    rows[group].value['val.'+field]   = (rows[group].value['val.'+field] || 0) + (row.value[1].sum || 0).toFixed(2)
+    rows[group].value['count.'+field] = +(rows[group].value['count.'+field] || 0 + row.value[0].count || 0).toFixed(2)
+    rows[group].value['qty.'+field]   = +(rows[group].value['qty.'+field] || 0 + row.value[0].sum || 0).toFixed(2)
+    rows[group].value['val.'+field]   = +(rows[group].value['val.'+field] || 0 + row.value[1].sum || 0).toFixed(2)
   }
 }
 
