@@ -120,21 +120,18 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
   let records = await getRecords(ctx, to_id, 'by-generic')
 
   console.timeEnd('Get recordByGeneric')
-  //console.time('Merge recordByGeneric')
+
+  console.log('AFTER getRecords', records)
 
   records = mergeRecords(records)
 
-  //console.timeEnd('Merge recordByGeneric')
-  //console.time('Sort recordByGeneric')
+  console.log('AFTER mergeRecords', records)
 
   records = sortRecords(records)
 
-  //console.timeEnd('Sort recordByGeneric')
-  //console.time('To CSV recordByGeneric')
+  console.log('AFTER sortRecords', records)
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
-
-  //console.timeEnd('To CSV recordByGeneric')
 }
 
 exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -331,8 +328,6 @@ function optionalField(ctx, field, opts) {
   if (fields) {
 
     let fieldType = field.split('-')[0] //Hacky as this relies on consistent naming of fields.  eg.  dispensed-by-user-from-shipment -> dispensed
-
-    console.log('optionalField', field, fieldType, fields.includes(fieldType), fields)
 
     //views have values of [qty _stat, value _stat] _stats also supplies the count, so here are no count views
     if ( ! fields.includes(fieldType))
