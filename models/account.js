@@ -378,18 +378,11 @@ function mergeRecord(rows, record, field, groupFn, updateOnly) {
     console.log("5_")
     console.log(group)
     console.log("5_end")
-    if ( (! rows[group])) {
+    if ( ! rows[group]) {
       if (updateOnly) continue
-      rows[group] = {key:row.key, value:{
-        ['count.'+field]:0,
-        ['qty.'+field]:0,
-        ['val.'+field]:0
-      }}
+      rows[group] = {key:row.key, value:{}}
     }
 
-    if(!rows[group].value['count'+field]){
-      rows[group]
-    }
     console.log("1_")
     console.log(field)
     console.log(+(row.value[0].count).toFixed(2))
@@ -397,9 +390,9 @@ function mergeRecord(rows, record, field, groupFn, updateOnly) {
     console.log('count.'+field)
     console.log(rows[group].value['count.'+field])
     console.log("1_end")
-    rows[group].value['count.'+field] += +(row.value[0].count || 0).toFixed(2)
-    rows[group].value['qty.'+field]   += +(row.value[0].sum || 0).toFixed(2)
-    rows[group].value['val.'+field]   += +(row.value[1].sum || 0).toFixed(2)
+    rows[group].value['count.'+field] = (rows[group].value['count.'+field] || 0) + (row.value[0].count || 0).toFixed(2)
+    rows[group].value['qty.'+field]   = (rows[group].value['qty.'+field] || 0) + (row.value[0].sum || 0).toFixed(2)
+    rows[group].value['val.'+field]   = (rows[group].value['val.'+field] || 0) + (row.value[1].sum || 0).toFixed(2)
   }
 }
 
