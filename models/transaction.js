@@ -162,6 +162,7 @@ exports.lib = {
     return dispensed && expired > dispensed
   },
 
+
   //Because of Unicode collation order would be a000, A000, a001 even if I put delimiters like a space or comma inbetween characters
   //putting into an array seemed like the only remaining option http://docs.couchdb.org/en/stable/ddocs/views/collation.html#collation-specification
   sortedBin(doc) {
@@ -172,8 +173,12 @@ exports.lib = {
 
   groupByDate(emit, doc, stage, key, val) {
     var date = require(stage+'At')(doc)
+     //stage = pickedAt
+     //key = [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id],
+     //val = [require('qty')(doc), require('value')(doc)])
 
     if ( ! date || ! val) return //don't emit disposed items with qty 0 or it throws off count
+
 
     var to_id = require('to_id')(doc)
     emit([to_id, ''].concat(key), val)
@@ -444,7 +449,6 @@ exports.views = {
 
   'dispensed-by-from-generic':{
     map(doc) {
-      console.log("here")
       if (require('isDispensed')(doc))
         require('groupByDate')(emit, doc, 'dispensed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
@@ -504,6 +508,13 @@ exports.views = {
     map(doc) {
       if (require('isExpired')(doc))
         require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'picked-by-user-from-shipment':{
+    map(doc) {
+        require('groupByDate')(emit, doc, 'picked', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
