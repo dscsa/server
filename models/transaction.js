@@ -304,7 +304,7 @@ exports.views = {
   },
 
   //*** 2. Filtered View  ***
-  'currently-pended-by-name-bin':function(doc) {
+  'currently-pended-by-group-bin':function(doc) {
     if (require('nextAt')(doc)) return;
     require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended._id || doc.next[0].createdAt, doc.exp.to || doc.exp.from, require('sortedBin')(doc)])
   },
