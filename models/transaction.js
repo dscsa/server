@@ -221,7 +221,7 @@ exports.lib = {
     if (require('isDisposed')(doc)) //Match disposed view
       removedAt = disposedAt
     else if (require('isExpired')(doc)) //Match expired view
-      removedAt = expiredAt
+      removedAt = expiredAt > disposedAt ? disposedAt : expiredAt //Math.min 2019-01-03T16:26:42.825900Z because items destroyed month before expiration are marked as expired rather than disposed
 
     if ( ! doc.bin) return
 
