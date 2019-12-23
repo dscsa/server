@@ -374,7 +374,7 @@ function mergeRecord(rows, record, field, groupFn, updateOnly) {
 
     rows[group].value['count.'+field] = +(rows[group].value['count.'+field] || 0 + row.value[0].count || 0).toFixed(2)
     rows[group].value['qty.'+field]   = +(rows[group].value['qty.'+field] || 0 + row.value[0].sum || 0).toFixed(2)
-    rows[group].value['val.'+field]   = +(rows[group].value['val.'+field] || 0 + row.value[1].sum || 0).toFixed(2)
+    rows[group].value['value.'+field]   = +(rows[group].value['value.'+field] || 0 + row.value[1].sum || 0).toFixed(2)
   }
 }
 
