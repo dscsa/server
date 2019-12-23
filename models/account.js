@@ -508,14 +508,24 @@ exports.dispose = {
   // }
 }
 
-
+//TOD is set [0] enough or do we need/should to set all of them
 function updateNext(ctx, key, object){
 
   for (let transaction of ctx.req.body) {
+
     if(object){
+
+      if ( ! transaction.next[0])
+        transaction.next[0] = {}
+
       transaction.next[0][key] = object
+
     } else {
+
       delete transaction.next[0][key]
+
+      if (Object.keys(transaction.next[0]).length)
+        delete transaction.next[0]
     }
   }
 
