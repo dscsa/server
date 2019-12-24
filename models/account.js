@@ -69,9 +69,9 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
 
   let drugs = {}
 
-  mergeRecord(drugs, inventory, 'qty.inventory', genericKey)
-  mergeRecord(drugs, dispensed, 'qty.dispensed', genericKey)
-  mergeRecord(drugs, entered, 'qty.entered', genericKey, true)
+  mergeRecord(drugs, inventory, 'inventory', genericKey)
+  mergeRecord(drugs, dispensed, 'dispensed', genericKey)
+  mergeRecord(drugs, entered, 'entered', genericKey, true)
 
   //Match inventory with ordered when applicable
   for (let i in drugs) {
@@ -92,7 +92,16 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
       value:setOrderFields(generic, account, {})
     }
 
-  drugs = Object.keys(drugs).map(i => drugs[i])
+  //Transform object into array
+  drugs = Object.keys(drugs).map(i => {
+    delete drugs[i].value['count.inventory']
+    delete drugs[i].value['count.dispensed']
+    delete drugs[i].value['count.entered']
+    delete drugs[i].value['value.inventory']
+    delete drugs[i].value['value.dispensed']
+    delete drugs[i].value['value.entered']
+    return drugs[i]
+  })
 
   ctx.body = csv.fromJSON(drugs, ctx.query.fields)
 }
