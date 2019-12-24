@@ -69,9 +69,9 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
 
   let drugs = {}
 
-  mergeRecord(drugs, inventory, 'inventory.qty', genericKey)
-  mergeRecord(drugs, dispensed, 'dispensed.qty', genericKey)
-  mergeRecord(drugs, entered, 'entered.qty', genericKey, true)
+  mergeRecord(drugs, inventory, 'qty.inventory', genericKey)
+  mergeRecord(drugs, dispensed, 'qty.dispensed', genericKey)
+  mergeRecord(drugs, entered, 'qty.entered', genericKey, true)
 
   //Match inventory with ordered when applicable
   for (let i in drugs) {
@@ -80,7 +80,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
     let generic = drugs[i].key[4]
 
     if (account.ordered[generic]) {
-      setOrderFields(generic, account, drugs[i].value)
+      setOrderFields(generic, account, drugs[i].value[0])
       delete account.ordered[generic]
     }
   }
