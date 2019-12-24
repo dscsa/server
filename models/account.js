@@ -80,7 +80,7 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
     let generic = drugs[i].key[4]
 
     if (account.ordered[generic]) {
-      setOrderFields(generic, account, drugs[i].value[0])
+      setOrderFields(generic, account, drugs[i].value)
       delete account.ordered[generic]
     }
   }
