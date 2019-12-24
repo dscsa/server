@@ -209,21 +209,24 @@ exports.lib = {
   //is built into the view itself and doesn't require us to use start and end keys to filter by exp, and in this way we can group by drug
   inventory(emit, doc, key, val) {
 
+    if ( ! doc.bin) return
+
     var to_id      = require('to_id')(doc)
     var createdAt  = require('createdAt')(doc) //Rather than enteredAt to account for repacks that were not "entered" docs like 2019-01-15T14:43:33.378000Z
     var nextAt     = require('nextAt')(doc)
     var expiredAt  = require('expiredAt')(doc)
     var disposedAt = require('disposedAt')(doc)
+    var pendedAt   = require('pendedAt')(doc)
 
     // Can't just do require('addMonths')(expiredAt, -1) <= nextAt ? expiredAt : nextAt because 2019-01-03T21:02:25.368700Z counts as both inventory and dispensed in same time period
     var removedAt = nextAt
 
-    if (require('isDisposed')(doc)) //Match disposed view
+    if (pendedAt)
+      removedAt = pendedAt
+    else if (require('isDisposed')(doc)) //Match disposed view
       removedAt = disposedAt
     else if (require('isExpired')(doc)) //Match expired view
       removedAt = expiredAt > disposedAt ? disposedAt : expiredAt //Math.min 2019-01-03T16:26:42.825900Z because items destroyed month before expiration are marked as expired rather than disposed
-
-    if ( ! doc.bin) return
 
     if (createdAt > removedAt)
       return log(doc._id+' inventory createdAt > removedAt: createdAt:'+createdAt+' > removedAt:'+removedAt+',  expiredAt:'+expiredAt+',  nextAt:'+nextAt+', disposedAt:'+disposedAt) //these are arrays but that seems to work okay
