@@ -32,12 +32,12 @@ exports.lib = {
 
   //For authorization purposes.  Only allow recipients to see their own metrics
   to_id(doc) {
-    return doc.shipment && doc.shipment._id.slice(0, 10)
+    return doc.shipment && doc.shipment._id && doc.shipment._id.slice(0, 10)
   },
 
   //Identify the donor (for repacked this is the same as the recipient)
   from_id(doc) {
-    return doc.shipment && doc.shipment._id.slice(-10)
+    return doc.shipment && doc.shipment._id && doc.shipment._id.slice(-10)
   },
 
   createdAt(doc) {
@@ -45,7 +45,7 @@ exports.lib = {
   },
 
   receivedAt(doc) {
-    return doc.shipment && ~ doc.shipment._id.indexOf('.') && doc.shipment._id.slice(11, 21).split('-')
+    return doc.shipment && doc.shipment._id && ~ doc.shipment._id.indexOf('.') && doc.shipment._id.slice(11, 21).split('-')
   },
 
   //Want:
@@ -92,13 +92,13 @@ exports.lib = {
   //and exlude any items without a donor that were refused (e.g., 2019-01-24T17:24:21.063700Z because bin === "")
   disposedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].disposed && doc.next[0].disposed._id.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].disposed && doc.next[0].disposed._id && doc.next[0].disposed._id.slice(0, 10).split('-')
   },
 
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   dispensedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].dispensed && doc.next[0].dispensed._id.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].dispensed && doc.next[0].dispensed._id && doc.next[0].dispensed._id.slice(0, 10).split('-')
   },
 
   //Locked when currently being pick if picked === {} so there might not be an _id yet
@@ -110,12 +110,12 @@ exports.lib = {
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   pendedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].pended && doc.next[0].pended._id.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].pended && doc.next[0].pended._id && doc.next[0].pended._id.slice(0, 10).split('-')
   },
 
   repackedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].repacked && doc.next[0].repacked._id.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].repacked && doc.next[0].repacked._id && doc.next[0].repacked._id.slice(0, 10).split('-')
   },
 
   nextAt(doc) {
