@@ -193,6 +193,7 @@ exports.lib = {
   eachMonth(fromDate, toDate, callback) {
 
     if (toDate[0] - fromDate[0] > 5) return //Protect against long loops from invalid data
+    if (fromDate[1] > 12 || toDate[1] > 12) return //Protect against long loops from invalid data
 
     //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
     for (var y = +fromDate[0], m = +fromDate[1]; y < toDate[0] || m < toDate[1]; m++) {
