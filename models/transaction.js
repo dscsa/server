@@ -518,17 +518,10 @@ exports.views = {
     reduce:'_stats'
   },
 
-  'picked-by-user-from-shipment':{
-    map(doc) {
-        require('groupByDate')(emit, doc, 'picked', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
-    },
-    reduce:'_stats'
-  },
-
   'disposed-by-user-from-shipment':{
     map(doc) {
       if (require('isDisposed')(doc))
-        require('groupByDate')(emit, doc, 'disposed', [doc.next[0].disposed ? doc.next[0].disposed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+        require('groupByDate')(emit, doc, 'disposed', [doc.next[0].disposed && doc.next[0].disposed.user ? doc.next[0].disposed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
@@ -536,14 +529,14 @@ exports.views = {
   'dispensed-by-user-from-shipment':{
     map(doc) {
       if (require('isDispensed')(doc))
-        require('groupByDate')(emit, doc, 'dispensed', [doc.next[0].dispensed ? doc.next[0].dispensed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+        require('groupByDate')(emit, doc, 'dispensed', [doc.next[0].dispensed && doc.next[0].dispensed.user ? doc.next[0].dispensed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
   'pended-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [doc.next[0].picked && doc.next[0].picked.user ? doc.next[0].picked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+      require('groupByDate')(emit, doc, 'pended', [doc.next[0].pended && doc.next[0].pended.user ? doc.next[0].pended.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
@@ -557,7 +550,7 @@ exports.views = {
 
   'repacked-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'repacked', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+      require('groupByDate')(emit, doc, 'repacked', [doc.next[0].repacked && doc.next[0].repacked.user ? doc.next[0].repacked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
