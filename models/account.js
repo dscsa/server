@@ -529,7 +529,7 @@ function updateNext(ctx, key, object){
 
       transaction.next[0][key] = object
 
-    } else {
+    } else if (transaction.next[0]) {
 
       delete transaction.next[0][key]
 
