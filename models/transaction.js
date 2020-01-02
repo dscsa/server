@@ -171,6 +171,17 @@ exports.lib = {
     return doc.bin[3] ? binArr.slice(1) : binArr.slice(0, -1)
   },
 
+
+  simpleGroupByKey(emit, doc, stage, key, val){
+    if (require('nextAt')(doc)) return;
+
+    var date = require(stage+'At')(doc)
+
+    if ( ! date || ! val) return //don't emit disposed items with qty 0 or it throws off count
+    emit(key, val)
+  },
+
+
   groupByDate(emit, doc, stage, key, val) {
     var date = require(stage+'At')(doc)
      //stage = pickedAt
@@ -308,6 +319,17 @@ exports.views = {
     if (require('nextAt')(doc)) return;
     require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended._id || doc.next[0].createdAt, doc.exp.to || doc.exp.from, require('sortedBin')(doc)])
   },
+
+
+  'currently-pended-groups':{
+    map(doc) {
+      //require('simpleGroupByKey')(emit, doc, 'pended', [doc.next[0].pended.group], [1])
+      require('simpleGroupByKey')(emit, doc, 'pended', [doc.next[0].pended.group, typeof doc.next[0].pended.priority == 'undefined' ? false : doc.next[0].pended.priority, doc.next[0].picked ? (doc.next[0].picked._id ? true : null) : false], [1])
+
+    },
+    reduce:'_stats'
+  },
+
 
   //Client bin checking and reorganization, & account/bins.csv for use by data loggers needing to pick empty boxes.  Skip reduce with reduce=false.  Alphabatize within bin
   //Split bin because of weird unicode collation a < A < aa so upper and lower case bins were getting mixed in search results http://docs.couchdb.org/en/stable/ddocs/views/collation.html
