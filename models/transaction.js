@@ -32,12 +32,12 @@ exports.lib = {
 
   //For authorization purposes.  Only allow recipients to see their own metrics
   to_id(doc) {
-    return doc.shipment && doc.shipment._id.slice(0, 10)
+    return doc.shipment && doc.shipment._id && doc.shipment._id.slice(0, 10)
   },
 
   //Identify the donor (for repacked this is the same as the recipient)
   from_id(doc) {
-    return doc.shipment && doc.shipment._id.slice(-10)
+    return doc.shipment && doc.shipment._id && doc.shipment._id.slice(-10)
   },
 
   createdAt(doc) {
@@ -45,7 +45,7 @@ exports.lib = {
   },
 
   receivedAt(doc) {
-    return doc.shipment && ~ doc.shipment._id.indexOf('.') && doc.shipment._id.slice(11, 21).split('-')
+    return doc.shipment && doc.shipment._id && ~ doc.shipment._id.indexOf('.') && doc.shipment._id.slice(11, 21).split('-')
   },
 
   //Want:
@@ -92,13 +92,13 @@ exports.lib = {
   //and exlude any items without a donor that were refused (e.g., 2019-01-24T17:24:21.063700Z because bin === "")
   disposedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].disposed && doc.next[0].disposed._id.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].disposed && doc.next[0].disposed._id && doc.next[0].disposed._id.slice(0, 10).split('-')
   },
 
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   dispensedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].dispensed && doc.next[0].dispensed._id.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].dispensed && doc.next[0].dispensed._id && doc.next[0].dispensed._id.slice(0, 10).split('-')
   },
 
   //Locked when currently being pick if picked === {} so there might not be an _id yet
@@ -110,12 +110,12 @@ exports.lib = {
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   pendedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].pended && doc.next[0].pended._id.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].pended && doc.next[0].pended._id && doc.next[0].pended._id.slice(0, 10).split('-')
   },
 
   repackedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    return ! refusedAt && doc.next[0] && doc.next[0].repacked && doc.next[0].repacked._id.slice(0, 10).split('-')
+    return ! refusedAt && doc.next[0] && doc.next[0].repacked && doc.next[0].repacked._id && doc.next[0].repacked._id.slice(0, 10).split('-')
   },
 
   nextAt(doc) {
@@ -203,6 +203,9 @@ exports.lib = {
   //Inclusive, Callback(yyyy<string>, mm<string>, isLastMonth)
   eachMonth(fromDate, toDate, callback) {
 
+    if (toDate[0] - fromDate[0] > 5) return //Protect against long loops from invalid data
+    if (fromDate[1] > 12 || toDate[1] > 12) return //Protect against long loops from invalid data
+
     //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
     for (var y = +fromDate[0], m = +fromDate[1]; y < toDate[0] || m < toDate[1]; m++) {
       if (m == 13) { y++; m = 0; continue }
@@ -220,21 +223,24 @@ exports.lib = {
   //is built into the view itself and doesn't require us to use start and end keys to filter by exp, and in this way we can group by drug
   inventory(emit, doc, key, val) {
 
+    if ( ! doc.bin) return
+
     var to_id      = require('to_id')(doc)
     var createdAt  = require('createdAt')(doc) //Rather than enteredAt to account for repacks that were not "entered" docs like 2019-01-15T14:43:33.378000Z
     var nextAt     = require('nextAt')(doc)
     var expiredAt  = require('expiredAt')(doc)
     var disposedAt = require('disposedAt')(doc)
+    var pendedAt   = require('pendedAt')(doc)
 
     // Can't just do require('addMonths')(expiredAt, -1) <= nextAt ? expiredAt : nextAt because 2019-01-03T21:02:25.368700Z counts as both inventory and dispensed in same time period
     var removedAt = nextAt
 
-    if (require('isDisposed')(doc)) //Match disposed view
+    if (pendedAt)
+      removedAt = pendedAt
+    else if (require('isDisposed')(doc)) //Match disposed view
       removedAt = disposedAt
     else if (require('isExpired')(doc)) //Match expired view
       removedAt = expiredAt > disposedAt ? disposedAt : expiredAt //Math.min 2019-01-03T16:26:42.825900Z because items destroyed month before expiration are marked as expired rather than disposed
-
-    if ( ! doc.bin) return
 
     if (createdAt > removedAt)
       return log(doc._id+' inventory createdAt > removedAt: createdAt:'+createdAt+' > removedAt:'+removedAt+',  expiredAt:'+expiredAt+',  nextAt:'+nextAt+', disposedAt:'+disposedAt) //these are arrays but that seems to work okay
@@ -534,17 +540,10 @@ exports.views = {
     reduce:'_stats'
   },
 
-  'picked-by-user-from-shipment':{
-    map(doc) {
-        require('groupByDate')(emit, doc, 'picked', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
-    },
-    reduce:'_stats'
-  },
-
   'disposed-by-user-from-shipment':{
     map(doc) {
       if (require('isDisposed')(doc))
-        require('groupByDate')(emit, doc, 'disposed', [doc.next[0].disposed ? doc.next[0].disposed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+        require('groupByDate')(emit, doc, 'disposed', [doc.next[0].disposed && doc.next[0].disposed.user ? doc.next[0].disposed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
@@ -552,14 +551,14 @@ exports.views = {
   'dispensed-by-user-from-shipment':{
     map(doc) {
       if (require('isDispensed')(doc))
-        require('groupByDate')(emit, doc, 'dispensed', [doc.next[0].dispensed ? doc.next[0].dispensed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+        require('groupByDate')(emit, doc, 'dispensed', [doc.next[0].dispensed && doc.next[0].dispensed.user ? doc.next[0].dispensed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
   'pended-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [doc.next[0].picked && doc.next[0].picked.user ? doc.next[0].picked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+      require('groupByDate')(emit, doc, 'pended', [doc.next[0].pended && doc.next[0].pended.user ? doc.next[0].pended.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
@@ -573,7 +572,7 @@ exports.views = {
 
   'repacked-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'repacked', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+      require('groupByDate')(emit, doc, 'repacked', [doc.next[0].repacked && doc.next[0].repacked.user ? doc.next[0].repacked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
