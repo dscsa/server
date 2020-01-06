@@ -329,11 +329,15 @@ exports.views = {
 
   'currently-pended-groups':{
     map(doc) {
-      //require('simpleGroupByKey')(emit, doc, 'pended', [doc.next[0].pended.group], [1])
       require('simpleGroupByKey')(emit, doc, 'pended', [doc.next[0].pended.group, typeof doc.next[0].pended.priority == 'undefined' ? false : doc.next[0].pended.priority, doc.next[0].picked ? (doc.next[0].picked._id ? true : null) : false], [1])
-
     },
     reduce:'_stats'
+  },
+
+
+  'currently-pended-by-group':function(doc) {
+    if (require('nextAt')(doc)) return;
+    require('pendedAt')(doc) && emit([doc.next[0].pended.group], [0])
   },
 
 
