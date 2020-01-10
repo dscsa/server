@@ -368,6 +368,7 @@ function uniqueKey(key, field) {
   return unique.join(',') //remove to_id and anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
+//updateOnly means we won't add a group for that type (e.g. entered) unless that group already exists (e.g created by dispensed or inventory)
 function mergeRecord(rows, record, field, groupFn, updateOnly) {
 
   if ( ! record) return
@@ -378,7 +379,7 @@ function mergeRecord(rows, record, field, groupFn, updateOnly) {
 
     if ( ! rows[group]) {
       if (updateOnly) continue
-      rows[group] = {key:row.key, value:{}}
+      rows[group] = {key:row.key, value:{group}}
     }
 
     rows[group].value['count.'+field] = +(rows[group].value['count.'+field] || 0 + row.value[0].count || 0).toFixed(2)
