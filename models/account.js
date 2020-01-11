@@ -479,7 +479,7 @@ exports.pend = {
   //in the ctx object the query paramaters
   async post(ctx, _id, group) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, 'pended', {_id:new Date().toJSON(), group, repackQty:ctx.query.repackQty, user:{_id:ctx.user}})
+    ctx.body = await updateNext(ctx, 'pended', {_id:new Date().toJSON(), group, repackQty:ctx.query.repackQty, user:ctx.user})
   },
 
   //Unpend all requests that match a name
