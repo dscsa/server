@@ -314,7 +314,8 @@ exports.views = {
     map(doc) {
       if (require('nextAt')(doc)) return;
       var priority = typeof doc.next[0].pended.priority == 'undefined' ? false : doc.next[0].pended.priority
-      require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended.group, priority, doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, require('sortedBin')(doc)])
+      var picked = doc.next[0].picked ? (doc.next[0].picked._id ? true : null) : false
+      require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended.group, priority, picked, doc, require('sortedBin')(doc)],[1])
     },
     reduce:'_stats'
   },
