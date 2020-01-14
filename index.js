@@ -242,9 +242,6 @@ keys(function() {
   r('/account/:id/record-by-from.csv')     //Allow user to get, modify, & delete docs
     .get(models.account.recordByFrom)
 
-  r('/account/:id/binned.csv')     //Allow user to get, modify, & delete docs
-    .get(models.account.binned)
-
   r('/:model/:id')
     .get(async function(ctx, db, id) {
       ctx.query.selector = `{"id":"${id}"}`

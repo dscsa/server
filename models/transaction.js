@@ -1,10 +1,11 @@
 "use strict"
 //defaults
 
-//TODO replace all recipient_id with TO_ID
-//TODO replace all with sortedBin
-//TODO replace all isXXX with wasXXX
-//TODO remove deprecations
+//All Google Sheets with old view names
+//- Good Pill records
+//- Good Pill Live inventory
+//- Good Pill V1 V2 Merge
+//- Jeff Data Scientist Views
 
 module.exports = exports = Object.create(require('../helpers/model'))
 
@@ -31,12 +32,12 @@ exports.lib = {
 
   //For authorization purposes.  Only allow recipients to see their own metrics
   to_id(doc) {
-    return doc.shipment && doc.shipment._id.slice(0, 10)
+    return doc.shipment && doc.shipment._id && doc.shipment._id.slice(0, 10)
   },
 
   //Identify the donor (for repacked this is the same as the recipient)
   from_id(doc) {
-    return doc.shipment && doc.shipment._id.slice(-10)
+    return doc.shipment && doc.shipment._id && doc.shipment._id.slice(-10)
   },
 
   createdAt(doc) {
@@ -44,13 +45,7 @@ exports.lib = {
   },
 
   receivedAt(doc) {
-    return doc.shipment && ~ doc.shipment._id.indexOf('.') && doc.shipment._id.slice(11, 21).split('-')
-  },
-
-  //TODO In case next.length > 1 we may need to do a loop.  Break at first key with "dispensed" prop?
-  //see 'next.transaction._id' view for an example
-  nextAt(doc) {
-    return doc.next[0] && doc.next[0].createdAt.slice(0, 10).split('-')
+    return doc.shipment && doc.shipment._id && ~ doc.shipment._id.indexOf('.') && doc.shipment._id.slice(11, 21).split('-')
   },
 
   //Want:
@@ -97,22 +92,34 @@ exports.lib = {
   //and exlude any items without a donor that were refused (e.g., 2019-01-24T17:24:21.063700Z because bin === "")
   disposedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    var nextAt    = require('nextAt')(doc)
-    return ! refusedAt && nextAt && doc.next[0].disposed && nextAt
+    return ! refusedAt && doc.next[0] && doc.next[0].disposed && doc.next[0].disposed._id && doc.next[0].disposed._id.slice(0, 10).split('-')
   },
 
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   dispensedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    var nextAt = require('nextAt')(doc)
-    return ! refusedAt && nextAt && doc.next[0].dispensed && nextAt
+    return ! refusedAt && doc.next[0] && doc.next[0].dispensed && doc.next[0].dispensed._id && doc.next[0].dispensed._id.slice(0, 10).split('-')
+  },
+
+  //Locked when currently being pick if picked === {} so there might not be an _id yet
+  pickedAt(doc) {
+    var refusedAt = require('refusedAt')(doc) //
+    return ! refusedAt && doc.next[0] && doc.next[0].picked && doc.next[0].picked._id && doc.next[0].picked._id.slice(0, 10).split('-')
   },
 
   //MECE breakdown of ! refused (verified + repacked) into disposed, dispensed, pended
   pendedAt(doc) {
     var refusedAt = require('refusedAt')(doc)
-    var nextAt = require('nextAt')(doc)
-    return ! refusedAt && nextAt && doc.next[0].pended && nextAt
+    return ! refusedAt && doc.next[0] && doc.next[0].pended && doc.next[0].pended._id && doc.next[0].pended._id.slice(0, 10).split('-')
+  },
+
+  repackedAt(doc) {
+    var refusedAt = require('refusedAt')(doc)
+    return ! refusedAt && doc.next[0] && doc.next[0].repacked && doc.next[0].repacked._id && doc.next[0].repacked._id.slice(0, 10).split('-')
+  },
+
+  nextAt(doc) {
+    return require('dispensedAt')(doc) || require('disposedAt')(doc) || require('repackedAt')(doc)
   },
 
   addMonths(date, months) {
@@ -129,14 +136,6 @@ exports.lib = {
   //removes all pended, dispensed, disposed, and previous (repacked)
   isInventory(doc) {
     return doc.bin && ! doc.next.length
-  },
-
-  isBinned(doc) {
-    return require('isInventory')(doc) && doc.bin.length == 4
-  },
-
-  isRepacked(doc) {
-    return require('isInventory')(doc) && doc.bin.length != 4
   },
 
   isExpired(doc) {
@@ -163,6 +162,7 @@ exports.lib = {
     return dispensed && expired > dispensed
   },
 
+
   //Because of Unicode collation order would be a000, A000, a001 even if I put delimiters like a space or comma inbetween characters
   //putting into an array seemed like the only remaining option http://docs.couchdb.org/en/stable/ddocs/views/collation.html#collation-specification
   sortedBin(doc) {
@@ -173,8 +173,12 @@ exports.lib = {
 
   groupByDate(emit, doc, stage, key, val) {
     var date = require(stage+'At')(doc)
+     //stage = pickedAt
+     //key = [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id],
+     //val = [require('qty')(doc), require('value')(doc)])
 
     if ( ! date || ! val) return //don't emit disposed items with qty 0 or it throws off count
+
 
     var to_id = require('to_id')(doc)
     emit([to_id, ''].concat(key), val)
@@ -188,6 +192,9 @@ exports.lib = {
   //Inclusive, Callback(yyyy<string>, mm<string>, isLastMonth)
   eachMonth(fromDate, toDate, callback) {
 
+    if (toDate[0] - fromDate[0] > 5) return //Protect against long loops from invalid data
+    if (fromDate[1] > 12 || toDate[1] > 12) return //Protect against long loops from invalid data
+
     //Each month in range inclusive start, exclusive end so that if something is disposed the moment we log it doesn't count
     for (var y = +fromDate[0], m = +fromDate[1]; y < toDate[0] || m < toDate[1]; m++) {
       if (m == 13) { y++; m = 0; continue }
@@ -196,23 +203,33 @@ exports.lib = {
     callback(''+y, ('0'+m).slice(-2), true)
   },
 
+  //Inventory at the end of each month (so we do not count the last month)
+  //An item is in inventory from the moment it is entered (not verified because verified is unset once destroyed) until the moment it is removed (next property is set) or until it expires
+  //We do a loop because couchdb cannot filter and group on different fields.  Emitting [exp, drug] would filter and group on exp.
+  //Emitting [drug, exp] would filter and group by drug.  We want to group by drug and filter by exp.  To achieve this we emit
+  //every month between the item being added and when it leaves inventory (see above).  This way search for [2018, 06] doesn't just
+  //give us 2018-06 items but all items before that too e.g 2018-05, 2018-04 .... until enteredAt date.  In this way the Exp filter
+  //is built into the view itself and doesn't require us to use start and end keys to filter by exp, and in this way we can group by drug
   inventory(emit, doc, key, val) {
+
+    if ( ! doc.bin) return
 
     var to_id      = require('to_id')(doc)
     var createdAt  = require('createdAt')(doc) //Rather than enteredAt to account for repacks that were not "entered" docs like 2019-01-15T14:43:33.378000Z
     var nextAt     = require('nextAt')(doc)
     var expiredAt  = require('expiredAt')(doc)
     var disposedAt = require('disposedAt')(doc)
+    var pendedAt   = require('pendedAt')(doc)
 
     // Can't just do require('addMonths')(expiredAt, -1) <= nextAt ? expiredAt : nextAt because 2019-01-03T21:02:25.368700Z counts as both inventory and dispensed in same time period
     var removedAt = nextAt
 
-    if (require('isDisposed')(doc)) //Match disposed view
+    if (pendedAt)
+      removedAt = pendedAt
+    else if (require('isDisposed')(doc)) //Match disposed view
       removedAt = disposedAt
     else if (require('isExpired')(doc)) //Match expired view
-      removedAt = expiredAt
-
-    if ( ! doc.bin) return
+      removedAt = expiredAt > disposedAt ? disposedAt : expiredAt //Math.min 2019-01-03T16:26:42.825900Z because items destroyed month before expiration are marked as expired rather than disposed
 
     if (createdAt > removedAt)
       return log(doc._id+' inventory createdAt > removedAt: createdAt:'+createdAt+' > removedAt:'+removedAt+',  expiredAt:'+expiredAt+',  nextAt:'+nextAt+', disposedAt:'+disposedAt) //these are arrays but that seems to work okay
@@ -268,8 +285,9 @@ exports.views = {
   //*** 2. Server (Private) Endpoints ***
   //Used by history
   'next.transaction._id':function(doc) {
-    for (var i in doc.next)
-      doc.next[i].transaction && emit(doc.next[i].transaction._id)
+    var transaction_arr = doc.next[0].repacked ? doc.next[0].repacked.transactions : []
+    for (var i in transaction_arr)
+      transaction_arr[i] && emit(transaction_arr[i]._id)
   },
 
   //Used by drug endpoint to update transactions on drug name/form updates
@@ -292,8 +310,14 @@ exports.views = {
   },
 
   //*** 2. Filtered View  ***
-  'pended-by-name-bin':function(doc) {
-    require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended._id || doc.next[0].createdAt, doc.exp.to || doc.exp.from, require('sortedBin')(doc)])
+  'currently-pended-by-group-priority-generic':{
+    map(doc) {
+      if (require('nextAt')(doc)) return;
+      var priority = typeof doc.next[0].pended.priority == 'undefined' ? false : doc.next[0].pended.priority
+      var picked = doc.next[0].picked ? (doc.next[0].picked._id ? true : null) : false
+      require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended.group, priority, picked, require('sortedBin')(doc)],[1])
+    },
+    reduce:'_stats'
   },
 
   //Client bin checking and reorganization, & account/bins.csv for use by data loggers needing to pick empty boxes.  Skip reduce with reduce=false.  Alphabatize within bin
@@ -302,15 +326,15 @@ exports.views = {
     map(doc) {
       if ( ! require('isInventory')(doc)) return
       var bin  = require('sortedBin')(doc)
-      var qty  = require('qty')(doc)
+      var val  = [require('qty')(doc), require('value')(doc)]
       var date = require('verifiedAt')(doc)
-      emit([require('to_id')(doc)].concat(bin).concat(date), qty)
+      emit([require('to_id')(doc)].concat(bin).concat(date), val)
     },
     reduce:'_stats'
   },
 
   //Expiration Date Search By Client
-  'expired.qty-by-bin':{
+  'expired-by-bin':{
     map(doc) {
 
       if ( ! require('isInventory')(doc)) return
@@ -319,375 +343,226 @@ exports.views = {
       var to_id      = require('to_id')(doc)
       var sortedBin  = require('sortedBin')(doc)
 
-      emit([to_id].concat(expiredAt).concat(sortedBin), require('qty')(doc))
+      emit([to_id].concat(expiredAt).concat(sortedBin), [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  //Inventory at the end of each month (so we do not count the last month)
-  //An item is in inventory from the moment it is entered (not verified because verified is unset once destroyed) until the moment it is removed (next property is set) or until it expires
-  //We do a loop because couchdb cannot filter and group on different fields.  Emitting [exp, drug] would filter and group on exp.
-  //Emitting [drug, exp] would filter and group by drug.  We want to group by drug and filter by exp.  To achieve this we emit
-  //every month between the item being added and when it leaves inventory (see above).  This way search for [2018, 06] doesn't just
-  //give us 2018-06 items but all items before that too e.g 2018-05, 2018-04 .... until enteredAt date.  In this way the Exp filter
-  //is built into the view itself and doesn't require us to use start and end keys to filter by exp, and in this way we can group by drug
-
-  //Live Inventory [to_id, year, month+2]?group_level=4
-  //Inventory Download [to_id, year, month+2]?group_level=false
-  //v2 Inventory [to_id, year, month+2, Drug Name]
-  //v2 Drugs [to_id, year, month+2, Drug Name]?group_level=5 (inventory/dispense/disposed/pended/repacked)
-  //Audit Inventory [to_id, year-1, 12]?group_level=4
-
-  'inventory.qty-by-generic':{
+  'entered-by-generic':{
     map(doc) {
-      require('inventory')(emit, doc, [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+      require('groupByDate')(emit, doc, 'entered', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'inventory.value-by-generic':{
+  'refused-by-generic':{
     map(doc) {
-      require('inventory')(emit, doc, [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
+      require('groupByDate')(emit, doc, 'refused', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'entered.qty-by-generic':{
+  'verified-by-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'entered', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+      require('groupByDate')(emit, doc, 'verified', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'entered.value-by-generic':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'entered', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'refused.qty-by-generic':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'refused', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'refused.value-by-generic':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'refused', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'verified.qty-by-generic':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'verified', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'verified.value-by-generic':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'verified', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'expired.qty-by-generic':{
+  'expired-by-generic':{
     map(doc) {
       if (require('isExpired')(doc))
-        require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+        require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'expired.value-by-generic':{
+  'disposed-by-generic':{
+    map(doc) {
+      if (require('isDisposed')(doc))
+        require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'dispensed-by-generic':{
+    map(doc) {
+      if (require('isDispensed')(doc))
+        require('groupByDate')(emit, doc, 'dispensed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'pended-by-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'pended', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'picked-by-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'picked', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'repacked-by-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'repacked', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'inventory-by-generic':{
+    map(doc) {
+      require('inventory')(emit, doc, [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'entered-by-from-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'entered', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'refused-by-from-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'refused', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'verified-by-from-generic':{
+    map(doc) {
+      require('groupByDate')(emit, doc, 'verified', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+    },
+    reduce:'_stats'
+  },
+
+  'expired-by-from-generic':{
     map(doc) {
       if (require('isExpired')(doc))
-        require('groupByDate')(emit, doc, 'expired', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
+        require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'disposed.qty-by-generic':{
+  'disposed-by-from-generic':{
     map(doc) {
       if (require('isDisposed')(doc))
-        require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+        require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'disposed.value-by-generic':{
-    map(doc) {
-      if (require('isDisposed')(doc))
-        require('groupByDate')(emit, doc, 'disposed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'dispensed.qty-by-generic':{
+  'dispensed-by-from-generic':{
     map(doc) {
       if (require('isDispensed')(doc))
-        require('groupByDate')(emit, doc, 'dispensed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+        require('groupByDate')(emit, doc, 'dispensed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'dispensed.value-by-generic':{
+  'pended-by-from-generic':{
     map(doc) {
-      if (require('isDispensed')(doc))
-        require('groupByDate')(emit, doc, 'dispensed', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
+      require('groupByDate')(emit, doc, 'pended', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'pended.qty-by-generic':{
+  'picked-by-from-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+      require('groupByDate')(emit, doc, 'picked', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'pended.value-by-generic':{
+  'repacked-by-from-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
+      require('groupByDate')(emit, doc, 'repacked', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'entered.qty-by-from-generic':{
+  'inventory-by-from-generic':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'entered', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+      require('inventory')(emit, doc, [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'entered.value-by-from-generic':{
+  'entered-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'entered', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
+      require('groupByDate')(emit, doc, 'entered', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'refused.qty-by-from-generic':{
+  'refused-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'refused', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+      require('groupByDate')(emit, doc, 'refused', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'refused.value-by-from-generic':{
+  'verified-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'refused', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
+      require('groupByDate')(emit, doc, 'verified', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'verified.qty-by-from-generic':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'verified', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'verified.value-by-from-generic':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'verified', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'expired.qty-by-from-generic':{
+  'expired-by-user-from-shipment':{
     map(doc) {
       if (require('isExpired')(doc))
-        require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+        require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'expired.value-by-from-generic':{
-    map(doc) {
-      if (require('isExpired')(doc))
-        require('groupByDate')(emit, doc, 'expired', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'disposed.qty-by-from-generic':{
+  'disposed-by-user-from-shipment':{
     map(doc) {
       if (require('isDisposed')(doc))
-        require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+        require('groupByDate')(emit, doc, 'disposed', [doc.next[0].disposed && doc.next[0].disposed.user ? doc.next[0].disposed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'disposed.value-by-from-generic':{
-    map(doc) {
-      if (require('isDisposed')(doc))
-        require('groupByDate')(emit, doc, 'disposed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'dispensed.qty-by-from-generic':{
+  'dispensed-by-user-from-shipment':{
     map(doc) {
       if (require('isDispensed')(doc))
-        require('groupByDate')(emit, doc, 'dispensed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+        require('groupByDate')(emit, doc, 'dispensed', [doc.next[0].dispensed && doc.next[0].dispensed.user ? doc.next[0].dispensed.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'dispensed.value-by-from-generic':{
+  'pended-by-user-from-shipment':{
     map(doc) {
-      if (require('isDispensed')(doc))
-        require('groupByDate')(emit, doc, 'dispensed', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
+      require('groupByDate')(emit, doc, 'pended', [doc.next[0].pended && doc.next[0].pended.user ? doc.next[0].pended.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'pended.qty-by-from-generic':{
+  'picked-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
+      require('groupByDate')(emit, doc, 'picked', [doc.next[0].picked && doc.next[0].picked.user ? doc.next[0].picked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'pended.value-by-from-generic':{
+  'repacked-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
+      require('groupByDate')(emit, doc, 'repacked', [doc.next[0].repacked && doc.next[0].repacked.user ? doc.next[0].repacked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
-  'inventory.qty-by-from-generic':{
+  'inventory-by-user-from-shipment':{
     map(doc) {
-      require('inventory')(emit, doc, [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'inventory.value-by-from-generic':{
-    map(doc) {
-      require('inventory')(emit, doc, [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'entered.qty-by-user-from-shipment':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'entered', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'entered.value-by-user-from-shipment':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'entered', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'refused.qty-by-user-from-shipment':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'refused', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'refused.value-by-user-from-shipment':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'refused', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'verified.qty-by-user-from-shipment':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'verified', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'verified.value-by-user-from-shipment':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'verified', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'expired.qty-by-user-from-shipment':{
-    map(doc) {
-      if (require('isExpired')(doc))
-        require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'expired.value-by-user-from-shipment':{
-    map(doc) {
-      if (require('isExpired')(doc))
-        require('groupByDate')(emit, doc, 'expired', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'disposed.qty-by-user-from-shipment':{
-    map(doc) {
-      if (require('isDisposed')(doc))
-        require('groupByDate')(emit, doc, 'disposed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'disposed.value-by-user-from-shipment':{
-    map(doc) {
-      if (require('isDisposed')(doc))
-        require('groupByDate')(emit, doc, 'disposed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'dispensed.qty-by-user-from-shipment':{
-    map(doc) {
-      if (require('isDispensed')(doc))
-        require('groupByDate')(emit, doc, 'dispensed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'dispensed.value-by-user-from-shipment':{
-    map(doc) {
-      if (require('isDispensed')(doc))
-        require('groupByDate')(emit, doc, 'dispensed', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'pended.qty-by-user-from-shipment':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'pended.value-by-user-from-shipment':{
-    map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'inventory.qty-by-user-from-shipment':{
-    map(doc) {
-      require('inventory')(emit, doc, [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('qty')(doc))
-    },
-    reduce:'_stats'
-  },
-
-  'inventory.value-by-user-from-shipment':{
-    map(doc) {
-      require('inventory')(emit, doc, [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], require('value')(doc))
+      require('inventory')(emit, doc, [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   }

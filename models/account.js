@@ -25,13 +25,6 @@ exports.get_csv = async function (ctx, db) {
   ctx.type = 'text/csv'
 }
 
-//This is to find the emptiest bins
-exports.binned = async function  (ctx, id) { //account._id will not be set because google does not send cookie
-  const view = await ctx.db.transaction.query('inventory-by-bin-verifiedat', {group_level:3, startkey:[id, 'binned'], endkey:[id, 'binned', {}]}) //exclude repack bins from empty bins
-  let sortAsc = view.rows.sort((a, b) => a.value.count - b.value.count)
-  ctx.body  = csv.fromJSON(sortAsc, ctx.query.fields && ctx.query.fields.split(','))
-}
-
 function currentDate(months, split) {
   let minExp   = new Date()
   let minMonth = minExp.getMonth() + (+months || 0) // TODO exlcudes expireds in the last month because they are set to the 1st of the month
@@ -68,17 +61,17 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
   }
 
   const [entered, dispensed, inventory, account] = await Promise.all([
-    ctx.db.transaction.query('entered.qty-by-generic', enteredOpts),
-    ctx.db.transaction.query('dispensed.qty-by-generic', dispensedOpts),
-    ctx.db.transaction.query('inventory.qty-by-generic', invOpts),
+    ctx.db.transaction.query('entered-by-generic', enteredOpts),
+    ctx.db.transaction.query('dispensed-by-generic', dispensedOpts),
+    ctx.db.transaction.query('inventory-by-generic', invOpts),
     ctx.db.account.get(to_id)
   ])
 
   let drugs = {}
 
-  mergeRecord(drugs, inventory, 'inventory.qty', genericKey)
-  mergeRecord(drugs, dispensed, 'dispensed.qty', genericKey)
-  mergeRecord(drugs, entered, 'entered.qty', genericKey, true)
+  mergeRecord(drugs, inventory, 'inventory', genericKey)
+  mergeRecord(drugs, dispensed, 'dispensed', genericKey)
+  mergeRecord(drugs, entered, 'entered', genericKey, true)
 
   //Match inventory with ordered when applicable
   for (let i in drugs) {
@@ -99,7 +92,16 @@ exports.inventory = async function(ctx, to_id) { //account._id will not be set b
       value:setOrderFields(generic, account, {})
     }
 
-  drugs = Object.keys(drugs).map(i => drugs[i])
+  //Transform object into array
+  drugs = Object.keys(drugs).map(i => {
+    delete drugs[i].value['count.inventory']
+    delete drugs[i].value['count.dispensed']
+    delete drugs[i].value['count.entered']
+    delete drugs[i].value['value.inventory']
+    delete drugs[i].value['value.dispensed']
+    delete drugs[i].value['value.entered']
+    return drugs[i]
+  })
 
   ctx.body = csv.fromJSON(drugs, ctx.query.fields)
 }
@@ -124,42 +126,27 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
 
   console.time('Get recordByGeneric')
 
-  let [qtyRecords, valueRecords] = await Promise.all([
-    getRecords(ctx, to_id, 'qty-by-generic'),
-    getRecords(ctx, to_id, 'value-by-generic')
-  ])
+  let records = await getRecords(ctx, to_id, 'by-generic')
 
   console.timeEnd('Get recordByGeneric')
-  //console.time('Merge recordByGeneric')
 
-  let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
-
-  //console.timeEnd('Merge recordByGeneric')
-  //console.time('Sort recordByGeneric')
+  records = mergeRecords(records)
 
   records = sortRecords(records)
 
-  //console.timeEnd('Sort recordByGeneric')
-  //console.time('To CSV recordByGeneric')
-
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
-
-  //console.timeEnd('To CSV recordByGeneric')
 }
 
 exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
 
   console.time('Get recordByFrom')
 
-  let [qtyRecords, valueRecords] = await Promise.all([
-    getRecords(ctx, to_id, 'qty-by-from-generic'),
-    getRecords(ctx, to_id, 'value-by-from-generic')
-  ])
+  let records = await getRecords(ctx, to_id, 'by-from-generic')
 
   console.timeEnd('Get recordByFrom')
   //console.time('Merge recordByFrom')
 
-  let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
+  records = mergeRecords(records)
 
   //console.timeEnd('Merge recordByFrom')
   //console.time('Sort recordByFrom')
@@ -188,16 +175,15 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
 
   console.time('Get recordByUser')
 
-  let [qtyRecords, valueRecords, accounts] = await Promise.all([
-    getRecords(ctx, to_id, 'qty-by-user-from-shipment'),
-    getRecords(ctx, to_id, 'value-by-user-from-shipment'),
+  let [records, accounts] = await Promise.all([
+    getRecords(ctx, to_id, 'by-user-from-shipment'),
     denormalize >= 1 ? this.db.account.allDocs({endkey:'_design', include_docs:true}) : null
   ])
 
   console.timeEnd('Get recordByUser')
   //console.time('Merge recordByUser')
 
-  let records = mergeRecords({qty:qtyRecords,count:qtyRecords, value:valueRecords})
+  records = mergeRecords(records)
 
   //console.timeEnd('Merge recordByUser')
   //console.time('Sort recordByUser')
@@ -227,30 +213,36 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
 function defaultFieldOrder(shipment) {
   return [
     'group',
-    'entered.count',
-    'refused.count',
-    'verified.count',
-    'expired.count',
-    'disposed.count',
-    'dispensed.count',
-    'pended.count',
-    'inventory.count',
-    'entered.qty',
-    'refused.qty',
-    'verified.qty',
-    'expired.qty',
-    'disposed.qty',
-    'dispensed.qty',
-    'pended.qty',
-    'inventory.qty',
-    'entered.value',
-    'refused.value',
-    'verified.value',
-    'expired.value',
-    'disposed.value',
-    'dispensed.value',
-    'pended.value',
-    'inventory.value'
+    'count.entered',
+    'count.refused',
+    'count.verified',
+    'count.expired',
+    'count.disposed',
+    'count.dispensed',
+    'count.pended',
+    'count.picked',
+    'count.repacked',
+    'count.inventory',
+    'qty.entered',
+    'qty.refused',
+    'qty.verified',
+    'qty.expired',
+    'qty.disposed',
+    'qty.dispensed',
+    'qty.pended',
+    'qty.picked',
+    'qty.repacked',
+    'qty.inventory',
+    'value.entered',
+    'value.refused',
+    'value.verified',
+    'value.expired',
+    'value.disposed',
+    'value.dispensed',
+    'value.pended',
+    'value.picked',
+    'value.repacked',
+    'value.inventory'
   ]
   .concat( ! shipment ? [] :
   [
@@ -308,18 +300,20 @@ async function getRecords(ctx, to_id, suffix) {
   //Inventory cannot be kept by day because expiration date is kept by month.
   //Might be possible to eventually get it for custom group_level but doesn't seem worth trying to figure that out now.
   let queries = [
-    optionalField(ctx, 'entered.'+suffix, opts),
-    optionalField(ctx, 'refused.'+suffix, opts),
-    optionalField(ctx, 'verified.'+suffix, opts),
-    optionalField(ctx, 'expired.'+suffix, opts),
-    optionalField(ctx, 'disposed.'+suffix, opts),
-    optionalField(ctx, 'dispensed.'+suffix, opts),
-    optionalField(ctx, 'pended.'+suffix, opts)
+    optionalField(ctx, 'entered-'+suffix, opts),
+    optionalField(ctx, 'refused-'+suffix, opts),
+    optionalField(ctx, 'verified-'+suffix, opts),
+    optionalField(ctx, 'expired-'+suffix, opts),
+    optionalField(ctx, 'disposed-'+suffix, opts),
+    optionalField(ctx, 'dispensed-'+suffix, opts),
+    optionalField(ctx, 'pended-'+suffix, opts),
+    optionalField(ctx, 'picked-'+suffix, opts),
+    optionalField(ctx, 'repacked-'+suffix, opts),
   ]
 
   if (group === '' || group === 'month' || group === 'year') //inventory is not kept by day and other groupings not listed here
     //console.log('getRecords', 'invOpts', invOpts)
-    queries.push(optionalField(ctx, 'inventory.'+suffix, invOpts).then(res => {
+    queries.push(optionalField(ctx, 'inventory-'+suffix, invOpts).then(res => {
       //console.log('res', res && res.rows)
       group || res && res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
       return res
@@ -336,30 +330,31 @@ function optionalField(ctx, field, opts) {
 
   if (fields) {
 
-    let fieldType = field.split('-')[0] //Hacky as this relies on consistent naming of fields.  eg.  dispensed.value-by-user-from-shipment -> dispensed.value
+    let fieldType = field.split('-')[0] //Hacky as this relies on consistent naming of fields.  eg.  dispensed-by-user-from-shipment -> dispensed
 
-    //qty views use the _stat reduce which supplies the count.  There are no count views
-    if ( ! fields.replace(/\.count/g, '.qty').includes(fieldType))
+    //views have values of [qty _stat, value _stat] _stats also supplies the count, so here are no count views
+    if ( ! fields.includes(fieldType))
       return Promise.resolve()
   }
   //console.log('optionalField specified', field, fields)
   return ctx.db.transaction.query(field, opts)
 }
 
-//Something like {qty:records, count:records}
-function mergeRecords(opts) {
-  let records = {}
-  for (let suffix in opts) {
-    mergeRecord(records, opts[suffix][0], 'entered.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][1], 'refused.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][2], 'verified.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][3], 'expired.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][4], 'disposed.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][5], 'dispensed.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][6], 'pended.'+suffix, uniqueKey)
-    mergeRecord(records, opts[suffix][7], 'inventory.'+suffix, uniqueKey)
-  }
-  return records
+function mergeRecords(records) {
+  let merged = {}
+
+  mergeRecord(merged, records[0], 'entered', uniqueKey)
+  mergeRecord(merged, records[1], 'refused', uniqueKey)
+  mergeRecord(merged, records[2], 'verified', uniqueKey)
+  mergeRecord(merged, records[3], 'expired', uniqueKey)
+  mergeRecord(merged, records[4], 'disposed', uniqueKey)
+  mergeRecord(merged, records[5], 'dispensed', uniqueKey)
+  mergeRecord(merged, records[6], 'pended', uniqueKey)
+  mergeRecord(merged, records[7], 'picked', uniqueKey)
+  mergeRecord(merged, records[8], 'repacked', uniqueKey)
+  mergeRecord(merged, records[9], 'inventory', uniqueKey)
+
+  return merged
 }
 
 //Move primary group (Generic/User/From) to the first key of the array instead of the last
@@ -373,6 +368,7 @@ function uniqueKey(key, field) {
   return unique.join(',') //remove to_id and anything after grouping just in case GSNs and/or Brands don't match we still want to group
 }
 
+//updateOnly means we won't add a group for that type (e.g. entered) unless that group already exists (e.g created by dispensed or inventory)
 function mergeRecord(rows, record, field, groupFn, updateOnly) {
 
   if ( ! record) return
@@ -386,8 +382,9 @@ function mergeRecord(rows, record, field, groupFn, updateOnly) {
       rows[group] = {key:row.key, value:{group}}
     }
 
-    rows[group].value[field] = rows[group].value[field] || 0
-    rows[group].value[field] += field.slice(-5) == 'count' ? row.value.count : +(row.value.sum).toFixed(2)
+    rows[group].value['count.'+field] = +(rows[group].value['count.'+field] || 0 + row.value[0].count || 0).toFixed(2)
+    rows[group].value['qty.'+field]   = +(rows[group].value['qty.'+field] || 0 + row.value[0].sum || 0).toFixed(2)
+    rows[group].value['value.'+field]   = +(rows[group].value['value.'+field] || 0 + row.value[1].sum || 0).toFixed(2)
   }
 }
 
@@ -472,31 +469,34 @@ exports.authorized = {
 exports.pend = {
 
   //List of items pended with a given name
-  async get(ctx, _id, name) {
-    const pendId = name.split(' - ')[0] //mirron client's inventory.js hacky getPendId method
-    const result = await ctx.db.transaction.query('pended-by-name-bin', {include_docs:true, startkey:[_id, name], endkey:[_id, name+'\uffff']})
+  async get(ctx, _id, group) {
+    const result = await ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[_id, group], endkey:[_id, group+'\uffff']})
     ctx.req.body = result.rows.map(row => row.doc)
   },
 
   //Body of request has all the transaction that you wish to pend under a name
-  async post(ctx, _id, name) {
+  //wrap name array into tranactiond
+  //in the ctx object the query paramaters
+  async post(ctx, _id, group) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, [{pended:{_id:name}, user:ctx.user, createdAt:new Date().toJSON()}])
+    ctx.body = await updateNext(ctx, 'pended', {_id:new Date().toJSON(), group, repackQty:ctx.query.repackQty, user:ctx.user})
   },
 
   //Unpend all requests that match a name
-  async delete(ctx, _id, name) {
-    await exports.pend.get(ctx, _id, name)
+  async delete(ctx, _id, group) {
+
+    await exports.pend.get(ctx, _id, group)
     ctx.account  = {_id}
-    ctx.body     = await updateNext(ctx, [])
+    ctx.body     = await updateNext(ctx, 'pended', null)
   }
+
 }
 
 exports.dispense = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, [{dispensed:{}, user:ctx.user, createdAt:new Date().toJSON()}])
+    ctx.body = await updateNext(ctx, 'dispensed',{_id:new Date().toJSON(), user:{_id:ctx.user}})
   },
 
   // async delete(ctx, _id) {
@@ -509,7 +509,7 @@ exports.dispose = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, [{disposed:{}, user:ctx.user, createdAt:new Date().toJSON()}])
+    ctx.body = await updateNext(ctx, 'disposed',{_id:new Date().toJSON(), user:{_id:ctx.user}})
   },
 
   // async delete(ctx, _id) {
@@ -518,7 +518,33 @@ exports.dispose = {
   // }
 }
 
-function updateNext(ctx, next) {
+//TOD is set [0] enough or do we need/should to set all of them
+function updateNext(ctx, key, object){
+
+  for (let transaction of ctx.req.body) {
+
+    if(object){
+
+      if ( ! transaction.next[0])
+        transaction.next[0] = {}
+
+      transaction.next[0][key] = object
+
+    } else if (transaction.next[0]) {
+
+      delete transaction.next[0][key]
+
+      if (Object.keys(transaction.next[0]).length)
+        delete transaction.next[0]
+    }
+  }
+
+  return ctx.db.transaction.bulkDocs(ctx.req.body, {ctx})
+
+}
+
+function replaceNext(ctx, next) {
+
   //console.log('account.updateNext', ctx.req.body.length, next, ctx.req.body)
   for (let transaction of ctx.req.body) {
     transaction.next = next
