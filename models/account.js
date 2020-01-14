@@ -470,8 +470,8 @@ exports.pend = {
 
   //List of items pended with a given name
   async get(ctx, _id, group) {
-    const result = await ctx.db.transaction.query('currently-pended-by-group-priority-generic', {group_level:5, startkey:[_id, group], endkey:[_id, group+'\uffff']})
-    ctx.req.body = result.rows.map(row => row.key[4])
+    const result = await ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[_id, group], endkey:[_id, group+'\uffff']})
+    ctx.req.body = result.rows.map(row => row.doc)
   },
 
   //Body of request has all the transaction that you wish to pend under a name
