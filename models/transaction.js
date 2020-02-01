@@ -214,18 +214,21 @@ exports.lib = {
 
     if ( ! doc.bin) return
 
-    var to_id      = require('to_id')(doc)
-    var createdAt  = require('createdAt')(doc) //Rather than enteredAt to account for repacks that were not "entered" docs like 2019-01-15T14:43:33.378000Z
-    var nextAt     = require('nextAt')(doc)
-    var expiredAt  = require('expiredAt')(doc)
-    var disposedAt = require('disposedAt')(doc)
-    var pendedAt   = require('pendedAt')(doc)
+    var to_id       = require('to_id')(doc)
+    var createdAt   = require('createdAt')(doc) //Rather than enteredAt to account for repacks that were not "entered" docs like 2019-01-15T14:43:33.378000Z
+    var nextAt      = require('nextAt')(doc)
+    var expiredAt   = require('expiredAt')(doc)
+    var dispensedAt = require('dispensedAt')(doc)
+    var disposedAt  = require('disposedAt')(doc)
+    var pendedAt    = require('pendedAt')(doc)
 
     // Can't just do require('addMonths')(expiredAt, -1) <= nextAt ? expiredAt : nextAt because 2019-01-03T21:02:25.368700Z counts as both inventory and dispensed in same time period
     var removedAt = nextAt
 
     if (pendedAt)
       removedAt = pendedAt
+    else if (require('isDispensed')(doc)) //Match disposed view
+      removedAt = dispensedAt
     else if (require('isDisposed')(doc)) //Match disposed view
       removedAt = disposedAt
     else if (require('isExpired')(doc)) //Match expired view
