@@ -505,6 +505,198 @@ exports.dispense = {
   // }
 }
 
+exports.picking = {
+
+  async post(ctx) {
+
+    console.log("PIIIIIIIIIIIIIIICKIIIIIIIIIIIIIG")
+
+    let groupName = ctx.req.body.groupName
+    let action = ctx.req.body.action
+    console.log(groupName, action)
+    console.log(ctx.account)
+
+    let fullAccount = {}
+    let shopList = []
+
+    if(action == 'load'){
+      ctx.body = await loadPickingData(groupName,ctx)
+    }
+
+  },
+}
+
+function loadPickingData(groupName, ctx){
+    console.log("loading group:", groupName)
+
+    let shopList = []
+
+    return ctx.db.account.get(ctx.account._id).then(account =>{
+      ctx.account = account
+
+      return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName +'\uffff']})
+      .then(res => {
+
+        if(!res.rows.length) return //TODO how to return error here
+
+        shopList = prepShoppingData(res.rows.map(row => row.doc).sort(sortTransactionsForShopping), ctx)
+
+        if(!shopList.length) return //TODO: return error here
+
+        let locked_down = saveShoppingResults(shopList, 'lockdown', ctx)
+
+        if(!locked_down){
+          //TODO: return some sort of error
+        }
+        console.log("complete: ", shopList)
+
+        return shopList
+      })
+
+    })
+
+}
+//given an array of transactions, then build the shopList array
+//which has the extra info we need to track during the shopping process
+function prepShoppingData(raw_transactions, ctx) {
+
+  let shopList = [] //going to be an array of objects, where each object is {raw:{transaction}, extra:{extra_data}}
+  let uniqueDrugsInOrder = []
+
+  for(var i = 0; i < raw_transactions.length; i++){
+
+    if(raw_transactions[i].next[0].picked) continue
+
+    //this will track info needed during the miniapp running, and which we'd need to massage later before saving
+    var extra_data = {
+      outcome:{
+        'exact_match':false,
+        'roughly_equal':false,
+        'slot_before':false,
+        'slot_after':false,
+        'missing':false,
+      },
+      basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'B' : raw_transactions[i].next[0].pended.priority == true ? 'G' : 'R' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
+    }
+
+    if(!(uniqueDrugsInOrder.indexOf(raw_transactions[i].drug.generic))) uniqueDrugsInOrder.push(raw_transactions[i].drug.generic)
+
+    shopList.push({raw: raw_transactions[i],extra: extra_data})
+  }
+
+  for(var i = 0; i < shopList.length; i++){
+    shopList[i].extra.genericIndex = 'Drug <b>' + uniqueDrugsInOrder.indexOf(shopList[i].raw.drug.generic)+1 + '</b> of ' + uniqueDrugsInOrder.length
+  }
+
+  getImageURLS(shopList, ctx) //must use an async call to the db
+  return shopList
+}
+
+function getImageURLS(shopList, ctx){
+
+    let saveImgCallback = (function(drug){
+      for(var n = 0; n < shopList.length; n++){
+        if(shopList[n].raw.drug._id == drug._id) shopList[n].extra.image = drug.image
+      }
+    }).bind(shopList)
+
+    for(var i = 0; i < shopList.length; i++){
+      ctx.db.drug.get(shopList[i].raw.drug._id).then(drug => saveImgCallback(drug)).catch(err=>console.log(err))
+    }
+  }
+
+function saveShoppingResults(arr_enriched_transactions, key, ctx){
+
+    if(arr_enriched_transactions.length == 0) return Promise.resolve()
+
+    //go through enriched trasnactions, edit the raw transactions to store the data,
+    //then save them
+    var transactions_to_save = []
+
+    for(var i = 0; i < arr_enriched_transactions.length; i++){
+
+      var reformated_transaction = arr_enriched_transactions[i].raw
+      let next = reformated_transaction.next
+
+      if(next[0]){
+        if(key == 'shopped'){
+          var outcome = this.getOutcome(arr_enriched_transactions[i].extra)
+          next[0].picked = {
+            _id:new Date().toJSON(),
+            basket:arr_enriched_transactions[i].extra.basketNumber,
+            repackQty: reformated_transaction.qty.to ? reformated_transaction.qty.to : reformated_transaction.qty.from,
+            matchType:outcome,
+            user:this.user,
+          }
+
+        } else if(key == 'unlock'){
+
+          delete next[0].picked
+
+        } else if(key == 'lockdown'){
+
+          next[0].picked = {}
+
+        }
+      }
+
+      reformated_transaction.next = next
+      transactions_to_save.push(reformated_transaction)
+
+    }
+
+    console.log("saving these transactions", JSON.stringify(transactions_to_save))
+    console.log(ctx)
+    //console.log(ctx.account)
+    ctx.db.transaction.bulkDocs(transactions_to_save, {ctx:ctx})
+    .then(res => {
+        console.log("results of saving" + JSON.stringify(res))
+        return true
+    })
+    .catch(err => {
+      console.log("error saving:", JSON.stringify(err))
+      return false
+    })
+  }
+
+function getOutcome(extraItemData){
+    let res = ''
+    for(let possibility in extraItemData.outcome){
+      if(extraItemData.outcome[possibility]) res += possibility //this could be made to append into a magic string if there's multiple conditions we want to allow
+    }
+    return res
+  }
+
+function sortTransactionsForShopping(a, b) {
+
+    var aName = a.drug.generic;
+    var bName = b.drug.generic;
+
+    //sort by drug name first
+    if(aName > bName) return -1
+    if(aName < bName) return 1
+
+    var aBin = a.bin
+    var bBin = b.bin
+
+    var aPack = aBin && aBin.length == 3
+    var bPack = bBin && bBin.length == 3
+
+    if (aPack > bPack) return -1
+    if (aPack < bPack) return 1
+
+    //Flip columns and rows for sorting, since shopping is easier if you never move backwards
+    var aFlip = aBin[0]+aBin[2]+aBin[1]+(aBin[3] || '')
+    var bFlip = bBin[0]+bBin[2]+bBin[1]+(bBin[3] || '')
+
+    if (aFlip > bFlip) return 1
+    if (aFlip < bFlip) return -1
+
+    return 0
+  }
+
+
+
 exports.dispose = {
 
   async post(ctx, _id) {
