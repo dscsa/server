@@ -539,12 +539,7 @@ function unlockPickingData(groupName, ctx){
       if(!(res.rows[i].doc.next[0].picked && res.rows[i].doc.next[0].picked._id)) transactions.push({'raw':res.rows[i].doc}) //don't unlock fully picked items
     }
 
-
-    console.log('want to unlock:',transactions)
-
     return saveShoppingResults(transactions, 'unlock', ctx).then(_ => {
-      console.log("NOW TO REFRESH")
-
       return refreshGroupsToPick(ctx)
     })
 
