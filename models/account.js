@@ -509,21 +509,46 @@ exports.picking = {
 
   async post(ctx) {
 
-    console.log("PIIIIIIIIIIIIIIICKIIIIIIIIIIIIIG")
-
     let groupName = ctx.req.body.groupName
     let action = ctx.req.body.action
-    console.log(groupName, action)
-    console.log(ctx.account)
 
-    let fullAccount = {}
-    let shopList = []
+    console.log("Call to PICKING for:", groupName)
 
-    if(action == 'load'){
+    if(action == 'refresh'){
+      ctx.body = await refreshGroupsToPick(ctx)
+    } else if(action == 'load'){
       ctx.body = await loadPickingData(groupName,ctx)
+    } else if(action == 'unlock'){
+      ctx.body = await unlockPickingData(groupName, ctx)
     }
 
   },
+}
+
+function unlockPickingData(groupName, ctx){
+  console.log("locking group:", groupName);
+
+  return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName +'\uffff']})
+  .then(res => {
+
+    if(!res.rows.length) return;
+
+    let transactions = []
+
+    for(var i = 0; i < res.rows.length; i++){
+      if(!(res.rows[i].doc.next[0].picked && res.rows[i].doc.next[0].picked._id)) transactions.push({'raw':res.rows[i].doc}) //don't unlock fully picked items
+    }
+
+
+    console.log('want to unlock:',transactions)
+
+    return saveShoppingResults(transactions, 'unlock', ctx).then(_ => {
+      console.log("NOW TO REFRESH")
+
+      return refreshGroupsToPick(ctx)
+    })
+
+  })
 }
 
 function loadPickingData(groupName, ctx){
@@ -543,14 +568,10 @@ function loadPickingData(groupName, ctx){
 
         if(!shopList.length) return //TODO: return error here
 
-        let locked_down = saveShoppingResults(shopList, 'lockdown', ctx)
+        return saveShoppingResults(shopList, 'lockdown', ctx).then(_ => {
+          return shopList
+        })
 
-        if(!locked_down){
-          //TODO: return some sort of error
-        }
-        console.log("complete: ", shopList)
-
-        return shopList
       })
 
     })
@@ -565,7 +586,7 @@ function prepShoppingData(raw_transactions, ctx) {
 
   for(var i = 0; i < raw_transactions.length; i++){
 
-    if(raw_transactions[i].next[0].picked) continue
+    if((raw_transactions[i].next[0].picked) || (raw_transactions[i].next[0].pended.priority === null)) continue //don't show picked or fully unchecked boxes (fromt he inventory drawer)
 
     //this will track info needed during the miniapp running, and which we'd need to massage later before saving
     var extra_data = {
@@ -579,17 +600,36 @@ function prepShoppingData(raw_transactions, ctx) {
       basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'B' : raw_transactions[i].next[0].pended.priority == true ? 'G' : 'R' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
     }
 
-    if(!(uniqueDrugsInOrder.indexOf(raw_transactions[i].drug.generic))) uniqueDrugsInOrder.push(raw_transactions[i].drug.generic)
+    if(!(~uniqueDrugsInOrder.indexOf(raw_transactions[i].drug.generic))) uniqueDrugsInOrder.push(raw_transactions[i].drug.generic)
 
     shopList.push({raw: raw_transactions[i],extra: extra_data})
   }
 
+  //then go back through to add the drug count
   for(var i = 0; i < shopList.length; i++){
-    shopList[i].extra.genericIndex = 'Drug <b>' + uniqueDrugsInOrder.indexOf(shopList[i].raw.drug.generic)+1 + '</b> of ' + uniqueDrugsInOrder.length
+    shopList[i].extra.genericIndex = {index:uniqueDrugsInOrder.indexOf(shopList[i].raw.drug.generic)+1, total: uniqueDrugsInOrder.length}
   }
 
   getImageURLS(shopList, ctx) //must use an async call to the db
   return shopList
+}
+
+
+function refreshGroupsToPick(ctx){
+    console.log("refreshing groups")
+
+    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {group_level:4})
+    .then(res => {
+      //key = [account._id, group, priority, picked (true, false, null=locked), full_doc]
+      let groups = []
+      res = res.rows
+
+      for(var group of res){
+        if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)) groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null})
+      }
+      return groups
+    })
+
 }
 
 function getImageURLS(shopList, ctx){
@@ -605,7 +645,7 @@ function getImageURLS(shopList, ctx){
     }
   }
 
-function saveShoppingResults(arr_enriched_transactions, key, ctx){
+async function saveShoppingResults(arr_enriched_transactions, key, ctx){
 
     if(arr_enriched_transactions.length == 0) return Promise.resolve()
 
@@ -648,7 +688,7 @@ function saveShoppingResults(arr_enriched_transactions, key, ctx){
     console.log("saving these transactions", JSON.stringify(transactions_to_save))
     console.log(ctx)
     //console.log(ctx.account)
-    ctx.db.transaction.bulkDocs(transactions_to_save, {ctx:ctx})
+    return ctx.db.transaction.bulkDocs(transactions_to_save, {ctx:ctx})
     .then(res => {
         console.log("results of saving" + JSON.stringify(res))
         return true
