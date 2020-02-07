@@ -559,7 +559,32 @@ function loadPickingData(groupName, ctx){
 
         if(!res.rows.length) return //TODO how to return error here
 
-        shopList = prepShoppingData(res.rows.map(row => row.doc).sort(sortTransactionsForShopping), ctx)
+        shopList = prepShoppingData(res.rows.map(row => row.doc).sort(function(a,b){
+          var aName = a.drug.generic;
+          var bName = b.drug.generic;
+
+          //sort by drug name first
+          if(aName > bName) return -1
+          if(aName < bName) return 1
+
+          var aBin = a.bin
+          var bBin = b.bin
+
+          var aPack = aBin && aBin.length == 3
+          var bPack = bBin && bBin.length == 3
+
+          if (aPack > bPack) return -1
+          if (aPack < bPack) return 1
+
+          //Flip columns and rows for sorting, since shopping is easier if you never move backwards
+          var aFlip = aBin[0]+aBin[2]+aBin[1]+(aBin[3] || '')
+          var bFlip = bBin[0]+bBin[2]+bBin[1]+(bBin[3] || '')
+
+          if (aFlip > bFlip) return 1
+          if (aFlip < bFlip) return -1
+
+          return 0
+        }), ctx)
 
         if(!shopList.length) return //TODO: return error here
 
@@ -680,8 +705,6 @@ async function saveShoppingResults(arr_enriched_transactions, key, ctx){
 
     }
 
-    console.log("saving these transactions", JSON.stringify(transactions_to_save))
-    console.log(ctx)
     //console.log(ctx.account)
     return ctx.db.transaction.bulkDocs(transactions_to_save, {ctx:ctx})
     .then(res => {
@@ -700,34 +723,6 @@ function getOutcome(extraItemData){
       if(extraItemData.outcome[possibility]) res += possibility //this could be made to append into a magic string if there's multiple conditions we want to allow
     }
     return res
-  }
-
-function sortTransactionsForShopping(a, b) {
-
-    var aName = a.drug.generic;
-    var bName = b.drug.generic;
-
-    //sort by drug name first
-    if(aName > bName) return -1
-    if(aName < bName) return 1
-
-    var aBin = a.bin
-    var bBin = b.bin
-
-    var aPack = aBin && aBin.length == 3
-    var bPack = bBin && bBin.length == 3
-
-    if (aPack > bPack) return -1
-    if (aPack < bPack) return 1
-
-    //Flip columns and rows for sorting, since shopping is easier if you never move backwards
-    var aFlip = aBin[0]+aBin[2]+aBin[1]+(aBin[3] || '')
-    var bFlip = bBin[0]+bBin[2]+bBin[1]+(bBin[3] || '')
-
-    if (aFlip > bFlip) return 1
-    if (aFlip < bFlip) return -1
-
-    return 0
   }
 
 
