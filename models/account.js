@@ -647,7 +647,7 @@ function refreshGroupsToPick(ctx, today){
       let groups = []
 
       let today = new Date().toJSON().slice(0,10).replace(/-/g,'/')
-      DAILY_LIMIT = 1 //TODO: remove so it resets to value above
+      DAILY_LIMIT = 20 //TODO: remove so it resets to value above
       console.log(today)
       console.log(cache)
 
@@ -668,8 +668,9 @@ function refreshGroupsToPick(ctx, today){
 
         if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)){
 
-          if(calculate_stack){
+          let end_of_stack = calculate_stack ? false : cache[today].indexOf(group.key[1]) == cache[today].length - 1
 
+          if(calculate_stack){
             cumulative_count += group.value[0].count
 
             let should_stack = (cumulative_count <= DAILY_LIMIT) && (!( ~cache[today].indexOf(group.key[1])))
@@ -678,12 +679,10 @@ function refreshGroupsToPick(ctx, today){
               cache[today].push(group.key[1])
             }
             console.log(group.value[0].count)
-            
           }
 
-          let end_of_stack = cache[today].indexOf(group.key[1]) == cache[today].length - 1
-
           groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, end_of_stack:end_of_stack})
+
         }
 
       }
