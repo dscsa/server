@@ -4,6 +4,8 @@ module.exports = exports = Object.create(require('../helpers/model'))
 
 let csv = require('csv/server')
 let admin = {ajax:{jar:false, auth:require('../../../keys/dev').couch}}
+let cache = {}
+let DAILY_LIMIT = 1000
 
 exports.views = {
   //Use _bulk_get here instead? Not supported in 1.6
@@ -525,6 +527,7 @@ exports.picking = {
   },
 }
 
+
 function unlockPickingData(groupName, ctx){
   console.log("locking group:", groupName);
 
@@ -635,20 +638,75 @@ function prepShoppingData(raw_transactions, ctx) {
 }
 
 
-function refreshGroupsToPick(ctx){
+function refreshGroupsToPick(ctx, today){
     console.log("refreshing groups")
 
     return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {group_level:4})
     .then(res => {
       //key = [account._id, group, priority, picked (true, false, null=locked), full_doc]
       let groups = []
-      res = res.rows
 
-      for(var group of res){
-        if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)) groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null})
+      let today = new Date().toJSON().slice(0,10).replace(/-/g,'/')
+      DAILY_LIMIT = 1 //TODO: remove so it resets to value above
+      console.log(today)
+      console.log(cache)
+
+      let calculate_stack = !(today in cache)
+
+      console.log(calculate_stack)
+
+      let cumulative_count = 0
+
+      if(calculate_stack){ //could have cache save if there's any reason?
+        cache = {}
+        cache[today] = []
       }
+
+      let groups_raw = res.rows.sort(sortOrders)
+
+      for(var group of groups_raw){
+
+        if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)){
+
+          if(calculate_stack){
+
+            cumulative_count += group.value[0].count
+
+            let should_stack = (cumulative_count <= DAILY_LIMIT) && (!( ~cache[today].indexOf(group.key[1])))
+            if(should_stack){
+              console.log(cache[today])
+              cache[today].push(group.key[1])
+            }
+            console.log(group.value[0].count)
+            
+          }
+
+          let end_of_stack = cache[today].indexOf(group.key[1]) == cache[today].length - 1
+
+          groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, end_of_stack:end_of_stack})
+        }
+
+      }
+
       return groups
+
     })
+
+}
+
+function sortOrders(a,b){ //given array of orders, sort appropriately.
+
+    let urgency1 = a.priority
+    let urgency2 = b.priority
+
+    if(urgency1 && !urgency2) return -1
+    if(!urgency1 && urgency2) return 1
+
+    let group1 = a.name
+    let group2 = b.name
+    if(group1 > group2) return 1
+    if(group1 < group2) return -1
+
 
 }
 

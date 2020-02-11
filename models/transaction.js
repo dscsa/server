@@ -318,7 +318,7 @@ exports.views = {
       if (require('nextAt')(doc)) return;
       var priority = typeof doc.next[0].pended.priority == 'undefined' ? false : doc.next[0].pended.priority
       var picked = doc.next[0].picked ? (doc.next[0].picked._id ? true : null) : false
-      require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended.group, priority, picked, require('sortedBin')(doc)],[1])
+      require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended.group, priority, picked, require('sortedBin')(doc)],[require('qty')(doc)])
     },
     reduce:'_stats'
   },
