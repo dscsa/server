@@ -647,7 +647,7 @@ function refreshGroupsToPick(ctx, today){
       let groups = []
 
       let today = new Date().toJSON().slice(0,10).replace(/-/g,'/')
-      DAILY_LIMIT = 20 //TODO: remove so it resets to value above
+      DAILY_LIMIT = 1000 //TODO: remove so it resets to value above
       console.log(today)
       console.log(cache)
 
