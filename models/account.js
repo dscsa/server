@@ -647,13 +647,9 @@ function refreshGroupsToPick(ctx, today){
       let groups = []
 
       let today = new Date().toJSON().slice(0,10).replace(/-/g,'/')
-      DAILY_LIMIT = 1000 //TODO: remove so it resets to value above
-      console.log(today)
-      console.log(cache)
 
       let calculate_stack = !(today in cache)
 
-      console.log(calculate_stack)
 
       let cumulative_count = 0
 
@@ -662,29 +658,20 @@ function refreshGroupsToPick(ctx, today){
         cache[today] = []
       }
 
-      let groups_raw = res.rows.sort(sortOrders)
+      let groups_raw = res.rows.sort(sortOrders) //sort before stacking so that the cumulative count considrs priority and final sort logic
 
       for(var group of groups_raw){
 
         if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)){
 
+          //if we're in the first call of the day, when we need to refresh the stack, then we need to do some logic on the stack
           let end_of_stack = calculate_stack ? false : cache[today].indexOf(group.key[1]) == cache[today].length - 1
           cumulative_count += group.value[0].count
-
-          if(calculate_stack){
-
-            let should_stack = (cumulative_count <= DAILY_LIMIT) && (!( ~cache[today].indexOf(group.key[1])))
-            if(should_stack){
-              console.log(cache[today])
-              cache[today].push(group.key[1])
-            }
-            console.log(group.value[0].count)
-          }
+          if(calculate_stack && (cumulative_count <= DAILY_LIMIT) && (!( ~cache[today].indexOf(group.key[1])))) cache[today].push(group.key[1])
 
           groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, end_of_stack:end_of_stack, cumulative_count: cumulative_count})
 
         }
-
       }
 
       return groups
