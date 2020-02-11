@@ -669,9 +669,9 @@ function refreshGroupsToPick(ctx, today){
         if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)){
 
           let end_of_stack = calculate_stack ? false : cache[today].indexOf(group.key[1]) == cache[today].length - 1
+          cumulative_count += group.value[0].count
 
           if(calculate_stack){
-            cumulative_count += group.value[0].count
 
             let should_stack = (cumulative_count <= DAILY_LIMIT) && (!( ~cache[today].indexOf(group.key[1])))
             if(should_stack){
@@ -681,7 +681,7 @@ function refreshGroupsToPick(ctx, today){
             console.log(group.value[0].count)
           }
 
-          groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, end_of_stack:end_of_stack})
+          groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, end_of_stack:end_of_stack, cumulative_count: cumulative_count})
 
         }
 
