@@ -514,7 +514,7 @@ exports.picking = {
     let groupName = ctx.req.body.groupName
     let action = ctx.req.body.action
 
-    console.log("Call to PICKING for:", groupName)
+    console.log("Call to PICKING for:", groupName ? groupName : 'refresh')
 
     if(action == 'refresh'){
       ctx.body = await refreshGroupsToPick(ctx)
@@ -650,6 +650,7 @@ function refreshGroupsToPick(ctx, today){
 
       let calculate_stack = !(today in cache)
 
+      console.log(cache)
 
       let cumulative_count = 0
 
@@ -672,6 +673,7 @@ function refreshGroupsToPick(ctx, today){
           groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, end_of_stack:end_of_stack, cumulative_count: cumulative_count})
 
         }
+
       }
 
       return groups
@@ -692,7 +694,6 @@ function sortOrders(a,b){ //given array of orders, sort appropriately.
     let group2 = b.name
     if(group1 > group2) return 1
     if(group1 < group2) return -1
-
 
 }
 
