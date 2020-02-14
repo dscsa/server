@@ -220,6 +220,9 @@ keys(function() {
     .post(models.account.authorized.post)
     .del(models.account.authorized.delete)
 
+  r('/account/picking')
+    .post(models.account.picking.post)
+
   r('/account/:id/pend/:name?')
     .post(models.account.pend.post)
     .del(models.account.pend.delete)
@@ -229,6 +232,7 @@ keys(function() {
 
   r('/account/:id/dispose')
     .get(models.account.dispose)
+
 
   r('/account/:id/inventory.csv')     //Allow user to get, modify, & delete docs
     .get(models.account.inventory)

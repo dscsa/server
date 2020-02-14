@@ -4,6 +4,8 @@ module.exports = exports = Object.create(require('../helpers/model'))
 
 let csv = require('csv/server')
 let admin = {ajax:{jar:false, auth:require('../../../keys/dev').couch}}
+let cache = {}
+let DAILY_LIMIT = 1000
 
 exports.views = {
   //Use _bulk_get here instead? Not supported in 1.6
@@ -504,6 +506,271 @@ exports.dispense = {
   //   ctx.body = await patchNext(ctx, [])
   // }
 }
+
+exports.picking = {
+
+  async post(ctx) {
+
+    let groupName = ctx.req.body.groupName
+    let action = ctx.req.body.action
+
+    console.log("Call to PICKING for:", groupName ? groupName : 'refresh')
+
+    if(action == 'refresh'){
+      ctx.body = await refreshGroupsToPick(ctx)
+    } else if(action == 'load'){
+      ctx.body = await loadPickingData(groupName,ctx)
+    } else if(action == 'unlock'){
+      ctx.body = await unlockPickingData(groupName, ctx)
+    }
+
+  },
+}
+
+
+function unlockPickingData(groupName, ctx){
+  console.log("locking group:", groupName);
+
+  return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName +'\uffff']})
+  .then(res => {
+
+    if(!res.rows.length) return;
+
+    let transactions = []
+
+    for(var i = 0; i < res.rows.length; i++){
+      if(!(res.rows[i].doc.next[0].picked && res.rows[i].doc.next[0].picked._id)) transactions.push({'raw':res.rows[i].doc}) //don't unlock fully picked items
+    }
+
+    return saveShoppingResults(transactions, 'unlock', ctx).then(_ => {
+      return refreshGroupsToPick(ctx)
+    })
+
+  })
+}
+
+function loadPickingData(groupName, ctx){
+    console.log("loading group:", groupName)
+
+    let shopList = []
+
+    return ctx.db.account.get(ctx.account._id).then(account =>{
+      ctx.account = account
+
+      return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName +'\uffff']})
+      .then(res => {
+
+        if(!res.rows.length) return //TODO how to return error here
+
+        shopList = prepShoppingData(res.rows.map(row => row.doc).sort(function(a,b){
+          var aName = a.drug.generic;
+          var bName = b.drug.generic;
+
+          //sort by drug name first
+          if(aName > bName) return -1
+          if(aName < bName) return 1
+
+          var aBin = a.bin
+          var bBin = b.bin
+
+          var aPack = aBin && aBin.length == 3
+          var bPack = bBin && bBin.length == 3
+
+          if (aPack > bPack) return -1
+          if (aPack < bPack) return 1
+
+          //Flip columns and rows for sorting, since shopping is easier if you never move backwards
+          var aFlip = aBin[0]+aBin[2]+aBin[1]+(aBin[3] || '')
+          var bFlip = bBin[0]+bBin[2]+bBin[1]+(bBin[3] || '')
+
+          if (aFlip > bFlip) return 1
+          if (aFlip < bFlip) return -1
+
+          return 0
+        }), ctx)
+
+        if(!shopList.length) return //TODO: return error here
+
+        return saveShoppingResults(shopList, 'lockdown', ctx).then(_ => {
+          return shopList
+        })
+
+      })
+
+    })
+
+}
+//given an array of transactions, then build the shopList array
+//which has the extra info we need to track during the shopping process
+function prepShoppingData(raw_transactions, ctx) {
+
+  let shopList = [] //going to be an array of objects, where each object is {raw:{transaction}, extra:{extra_data}}
+  let uniqueDrugsInOrder = []
+
+  for(var i = 0; i < raw_transactions.length; i++){
+
+    if((raw_transactions[i].next[0].picked) || (raw_transactions[i].next[0].pended.priority === null)) continue //don't show picked or fully unchecked boxes (fromt he inventory drawer)
+
+    //this will track info needed during the miniapp running, and which we'd need to massage later before saving
+    var extra_data = {
+      outcome:{
+        'exact_match':false,
+        'roughly_equal':false,
+        'slot_before':false,
+        'slot_after':false,
+        'missing':false,
+      },
+      basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'B' : raw_transactions[i].next[0].pended.priority == true ? 'G' : 'R' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
+    }
+
+    if(!(~uniqueDrugsInOrder.indexOf(raw_transactions[i].drug.generic))) uniqueDrugsInOrder.push(raw_transactions[i].drug.generic)
+
+    shopList.push({raw: raw_transactions[i],extra: extra_data})
+  }
+
+  //then go back through to add the drug count
+  for(var i = 0; i < shopList.length; i++){
+    shopList[i].extra.genericIndex = {index:uniqueDrugsInOrder.indexOf(shopList[i].raw.drug.generic)+1, total: uniqueDrugsInOrder.length}
+  }
+
+  getImageURLS(shopList, ctx) //must use an async call to the db
+  return shopList
+}
+
+
+function refreshGroupsToPick(ctx, today){
+    console.log("refreshing groups")
+
+    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {group_level:4})
+    .then(res => {
+      //key = [account._id, group, priority, picked (true, false, null=locked), full_doc]
+      let groups = []
+
+      let today = new Date().toJSON().slice(0,10).replace(/-/g,'/')
+
+      let calculate_stack = !(today in cache)
+
+      console.log(cache)
+
+      let cumulative_count = 0
+
+      if(calculate_stack){ //could have cache save if there's any reason?
+        cache = {}
+        cache[today] = []
+      }
+
+      let groups_raw = res.rows.sort(sortOrders) //sort before stacking so that the cumulative count considrs priority and final sort logic
+
+      for(var group of groups_raw){
+
+        if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)){
+
+          //if we're in the first call of the day, when we need to refresh the stack, then we need to do some logic on the stack
+          let end_of_stack = calculate_stack ? false : cache[today].indexOf(group.key[1]) == cache[today].length - 1
+          cumulative_count += group.value[0].count
+          if(calculate_stack && (cumulative_count <= DAILY_LIMIT) && (!( ~cache[today].indexOf(group.key[1])))) cache[today].push(group.key[1])
+
+          groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, end_of_stack:end_of_stack, cumulative_count: cumulative_count})
+
+        }
+
+      }
+
+      return groups
+
+    })
+
+}
+
+function sortOrders(a,b){ //given array of orders, sort appropriately.
+
+    let urgency1 = a.priority
+    let urgency2 = b.priority
+
+    if(urgency1 && !urgency2) return -1
+    if(!urgency1 && urgency2) return 1
+
+    let group1 = a.name
+    let group2 = b.name
+    if(group1 > group2) return 1
+    if(group1 < group2) return -1
+
+}
+
+function getImageURLS(shopList, ctx){
+
+    let saveImgCallback = (function(drug){
+      for(var n = 0; n < shopList.length; n++){
+        if(shopList[n].raw.drug._id == drug._id) shopList[n].extra.image = drug.image
+      }
+    }).bind(shopList)
+
+    for(var i = 0; i < shopList.length; i++){
+      ctx.db.drug.get(shopList[i].raw.drug._id).then(drug => saveImgCallback(drug)).catch(err=>console.log(err))
+    }
+  }
+
+async function saveShoppingResults(arr_enriched_transactions, key, ctx){
+
+    if(arr_enriched_transactions.length == 0) return Promise.resolve()
+
+    //go through enriched trasnactions, edit the raw transactions to store the data,
+    //then save them
+    var transactions_to_save = []
+
+    for(var i = 0; i < arr_enriched_transactions.length; i++){
+
+      var reformated_transaction = arr_enriched_transactions[i].raw
+      let next = reformated_transaction.next
+
+      if(next[0]){
+        if(key == 'shopped'){
+          var outcome = this.getOutcome(arr_enriched_transactions[i].extra)
+          next[0].picked = {
+            _id:new Date().toJSON(),
+            basket:arr_enriched_transactions[i].extra.basketNumber,
+            repackQty: reformated_transaction.qty.to ? reformated_transaction.qty.to : reformated_transaction.qty.from,
+            matchType:outcome,
+            user:this.user,
+          }
+
+        } else if(key == 'unlock'){
+
+          delete next[0].picked
+
+        } else if(key == 'lockdown'){
+
+          next[0].picked = {}
+
+        }
+      }
+
+      reformated_transaction.next = next
+      transactions_to_save.push(reformated_transaction)
+
+    }
+
+    //console.log(ctx.account)
+    return ctx.db.transaction.bulkDocs(transactions_to_save, {ctx:ctx})
+    .then(res => {
+        console.log("results of saving" + JSON.stringify(res))
+        return true
+    })
+    .catch(err => {
+      console.log("error saving:", JSON.stringify(err))
+      return false
+    })
+  }
+
+function getOutcome(extraItemData){
+    let res = ''
+    for(let possibility in extraItemData.outcome){
+      if(extraItemData.outcome[possibility]) res += possibility //this could be made to append into a magic string if there's multiple conditions we want to allow
+    }
+    return res
+  }
+
+
 
 exports.dispose = {
 
