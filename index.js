@@ -215,8 +215,6 @@ keys(function() {
   r('/transaction/:id/history')
     .get(models.transaction.history)
 
-  r('/transaction/')
-
   r('/account/authorized')     //Allow user to get, modify, & delete docs
     .get(models.account.authorized.get)
     .post(models.account.authorized.post)
