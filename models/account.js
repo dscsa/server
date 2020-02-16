@@ -659,6 +659,7 @@ function refreshGroupsToPick(ctx, today){
         cache[today] = []
       }
 
+      //gotta extract some of these fields before sorting
       let groups_raw = res.rows.sort(sortOrders) //sort before stacking so that the cumulative count considrs priority and final sort logic
 
       for(var group of groups_raw){
@@ -684,14 +685,14 @@ function refreshGroupsToPick(ctx, today){
 
 function sortOrders(a,b){ //given array of orders, sort appropriately.
 
-    let urgency1 = a.priority
-    let urgency2 = b.priority
+    let urgency1 = a.key[2]
+    let urgency2 = b.key[2]
 
     if(urgency1 && !urgency2) return -1
     if(!urgency1 && urgency2) return 1
 
-    let group1 = a.name
-    let group2 = b.name
+    let group1 = a.key[1]
+    let group2 = b.key[1]
     if(group1 > group2) return 1
     if(group1 < group2) return -1
 
