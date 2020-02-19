@@ -160,8 +160,8 @@ keys(function() {
   r('/csv/:file', {end:false})
     .get(get_asset)
 
-  r('/favicon.ico', {end:false})
-    .get(get_asset)
+  //r('/favicon.ico', {end:false})
+    //.get(get_asset)
 
   r('/:model/', {strict:true}) //Shows DB info including update_seq#, needed for replication for new users
     .get(adminProxy)
