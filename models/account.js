@@ -537,53 +537,55 @@ function compensateForMissingTransaction(groupName, ctx){
   console.log("missing generic:", missing_generic)
   console.log("missed qty:", missed_qty)
 
-
   var date = new Date()
-
-  let opts = {include_docs:true, reduce:false}
-
   var [year, month] = date.toJSON().split(/\-|T|:|\./)
-  opts.startkey = [ctx.account._id, 'month', year, month, missing_generic]
-  opts.endkey   = [ctx.account._id, 'month', year, month, missing_generic, {}] //Use of {} rather than \uffff so we don't combine different drug.forms
 
-  return ctx.db.transaction.query('inventory-by-generic', opts).then(res => {
+  let opts = {
+    include_docs:true,
+    reduce:false,
+    startkey: [ctx.account._id, 'month', year, month, missing_generic],
+    endkey: [ctx.account._id, 'month', year, month, missing_generic, {}]
+  }
 
-    let items = res.rows
+  return ctx.db.account.get(ctx.account._id).then(account =>{
 
-    if(items.length == 0) return []
+    ctx.account = account
+    opts.ctx = ctx
 
-    items = items.map(row => row.doc).sort(function(a,b){ //sorts in increasing qty
-      if(a.qty.to > b.qty.to) return 1
-      if(a.qty.to < b.qty.to) return -1
-      return 0
-    })
+    return ctx.db.transaction.query('inventory-by-generic', opts).then(res => {
 
-    for(var i = 0; i < items.length; i++){
+      let items = res.rows
+      if(items.length == 0) return []
 
-      if(items[i].qty.to >= missed_qty){ //the first item with more than enough qty, take that. TODO: have it do more optimization later
-        //then call prepShoppingData([item]) and return that
-        let new_item = items[i]
-        let pended_obj = {_id:new Date().toJSON(), user:ctx.user, repackQty: items[i].qty.to, group: groupName}
-        new_item.next = [{pended:pended_obj}]
+      items = items.map(row => row.doc).sort(function(a,b){ //sorts in increasing qty
+        if(a.qty.to > b.qty.to) return 1
+        if(a.qty.to < b.qty.to) return -1
+        return 0
+      })
 
-        console.log("to pend into group:", new_item)
+      for(var i = 0; i < items.length; i++){
+        if(items[i].qty.to >= missed_qty){
 
-        return ctx.db.account.get(ctx.account._id).then(account =>{
-          ctx.account = account
-          //console.log(ctx.account)
+          let new_item = items[i]
+          let pended_obj = {_id:new Date().toJSON(), user:ctx.user, repackQty: items[i].qty.to, group: groupName}
+          new_item.next = [{pended:pended_obj}]
+
+          let prepped = prepShoppingData([new_item], ctx)
+
+          console.log("to pend into group:", prepped)
+          new_item.next[0].picked = {} //add this so it locks down on save
 
           return ctx.db.transaction.bulkDocs([new_item], {ctx:ctx}).then(res =>{
-            return prepShoppingData([new_item], ctx)
+            console.log("item saved")
+            return prepped
           })
-
-        });
-        break
+          
+        }
       }
-    }
 
-    //if get here, then no items found
-    return []
+      return []
 
+    })
   })
 }
 
