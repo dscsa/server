@@ -687,16 +687,12 @@ function prepShoppingData(raw_transactions, ctx) {
       basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'B' : (raw_transactions[i].next[0].pended.priority == true) ? 'G' : (raw_transactions.length <= 5) ? 'S' : 'R' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
     }
 
-    // = uniqueDrugs[raw_transactions[i].drug.generic)] ? uniqueDrugs[raw_transactions[i].drug.generic)] + 1 :
-
     if(uniqueDrugs[raw_transactions[i].drug.generic]){
       uniqueDrugs[raw_transactions[i].drug.generic].count += 1
-      //uniqueDrugs[raw_transactions[i].drug.generic)] = [uniqueDrugs[raw_transactions[i].drug.generic)].count+1,uniqueDrugs[raw_transactions[i].drug.generic)].index]
     } else {
       uniqueDrugs[raw_transactions[i].drug.generic] = {count:1, global_index:generic_index++, relative_index:1} //relative index is useful in next loop of editing the extra field
     }
 
-    //if(!(~uniqueDrugsInOrder.indexOf()) uniqueDrugsInOrder.push(raw_transactions[i].drug.generic)
 
     shopList.push({raw: raw_transactions[i],extra: extra_data})
   }
@@ -706,8 +702,6 @@ function prepShoppingData(raw_transactions, ctx) {
   //then go back through to add the drug count
   for(var i = 0; i < shopList.length; i++){
     shopList[i].extra.genericIndex = {relative_index: [uniqueDrugs[shopList[i].raw.drug.generic].relative_index++, uniqueDrugs[shopList[i].raw.drug.generic].count] , global_index:[uniqueDrugs[shopList[i].raw.drug.generic].global_index, generic_total]}
-
-//    shopList[i].extra.genericIndex = {index:uniqueDrugsInOrder.indexOf(shopList[i].raw.drug.generic)+1, total: uniqueDrugsInOrder.length}
   }
 
   getImageURLS(shopList, ctx) //must use an async call to the db
