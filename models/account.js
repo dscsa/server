@@ -684,7 +684,7 @@ function prepShoppingData(raw_transactions, ctx) {
         'slot_after':false,
         'missing':false,
       },
-      basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall')) || (raw_transactions.length > 15)) ? 'B' : (raw_transactions[i].next[0].pended.priority == true) ? 'G' : (raw_transactions.length <= 5) ? 'S' : 'R' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
+      basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'B' : (raw_transactions[i].next[0].pended.priority == true) ? 'G' : (raw_transactions.length <= 5) ? 'S' : 'R' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
     }
 
     if(uniqueDrugs[raw_transactions[i].drug.generic]){
@@ -701,6 +701,7 @@ function prepShoppingData(raw_transactions, ctx) {
 
   //then go back through to add the drug count
   for(var i = 0; i < shopList.length; i++){
+    shopList[i].extra.basketNumber = uniqueDrugs[shopList[i].raw.drug.generic].count > 15 ? 'B' : shopList[i].extra.basketNumber
     shopList[i].extra.genericIndex = {relative_index: [uniqueDrugs[shopList[i].raw.drug.generic].relative_index++, uniqueDrugs[shopList[i].raw.drug.generic].count] , global_index:[uniqueDrugs[shopList[i].raw.drug.generic].global_index, generic_total]}
   }
 
