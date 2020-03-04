@@ -18,7 +18,14 @@ exports.views = {
 
   state(doc) {
     emit(doc.state)
-  }
+  },
+  
+
+  'all':function(doc) {
+      emit(doc._id)
+  },
+
+
 }
 
 exports.get_csv = async function (ctx, db) {
@@ -123,6 +130,9 @@ function setOrderFields(generic, account, res ) {
   res['order.displayMessage'] = account.ordered[generic].displayMessage
   return res
 }
+
+
+
 
 exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
 

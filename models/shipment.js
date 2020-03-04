@@ -12,6 +12,10 @@ exports.views = {
 
   'account.from._id':function(doc) {
     emit(doc.account.from._id)
+  },
+
+  'recipient._id':function(doc) {
+    emit([doc.account.to._id])
   }
 }
 
