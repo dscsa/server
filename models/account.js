@@ -19,9 +19,9 @@ exports.views = {
   state(doc) {
     emit(doc.state)
   },
-  
 
-  'all':function(doc) {
+
+  'all-accounts':function(doc) {
       emit(doc._id)
   },
 
