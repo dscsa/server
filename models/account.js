@@ -5,7 +5,7 @@ module.exports = exports = Object.create(require('../helpers/model'))
 let csv = require('csv/server')
 let admin = {ajax:{jar:false, auth:require('../../../keys/dev').couch}}
 //let cache = {}
-let DAILY_LIMIT = 1000
+//let DAILY_LIMIT = 1000
 
 exports.views = {
   //Use _bulk_get here instead? Not supported in 1.6
@@ -586,7 +586,7 @@ function compensateForMissingTransaction(groupName, ctx){
           new_item.next[0].picked = {} //add this so it locks down on save
 
           return ctx.db.transaction.bulkDocs([new_item], {ctx:ctx}).then(res =>{
-            console.log("item saved")
+            console.log("item saved", prepped)
             return prepped
           })
 
@@ -694,6 +694,7 @@ function prepShoppingData(raw_transactions, ctx) {
         'slot_after':false,
         'missing':false,
       },
+      saved:null, //will be used to avoid double-saving
       basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'B' : (raw_transactions[i].next[0].pended.priority == true) ? 'G' : (raw_transactions.length <= 5) ? 'S' : 'R' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
     }
 

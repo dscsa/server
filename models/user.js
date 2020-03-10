@@ -98,11 +98,15 @@ exports.session = {
     const phone = ctx.req.body.phone.replace(/[^\d]/g, '')
     const login = await ctx.db.user.allDocs({startkey:phone, endkey:phone+'\uffff', include_docs:true})
 
-    login.rows.length
-      ? ctx.body = await session(ctx, phone+'.'+login.rows[0].doc.account._id, ctx.req.body.password)
-      : ctx.throw(404, 'No user exists with the phone '+phone)
+    if(!login.rows.length) ctx.throw(404, 'No user exists with the phone '+phone)
 
-      console.log('ctx.body', ctx.body)
+    try{
+      ctx.body = await session(ctx, phone+'.'+login.rows[0].doc.account._id, ctx.req.body.password)
+    } catch(e){
+      ctx.throw(404, 'Incorrect Password')
+    }
+
+    console.log('ctx.body', ctx.body)
   },
 
   async delete(ctx) {
