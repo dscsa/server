@@ -4,8 +4,8 @@ module.exports = exports = Object.create(require('../helpers/model'))
 
 let csv = require('csv/server')
 let admin = {ajax:{jar:false, auth:require('../../../keys/dev').couch}}
-let cache = {}
-let DAILY_LIMIT = 1000
+//let cache = {}
+//let DAILY_LIMIT = 1000
 
 exports.views = {
   //Use _bulk_get here instead? Not supported in 1.6
@@ -18,7 +18,14 @@ exports.views = {
 
   state(doc) {
     emit(doc.state)
-  }
+  },
+
+
+  'all-accounts':function(doc) {
+      emit(doc._id)
+  },
+
+
 }
 
 exports.get_csv = async function (ctx, db) {
@@ -123,6 +130,9 @@ function setOrderFields(generic, account, res ) {
   res['order.displayMessage'] = account.ordered[generic].displayMessage
   return res
 }
+
+
+
 
 exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
 
@@ -576,7 +586,7 @@ function compensateForMissingTransaction(groupName, ctx){
           new_item.next[0].picked = {} //add this so it locks down on save
 
           return ctx.db.transaction.bulkDocs([new_item], {ctx:ctx}).then(res =>{
-            console.log("item saved")
+            console.log("item saved", prepped)
             return prepped
           })
 
@@ -684,6 +694,7 @@ function prepShoppingData(raw_transactions, ctx) {
         'slot_after':false,
         'missing':false,
       },
+      saved:null, //will be used to avoid double-saving
       basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'B' : (raw_transactions[i].next[0].pended.priority == true) ? 'G' : (raw_transactions.length <= 5) ? 'S' : 'R' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
     }
 
@@ -720,16 +731,16 @@ function refreshGroupsToPick(ctx, today){
 
       let today = new Date().toJSON().slice(0,10).replace(/-/g,'/')
 
-      let calculate_stack = !(today in cache)
+      //let calculate_stack = !(today in cache)
 
-      console.log(cache)
+      //console.log(cache)
 
-      let cumulative_count = 0
+      //let cumulative_count = 0
 
-      if(calculate_stack){ //could have cache save if there's any reason?
-        cache = {}
-        cache[today] = []
-      }
+      //if(calculate_stack){ //could have cache save if there's any reason?
+      //  cache = {}
+      //  cache[today] = []
+      //}
 
       //gotta extract some of these fields before sorting
       let groups_raw = res.rows.sort(sortOrders) //sort before stacking so that the cumulative count considrs priority and final sort logic
@@ -739,11 +750,11 @@ function refreshGroupsToPick(ctx, today){
         if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)){
 
           //if we're in the first call of the day, when we need to refresh the stack, then we need to do some logic on the stack
-          let end_of_stack = calculate_stack ? false : cache[today].indexOf(group.key[1]) == cache[today].length - 1
-          cumulative_count += group.value[0].count
-          if(calculate_stack && (cumulative_count <= DAILY_LIMIT) && (!( ~cache[today].indexOf(group.key[1])))) cache[today].push(group.key[1])
+          //let end_of_stack = calculate_stack ? false : cache[today].indexOf(group.key[1]) == cache[today].length - 1
+          //cumulative_count += group.value[0].count
+          //if(calculate_stack && (cumulative_count <= DAILY_LIMIT) && (!( ~cache[today].indexOf(group.key[1])))) cache[today].push(group.key[1])
 
-          groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, end_of_stack:end_of_stack, cumulative_count: cumulative_count})
+          groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count})
 
         }
 
