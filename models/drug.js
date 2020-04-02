@@ -374,7 +374,7 @@ function nadacNdcUrl(drug) {
 
 function ndc9(drug) {
   let [labeler, product] = drug._id.split('-')
-  return ('00000'+labeler).slice(-5)+('0000'+product).slice(-4)
+  return ('00000'+labeler).slice(-5)+('00000'+product).slice(product.length > 4 ? -6 : -4)
 }
 
 function nadacNameUrl(drug) {
