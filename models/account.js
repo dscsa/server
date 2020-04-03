@@ -541,10 +541,11 @@ exports.picking = {
 
 
 function compensateForMissingTransaction(groupName, ctx){
-  let missing_generic = ctx.req.body.generic
+  let missing_generic = ctx.req.body.generic //in case we ever want to expand this
+  let missing_ndc = ctx.req.body.ndc
   let missed_qty = ctx.req.body.qty
 
-  console.log("missing generic:", missing_generic)
+  console.log("missing ndc:", missing_ndc)
   console.log("missed qty:", missed_qty)
 
   var date = new Date()
@@ -553,16 +554,16 @@ function compensateForMissingTransaction(groupName, ctx){
   let opts = {
     include_docs:true,
     reduce:false,
-    startkey: [ctx.account._id, 'month', year, month, missing_generic],
-    endkey: [ctx.account._id, 'month', year, month, missing_generic, {}]
+    startkey: [ctx.account._id, 'month', year, month, missing_ndc],
+    endkey: [ctx.account._id, 'month', year, month, missing_ndc, {}]
   }
 
   return ctx.db.account.get(ctx.account._id).then(account =>{
 
     ctx.account = account
     opts.ctx = ctx
-
-    return ctx.db.transaction.query('inventory-by-generic', opts).then(res => {
+    //TODO search by ndc
+    return ctx.db.transaction.query('inventory-by-ndc', opts).then(res => {
 
       let items = res.rows
       if(items.length == 0) return []
@@ -573,8 +574,11 @@ function compensateForMissingTransaction(groupName, ctx){
         return 0
       })
 
+      console.log("following items found: ", items)
+
       for(var i = 0; i < items.length; i++){
-        if(items[i].qty.to >= missed_qty){
+        if((!(~ ['M00', 'T00', 'W00', 'R00', 'F00', 'X00', 'Y00', 'Z00'].indexOf(items[i].bin)))
+            && (items[i].qty.to >= missed_qty)){
 
           let new_item = items[i]
           let pended_obj = {_id:new Date().toJSON(), user:ctx.user, repackQty: items[i].qty.to, group: groupName}

@@ -23,7 +23,7 @@ exports.get_csv = async function (ctx, db) {
 exports.validate = function(model) {
   return model
     .ensure('account._id').custom(authorized).withMessage('You are not authorized to modify this user')
-    .ensure('_rev').custom(saveLogin).withMessage('Could not save new user login information')
+    .ensure('password').custom(saveLogin).withMessage('Could not save new user login information')
     .ensure('_deleted').custom(deleteLogin).withMessage('Could not delete user login information')
 }
 
@@ -50,6 +50,7 @@ function deleteLogin(doc, opts) {
 }
 
 function saveLogin(doc, opts) {
+
   //Check for doc.password just in case we are trying to recreate an existing user
   if (doc.password) {
     //User ._id not .phone since _id has had all extraneous characters removed
