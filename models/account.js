@@ -545,6 +545,7 @@ function compensateForMissingTransaction(groupName, ctx){
   let missing_ndc = ctx.req.body.ndc
   let missed_qty = ctx.req.body.qty
 
+  console.log("missing generic:", missing_generic)
   console.log("missing ndc:", missing_ndc)
   console.log("missed qty:", missed_qty)
 
@@ -563,7 +564,7 @@ function compensateForMissingTransaction(groupName, ctx){
     ctx.account = account
     opts.ctx = ctx
     //TODO search by ndc
-    return ctx.db.transaction.query('inventory-by-ndc', opts).then(res => {
+    return ctx.db.transaction.query('inventory-by-generic', opts).then(res => {
 
       let items = res.rows
       if(items.length == 0) return []
@@ -576,9 +577,11 @@ function compensateForMissingTransaction(groupName, ctx){
 
       console.log("following items found: ", items)
 
+      //TODO: be able to find multiple transactions, until aggregate qty exceeds missed_qty
+
       for(var i = 0; i < items.length; i++){
-        if((!(~ ['M00', 'T00', 'W00', 'R00', 'F00', 'X00', 'Y00', 'Z00'].indexOf(items[i].bin)))
-            && (items[i].qty.to >= missed_qty)){
+        if((!(~ ['M00', 'T00', 'W00', 'R00', 'F00', 'X00', 'Y00', 'Z00'].indexOf(items[i].bin))) //exclude special bins
+            && (items[i].drug._id == missing_ndc) && (items[i].qty.to >= missed_qty)){  //only want the same ndc, and >= qty
 
           let new_item = items[i]
           let pended_obj = {_id:new Date().toJSON(), user:ctx.user, repackQty: items[i].qty.to, group: groupName}

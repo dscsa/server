@@ -424,13 +424,6 @@ exports.views = {
     reduce:'_stats'
   },
 
-  'inventory-by-ndc':{
-    map(doc) {
-      require('inventory')(emit, doc, [doc.drug._id, doc.drug.gsns, doc.drug.brand, doc.drug.generic, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
-    },
-    reduce:'_stats'
-  },
-
   'entered-by-from-generic':{
     map(doc) {
       require('groupByDate')(emit, doc, 'entered', [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
