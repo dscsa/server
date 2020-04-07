@@ -563,47 +563,57 @@ function compensateForMissingTransaction(groupName, ctx){
 
     ctx.account = account
     opts.ctx = ctx
-    //TODO search by ndc
+
     return ctx.db.transaction.query('inventory-by-generic', opts).then(res => {
 
       let items = res.rows
       if(items.length == 0) return []
 
-      items = items.map(row => row.doc).sort(function(a,b){ //sorts in increasing qty
-        if(a.qty.to > b.qty.to) return 1
-        if(a.qty.to < b.qty.to) return -1
+      items = items.map(row => row.doc).sort(function(a,b){ //sorts in decreasing qty
+        if(a.qty.to < b.qty.to) return 1
+        if(a.qty.to > b.qty.to) return -1
         return 0
       })
 
       console.log("following items found: ", items)
 
       //TODO: be able to find multiple transactions, until aggregate qty exceeds missed_qty
+      let result = [] //we'll add here and hopefully reach desired total
+      let tally = 0
 
       for(var i = 0; i < items.length; i++){
         if((!(~ ['M00', 'T00', 'W00', 'R00', 'F00', 'X00', 'Y00', 'Z00'].indexOf(items[i].bin))) //exclude special bins
             && (items[i].drug._id == missing_ndc)){
 
           console.log("found the right kind of item, might not have enough qty though")
-          
-          if(items[i].qty.to >= missed_qty){  //only want the same ndc, and >= qty
-            let new_item = items[i]
-            let pended_obj = {_id:new Date().toJSON(), user:ctx.user, repackQty: items[i].qty.to, group: groupName}
-            new_item.next = [{pended:pended_obj}]
 
-            let prepped = prepShoppingData([new_item], ctx)
+          tally += items[i].qty.to
+          result.push(items[i])
 
-            console.log("to pend into group:", prepped)
-            new_item.next[0].picked = {} //add this so it locks down on save
+          if(tally >= missed_qty) break
 
-            return ctx.db.transaction.bulkDocs([new_item], {ctx:ctx}).then(res =>{
-              console.log("item saved", prepped)
-              return prepped
-            })
-          }
         }
       }
 
-      return []
+      console.log("tally: ", tally)
+      console.log("result number: ", result.length)
+
+      if(tally >= missed_qty){
+        result.forEach(item => item.next = [{pended:{_id:new Date().toJSON(), user:ctx.user, repackQty: item.qty.to, group: groupName}}])
+
+        let prepped = prepShoppingData(result, ctx)
+
+        console.log("to pend into group:", prepped)
+
+        result.forEach(item => item.next.picked = {}) //add this so it locks down on save
+
+        return ctx.db.transaction.bulkDocs(result, {ctx:ctx}).then(res =>{
+          console.log("item saved", prepped)
+          return prepped
+        })
+      } else {
+        return []
+      }
 
     })
   })
@@ -705,7 +715,7 @@ function prepShoppingData(raw_transactions, ctx) {
         'missing':false,
       },
       saved:null, //will be used to avoid double-saving
-      basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'B' : (raw_transactions[i].next[0].pended.priority == true) ? 'G' : (raw_transactions.length <= 5) ? 'S' : 'R' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
+      basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'b' : (raw_transactions[i].next[0].pended.priority == true) ? 'g' : (raw_transactions.length <= 5) ? 's' : 'r' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
     }
 
     if(uniqueDrugs[raw_transactions[i].drug.generic]){
