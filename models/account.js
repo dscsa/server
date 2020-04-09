@@ -583,7 +583,7 @@ function compensateForMissingTransaction(groupName, ctx){
 
       for(var i = 0; i < items.length; i++){
         if((!(~ ['M00', 'T00', 'W00', 'R00', 'F00', 'X00', 'Y00', 'Z00'].indexOf(items[i].bin))) //exclude special bins
-            && (items[i].drug._id == missing_ndc)){
+            && (items[i].drug.next.length == 0) && (items[i].drug._id == missing_ndc)){
 
           console.log("found the right kind of item, might not have enough qty though")
 
