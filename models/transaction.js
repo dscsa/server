@@ -327,7 +327,7 @@ exports.views = {
   //Split bin because of weird unicode collation a < A < aa so upper and lower case bins were getting mixed in search results http://docs.couchdb.org/en/stable/ddocs/views/collation.html
   'inventory-by-bin-verifiedat':{
     map(doc) {
-      if ( ! require('isInventory')(doc)) return
+      if ( ! (require('isInventory')(doc) || (require('pendedAt')(doc) && !require('pickedAt')(doc)))) return
       var bin  = require('sortedBin')(doc)
       var val  = [require('qty')(doc), require('value')(doc)]
       var date = require('verifiedAt')(doc)
