@@ -715,7 +715,7 @@ function prepShoppingData(raw_transactions, ctx) {
         'missing':false,
       },
       saved:null, //will be used to avoid double-saving
-      basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'b' : (raw_transactions[i].next[0].pended.priority == true) ? 'g' : (raw_transactions.length <= 5) ? 's' : 'r' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
+      basketNumber:(ctx.account.hazards[raw_transactions[i].drug.generic] || (~raw_transactions[i].next[0].pended.group.toLowerCase().indexOf('recall'))) ? 'B' : (raw_transactions[i].next[0].pended.priority == true) ? 'G' : (raw_transactions.length <= 5) ? 'S' : 'R' //a little optimization from the pharmacy, the rest of the basketnumber is just numbers
     }
 
     if(uniqueDrugs[raw_transactions[i].drug.generic]){
