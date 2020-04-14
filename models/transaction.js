@@ -325,9 +325,12 @@ exports.views = {
 
   //Client bin checking and reorganization, & account/bins.csv for use by data loggers needing to pick empty boxes.  Skip reduce with reduce=false.  Alphabatize within bin
   //Split bin because of weird unicode collation a < A < aa so upper and lower case bins were getting mixed in search results http://docs.couchdb.org/en/stable/ddocs/views/collation.html
+  //Notes on special bins/cases:
+  //
   'inventory-by-bin-verifiedat':{
     map(doc) {
-      if ( ! (require('isInventory')(doc) || (require('pendedAt')(doc) && !require('pickedAt')(doc)))) return
+      if ( ! require('isInventory')(doc)) return
+      //if ( ! (require('isInventory')(doc) || (require('pendedAt')(doc) && !require('pickedAt')(doc) && !require('isDisposed')(doc) && !require('isDispensed')(doc)))) return
       var bin  = require('sortedBin')(doc)
       var val  = [require('qty')(doc), require('value')(doc)]
       var date = require('verifiedAt')(doc)
