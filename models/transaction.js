@@ -325,9 +325,32 @@ exports.views = {
 
   //Client bin checking and reorganization, & account/bins.csv for use by data loggers needing to pick empty boxes.  Skip reduce with reduce=false.  Alphabatize within bin
   //Split bin because of weird unicode collation a < A < aa so upper and lower case bins were getting mixed in search results http://docs.couchdb.org/en/stable/ddocs/views/collation.html
+  //Notes on special bins/cases:
+  //data-entry uses bin search with ansterix eg A23* across all slot number
+  //they pull out expireds and things that dont show up (bc expired arent there)
+  //basically compare box to that search: and if something's pended it doesnt appear so they were pulling out the drug
+  //techs & pharm uses bin:
+  //always shop for extra
+  //extra goes into prepack shelf
+  //the ac
+  //magic bin is the placeholder while they use/dispense it
+  //M00 = monday
+  //T00 = tuesday
+  //W00 = wednesday
+  //X00, Y00 were before the day by
+  /*
+    its a repacked bottle thatll prbably be dispensed
+    cindy ispense
+    100% are new repacked
+    the capsule tablet thing is reversed when
+    we're also still using paper
+  */
   'inventory-by-bin-verifiedat':{
     map(doc) {
-      if ( ! (require('isInventory')(doc) || (require('pendedAt')(doc) && !require('pickedAt')(doc)))) return
+
+      if (require('nextAt')(doc)) return; //if disposed, dispensed, repakced we don't want to include
+      if(!require('isInventory')(doc) && !(require('pendedAt')(doc) && !require('pickedAt')(doc))) return //either be regularl inventory or pended and not picked
+
       var bin  = require('sortedBin')(doc)
       var val  = [require('qty')(doc), require('value')(doc)]
       var date = require('verifiedAt')(doc)
