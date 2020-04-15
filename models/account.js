@@ -899,17 +899,23 @@ function updateNext(ctx, key, object){
 
     if(object){
 
-      if ( ! transaction.next[0])
-        transaction.next[0] = {}
+      if ( (!transaction.next[0])
+          || (Array.isArray(transaction.next[0]))) transaction.next[0] = {}   //for ones where there's already [[]]
 
       transaction.next[0][key] = object
 
-    } else if (transaction.next[0]) {
+    } else if (transaction.next[0]) { //then we're clearing out the next property
 
-      delete transaction.next[0][key]
+      transaction.next = []
+      //04/2020: switch to this, so it mirrors unpend in inventory.js, and think somehow
+      //it was creating arrays [null] or [{}] that, since we switched to php webform, are
+      //getting cast into empty arrays, creating [[]] for the next array
+      
+      //delete transaction.next[0][key]
 
-      if (Object.keys(transaction.next[0]).length)
-        delete transaction.next[0]
+      //if (Object.keys(transaction.next[0]).length)
+      //  transaction.next[] = []
+        //delete transaction.next[0]
     }
   }
 
