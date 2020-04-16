@@ -894,7 +894,6 @@ exports.dispose = {
 
 
 
-//TOD is set [0] enough or do we need/should to set all of them
 function updateNext(ctx, key, object){
 
   for (let transaction of ctx.req.body) {
