@@ -724,19 +724,39 @@ function prepShoppingData(raw_transactions, ctx) {
     }
 
 
-    shopList.push({raw: raw_transactions[i],extra: extra_data})
+    shopList.push({raw:raw_transactions[i], extra:extra_data})
   }
 
   let generic_total = Object.keys(uniqueDrugs).length;
 
   //then go back through to add the drug count and basket
   for(var i = 0; i < shopList.length; i++){
-    shopList[i].extra.basketNumber = (ctx.account.hazards[shopList[i].raw.drug.generic]
-                                      || (~shopList[i].raw.next[0].pended.group.toLowerCase().indexOf('recall'))
-                                      || (uniqueDrugs[shopList[i].raw.drug.generic].count > 15)) ? 'B'
-                                    : ((shopList[i].raw.next[0].pended.priority == true) ? 'G'
-                                    : ((shopList.length <= 5) ? 'S' : 'R'))
-    shopList[i].extra.genericIndex = {relative_index: [uniqueDrugs[shopList[i].raw.drug.generic].relative_index++, uniqueDrugs[shopList[i].raw.drug.generic].count] , global_index:[uniqueDrugs[shopList[i].raw.drug.generic].global_index, generic_total]}
+
+    const hazard   = ctx.account.hazards[shopList[i].raw.drug.generic] //Drug is marked for USP800
+    const recall   = ~shopList[i].raw.next[0].pended.group.toLowerCase().indexOf('recall')
+    const large    = uniqueDrugs[shopList[i].raw.drug.generic].count > 15
+    const small    = uniqueDrugs[shopList[i].raw.drug.generic].count <= 5
+    const priority = shopList[i].raw.next[0].pended.priority == true
+
+    if (priority)
+      shopList[i].extra.basketNumber = 'G'
+    else if (hazard || recall || large)
+      shopList[i].extra.basketNumber = 'B'
+    else if (small)
+      shopList[i].extra.basketNumber = 'S'
+    else
+      shopList[i].extra.basketNumber = 'R'
+
+    shopList[i].extra.genericIndex = {
+      relative_index: [
+        uniqueDrugs[shopList[i].raw.drug.generic].relative_index++,
+        uniqueDrugs[shopList[i].raw.drug.generic].count
+      ],
+      global_index: [
+        uniqueDrugs[shopList[i].raw.drug.generic].global_index,
+        generic_total
+      ]
+    }
   }
 
   getImageURLS(shopList, ctx) //must use an async call to the db
