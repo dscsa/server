@@ -892,6 +892,8 @@ exports.dispose = {
   // }
 }
 
+
+
 //TOD is set [0] enough or do we need/should to set all of them
 function updateNext(ctx, key, object){
 
@@ -907,15 +909,7 @@ function updateNext(ctx, key, object){
     } else if (transaction.next[0]) { //then we're clearing out the next property
 
       transaction.next = []
-      //04/2020: switch to this, so it mirrors unpend in inventory.js, and think somehow
-      //it was creating arrays [null] or [{}] that, since we switched to php webform, are
-      //getting cast into empty arrays, creating [[]] for the next array
-      
-      //delete transaction.next[0][key]
 
-      //if (Object.keys(transaction.next[0]).length)
-      //  transaction.next[] = []
-        //delete transaction.next[0]
     }
   }
 
