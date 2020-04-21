@@ -925,7 +925,7 @@ function updateNext(ctx, key, object){
 
       transaction.next[0][key] = object
 
-    } else if (transaction.next[0]) { //then we're clearing out the next property
+    } else if (transaction.next[0] && !transaction.next[0].picked) { //then we're clearing out the next property unless it has picked
 
       transaction.next = []
 
