@@ -732,7 +732,7 @@ function prepShoppingData(raw_transactions, ctx) {
   //then go back through to add the drug count and basket
   for(var i = 0; i < shopList.length; i++){
 
-    const hazard   = ctx.account.hazards[shopList[i].raw.drug.generic] //Drug is marked for USP800
+    const hazard   = ctx.account.hazards ? ctx.account.hazards[shopList[i].raw.drug.generic] : false //Drug is marked for USP800
     const recall   = ~shopList[i].raw.next[0].pended.group.toLowerCase().indexOf('recall')
     const large    = uniqueDrugs[shopList[i].raw.drug.generic].count > 15
     const small    = uniqueDrugs[shopList[i].raw.drug.generic].count <= 5
@@ -767,7 +767,7 @@ function prepShoppingData(raw_transactions, ctx) {
 function refreshGroupsToPick(ctx, today){
     console.log("refreshing groups")
 
-    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {group_level:4})
+    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {startkey:[ctx.account._id], endkey:[ctx.account._id +'\uffff'], group_level:4})
     .then(res => {
       //key = [account._id, group, priority, picked (true, false, null=locked), full_doc]
       let groups = []
