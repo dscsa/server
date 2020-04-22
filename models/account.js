@@ -735,7 +735,7 @@ function prepShoppingData(raw_transactions, ctx) {
     const hazard   = ctx.account.hazards ? ctx.account.hazards[shopList[i].raw.drug.generic] : false //Drug is marked for USP800
     const recall   = ~shopList[i].raw.next[0].pended.group.toLowerCase().indexOf('recall')
     const large    = uniqueDrugs[shopList[i].raw.drug.generic].count > 15
-    const small    = uniqueDrugs[shopList[i].raw.drug.generic].count <= 5
+    const small    = uniqueDrugs[shopList[i].raw.drug.generic].count <= 4
     const priority = shopList[i].raw.next[0].pended.priority == true
 
     if (priority)
