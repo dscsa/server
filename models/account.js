@@ -819,8 +819,12 @@ function sortOrders(a,b){ //given array of orders, sort appropriately.
 
     let group1 = a.key[1]
     let group2 = b.key[1]
-    if(group1 > group2) return 1
-    if(group1 < group2) return -1
+
+    //In case the length of orders is mismatched just compare the last most characters
+    //this ensures that if user pends "9998" that it will be sorted between 2020-04-01 9997 and 2020-04-01 9999
+    //rather than always being pushed until the end of the queue
+    if(group1.slice(-group2.length) > group2.slice(-group1.length)) return 1
+    if(group1.slice(-group2.length) < group2.slice(-group1.length)) return -1
 
 }
 
