@@ -544,6 +544,7 @@ function compensateForMissingTransaction(groupName, ctx){
   let missing_generic = ctx.req.body.generic //in case we ever want to expand this
   let missing_ndc = ctx.req.body.ndc
   let missed_qty = ctx.req.body.qty
+  let repack_qty = ctx.req.body.repackQty
 
   console.log("missing generic:", missing_generic)
   console.log("missing ndc:", missing_ndc)
@@ -599,7 +600,7 @@ function compensateForMissingTransaction(groupName, ctx){
       console.log("result number: ", result.length)
 
       if(tally >= missed_qty){
-        result.forEach(item => item.next = [{pended:{_id:new Date().toJSON(), user:ctx.user, repackQty: item.qty.to, group: groupName}}])
+        result.forEach(item => item.next = [{pended:{_id:new Date().toJSON(), user:ctx.user, repackQty: repack_qty, group: groupName}}])
 
         let prepped = prepShoppingData(result, ctx)
 
@@ -732,10 +733,10 @@ function prepShoppingData(raw_transactions, ctx) {
   //then go back through to add the drug count and basket
   for(var i = 0; i < shopList.length; i++){
 
-    const hazard   = ctx.account.hazards[shopList[i].raw.drug.generic] //Drug is marked for USP800
+    const hazard   = ctx.account.hazards ? ctx.account.hazards[shopList[i].raw.drug.generic] : false //Drug is marked for USP800
     const recall   = ~shopList[i].raw.next[0].pended.group.toLowerCase().indexOf('recall')
     const large    = uniqueDrugs[shopList[i].raw.drug.generic].count > 15
-    const small    = uniqueDrugs[shopList[i].raw.drug.generic].count <= 5
+    const small    = uniqueDrugs[shopList[i].raw.drug.generic].count <= 4
     const priority = shopList[i].raw.next[0].pended.priority == true
 
     if (priority)
@@ -767,23 +768,12 @@ function prepShoppingData(raw_transactions, ctx) {
 function refreshGroupsToPick(ctx, today){
     console.log("refreshing groups")
 
-    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {group_level:4})
+    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {startkey:[ctx.account._id], endkey:[ctx.account._id +'\uffff'], group_level:4})
     .then(res => {
       //key = [account._id, group, priority, picked (true, false, null=locked), full_doc]
       let groups = []
 
       let today = new Date().toJSON().slice(0,10).replace(/-/g,'/')
-
-      //let calculate_stack = !(today in cache)
-
-      //console.log(cache)
-
-      //let cumulative_count = 0
-
-      //if(calculate_stack){ //could have cache save if there's any reason?
-      //  cache = {}
-      //  cache[today] = []
-      //}
 
       //gotta extract some of these fields before sorting
       let groups_raw = res.rows.sort(sortOrders) //sort before stacking so that the cumulative count considrs priority and final sort logic
@@ -791,11 +781,6 @@ function refreshGroupsToPick(ctx, today){
       for(var group of groups_raw){
 
         if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)){
-
-          //if we're in the first call of the day, when we need to refresh the stack, then we need to do some logic on the stack
-          //let end_of_stack = calculate_stack ? false : cache[today].indexOf(group.key[1]) == cache[today].length - 1
-          //cumulative_count += group.value[0].count
-          //if(calculate_stack && (cumulative_count <= DAILY_LIMIT) && (!( ~cache[today].indexOf(group.key[1])))) cache[today].push(group.key[1])
 
           groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count})
 
