@@ -544,6 +544,7 @@ function compensateForMissingTransaction(groupName, ctx){
   let missing_generic = ctx.req.body.generic //in case we ever want to expand this
   let missing_ndc = ctx.req.body.ndc
   let missed_qty = ctx.req.body.qty
+  let repack_qty = ctx.req.body.repackQty
 
   console.log("missing generic:", missing_generic)
   console.log("missing ndc:", missing_ndc)
@@ -599,7 +600,7 @@ function compensateForMissingTransaction(groupName, ctx){
       console.log("result number: ", result.length)
 
       if(tally >= missed_qty){
-        result.forEach(item => item.next = [{pended:{_id:new Date().toJSON(), user:ctx.user, repackQty: item.qty.to, group: groupName}}])
+        result.forEach(item => item.next = [{pended:{_id:new Date().toJSON(), user:ctx.user, repackQty: repack_qty, group: groupName}}])
 
         let prepped = prepShoppingData(result, ctx)
 
