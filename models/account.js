@@ -768,27 +768,30 @@ function prepShoppingData(raw_transactions, ctx) {
 function refreshGroupsToPick(ctx, today){
     console.log("refreshing groups")
 
-    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {startkey:[ctx.account._id], endkey:[ctx.account._id +'\uffff'], group_level:4})
+    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {startkey:[ctx.account._id], endkey:[ctx.account._id +'\uffff'], group_level:5})
     .then(res => {
-      //key = [account._id, group, priority, picked (true, false, null=locked), full_doc]
-      let groups = []
+      //key = [account._id, group, priority, picked (true, false, null=locked), basket]
+      let groups = {}
 
       let today = new Date().toJSON().slice(0,10).replace(/-/g,'/')
 
       //gotta extract some of these fields before sorting
       let groups_raw = res.rows.sort(sortOrders) //sort before stacking so that the cumulative count considrs priority and final sort logic
-
       for(var group of groups_raw){
 
-        if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)){
+        if((group.key[1].length > 0) && (group.key[2] != null)){
 
-          groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count})
+          if(groups[group.key[1]] && (group.key[4].length > 0)){
+            groups[group.key[1]].baskets.push(group.key[4])
+          } else if(group.key[3] != true){
+            groups[group.key[1]] = {name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, baskets: []}
+          }
 
         }
 
       }
 
-      return groups
+      return Object.values(groups)
 
     })
 
@@ -806,6 +809,12 @@ function sortOrders(a,b){ //given array of orders, sort appropriately.
     let group2 = b.key[1]
     if(group1 > group2) return 1
     if(group1 < group2) return -1
+
+    let picked1 = a.key[3] == true
+    let picked2 = b.key[3] == true
+
+    if(!picked1 && picked2) return -1
+    if(picked1 && !picked2) return 1
 
 }
 
