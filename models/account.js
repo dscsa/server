@@ -782,7 +782,7 @@ function refreshGroupsToPick(ctx, today){
 
         if((group.key[1].length > 0) && (group.key[2] != null)){
 
-          if(groups[group.key[1]] && (group.key[4].length > 0)){
+          if(groups[group.key[1]] && (group.key[4] != null) && (group.key[4].length > 0)){
             groups[group.key[1]].baskets.push(group.key[4])
           } else if(group.key[3] != true){
             groups[group.key[1]] = {name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, baskets: []}
