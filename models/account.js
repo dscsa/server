@@ -716,6 +716,7 @@ function prepShoppingData(raw_transactions, ctx) {
         'missing':false,
       },
       saved:null, //will be used to avoid double-saving
+      basketNumber:'' //distinct from basketLetter at this point, will eventually combine into a fullBasket property
     }
 
     if(uniqueDrugs[raw_transactions[i].drug.generic]){
@@ -740,13 +741,13 @@ function prepShoppingData(raw_transactions, ctx) {
     const priority = shopList[i].raw.next[0].pended.priority == true
 
     if (priority)
-      shopList[i].extra.basketNumber = 'G'
+      shopList[i].extra.basketLetter = 'G'
     else if (hazard || recall || large)
-      shopList[i].extra.basketNumber = 'B'
+      shopList[i].extra.basketLetter = 'B'
     else if (small)
-      shopList[i].extra.basketNumber = 'S'
+      shopList[i].extra.basketLetter = 'S'
     else
-      shopList[i].extra.basketNumber = 'R'
+      shopList[i].extra.basketLetter = 'R'
 
     shopList[i].extra.genericIndex = {
       relative_index: [
@@ -849,7 +850,7 @@ async function saveShoppingResults(arr_enriched_transactions, key, ctx){
           var outcome = this.getOutcome(arr_enriched_transactions[i].extra)
           next[0].picked = {
             _id:new Date().toJSON(),
-            basket:arr_enriched_transactions[i].extra.basketNumber,
+            basket:arr_enriched_transactions[i].extra.fullBasket,
             repackQty: reformated_transaction.qty.to ? reformated_transaction.qty.to : reformated_transaction.qty.from,
             matchType:outcome,
             user:this.user,
