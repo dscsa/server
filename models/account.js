@@ -784,7 +784,7 @@ function refreshGroupsToPick(ctx, today){
 
           if(groups[group.key[1]] && (group.key[4] != null) && (group.key[4].length > 0)){
             groups[group.key[1]].baskets.push(group.key[4])
-          } else if(group.key[3] != true){
+          } else if(group.key[3] != true){ //so fully picked items will only be added if there is a not-picked/locked item in order
             groups[group.key[1]] = {name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, baskets: []}
           }
 
