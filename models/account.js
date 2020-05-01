@@ -606,7 +606,7 @@ function compensateForMissingTransaction(groupName, ctx){
 
         console.log("to pend into group:", prepped)
 
-        result.forEach(item => item.next.picked = {}) //add this so it locks down on save
+        result.forEach(item => item.next[0].picked = {}) //add this so it locks down on save
 
         return ctx.db.transaction.bulkDocs(result, {ctx:ctx}).then(res =>{
           console.log("item saved", prepped)
