@@ -606,7 +606,7 @@ function compensateForMissingTransaction(groupName, ctx){
 
         console.log("to pend into group:", prepped)
 
-        result.forEach(item => item.next.picked = {}) //add this so it locks down on save
+        result.forEach(item => item.next[0].picked = {}) //add this so it locks down on save
 
         return ctx.db.transaction.bulkDocs(result, {ctx:ctx}).then(res =>{
           console.log("item saved", prepped)
@@ -716,6 +716,7 @@ function prepShoppingData(raw_transactions, ctx) {
         'missing':false,
       },
       saved:null, //will be used to avoid double-saving
+      basketNumber:'' //distinct from basketLetter at this point, will eventually combine into a fullBasket property
     }
 
     if(uniqueDrugs[raw_transactions[i].drug.generic]){
@@ -740,13 +741,13 @@ function prepShoppingData(raw_transactions, ctx) {
     const priority = shopList[i].raw.next[0].pended.priority == true
 
     if (priority)
-      shopList[i].extra.basketNumber = 'G'
+      shopList[i].extra.basketLetter = 'G'
     else if (hazard || recall || large)
-      shopList[i].extra.basketNumber = 'B'
+      shopList[i].extra.basketLetter = 'B'
     else if (small)
-      shopList[i].extra.basketNumber = 'S'
+      shopList[i].extra.basketLetter = 'S'
     else
-      shopList[i].extra.basketNumber = 'R'
+      shopList[i].extra.basketLetter = 'R'
 
     shopList[i].extra.genericIndex = {
       relative_index: [
@@ -768,27 +769,30 @@ function prepShoppingData(raw_transactions, ctx) {
 function refreshGroupsToPick(ctx, today){
     console.log("refreshing groups")
 
-    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {startkey:[ctx.account._id], endkey:[ctx.account._id +'\uffff'], group_level:4})
+    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {startkey:[ctx.account._id], endkey:[ctx.account._id +'\uffff'], group_level:5})
     .then(res => {
-      //key = [account._id, group, priority, picked (true, false, null=locked), full_doc]
-      let groups = []
+      //key = [account._id, group, priority, picked (true, false, null=locked), basket]
+      let groups = {}
 
       let today = new Date().toJSON().slice(0,10).replace(/-/g,'/')
 
       //gotta extract some of these fields before sorting
       let groups_raw = res.rows.sort(sortOrders) //sort before stacking so that the cumulative count considrs priority and final sort logic
-
       for(var group of groups_raw){
 
-        if((group.key[1].length > 0) && (group.key[2] != null) && (group.key[3] != true)){
+        if((group.key[1].length > 0) && (group.key[2] != null)){
 
-          groups.push({name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count})
+          if(groups[group.key[1]] && (group.key[4].length > 0) && (!group.key[4][0])){
+            groups[group.key[1]].baskets.push(group.key[4][1])
+          } else if(group.key[3] != true){ //so fully picked items will only be added if there is a not-picked/locked item in order
+            groups[group.key[1]] = {name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, baskets: []}
+          }
 
         }
 
       }
 
-      return groups
+      return Object.values(groups)
 
     })
 
@@ -810,6 +814,12 @@ function sortOrders(a,b){ //given array of orders, sort appropriately.
     //rather than always being pushed until the end of the queue
     if(group1.slice(-group2.length) > group2.slice(-group1.length)) return 1
     if(group1.slice(-group2.length) < group2.slice(-group1.length)) return -1
+
+    let picked1 = a.key[3] == true
+    let picked2 = b.key[3] == true
+
+    if(!picked1 && picked2) return -1
+    if(picked1 && !picked2) return 1
 
 }
 
@@ -844,7 +854,7 @@ async function saveShoppingResults(arr_enriched_transactions, key, ctx){
           var outcome = this.getOutcome(arr_enriched_transactions[i].extra)
           next[0].picked = {
             _id:new Date().toJSON(),
-            basket:arr_enriched_transactions[i].extra.basketNumber,
+            basket:arr_enriched_transactions[i].extra.fullBasket,
             repackQty: reformated_transaction.qty.to ? reformated_transaction.qty.to : reformated_transaction.qty.from,
             matchType:outcome,
             user:this.user,

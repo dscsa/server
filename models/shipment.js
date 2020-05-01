@@ -14,8 +14,12 @@ exports.views = {
     emit(doc.account.from._id)
   },
 
-  'account.to._id':function(doc) {
-    emit([doc.account.to._id])
+  'account.to._id':{
+    map(doc) {
+      emit([doc.account.to._id, doc.updatedAt.slice(0,4)],[1])
+    },
+    reduce:'_stats'
+
   }
 }
 
