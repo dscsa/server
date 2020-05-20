@@ -804,12 +804,16 @@ function sortOrders(a,b){ //given array of orders, sort appropriately.
     let urgency2 = b.key[2]
 
     if(urgency1 && !urgency2) return -1
-    if(!urgency1 && urgency2) return 1
 
-    let group1 = a.key[1]
-    let group2 = b.key[1]
-    if(group1 > group2) return 1
-    if(group1 < group2) return -1
+    //Manually pended groups might not have a date.  If no date is set, then assume that it is wanted today
+    let dateRegex = /\d\d\d\d-\d\d-\d\d [a-zA-Z]/
+    let yyyymmdd  = new Date().toJSON().slice(0, 10)+' N' //pended._id date would be better but that is not available at group_level == 5.  Add it to view's key?
+    let group1 = a.key[1].match(dateRegex) ? a.key[1] : yyyymmdd+a.key[1]
+    let group2 = b.key[1].match(dateRegex) ? b.key[1] : yyyymmdd+b.key[1]
+
+    //They either both have prepended date or both do not have it
+    if (group1 > group2) return 1
+    if (group1 < group2) return -1
 
     let picked1 = a.key[3] == true
     let picked2 = b.key[3] == true
