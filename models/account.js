@@ -803,8 +803,9 @@ function sortOrders(a,b){ //given array of orders, sort appropriately.
     let urgency1 = a.key[2]
     let urgency2 = b.key[2]
 
+    if(urgency2 && !urgency1) return 1
     if(urgency1 && !urgency2) return -1
-
+    
     //Manually pended groups might not have a date.  If no date is set, then assume that it is wanted today
     let dateRegex = /\d\d\d\d-\d\d-\d\d [a-zA-Z]/
     let yyyymmdd  = new Date().toJSON().slice(0, 10)+' N' //pended._id date would be better but that is not available at group_level == 5.  Add it to view's key?
