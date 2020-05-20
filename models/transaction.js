@@ -313,12 +313,13 @@ exports.views = {
   },
 
   //*** 2. Filtered View  ***
+  //TODO get rid of "Currently" in title and move the pendedAt check into the view's key between to_id and group name.  This will allow use to search through previously pended groups as well for debugging purposes.
   'currently-pended-by-group-priority-generic':{
     map(doc) {
       if (require('nextAt')(doc)) return;
       var priority = typeof doc.next[0].pended.priority == 'undefined' ? false : doc.next[0].pended.priority
       var picked = doc.next[0].picked ? (doc.next[0].picked._id ? true : null) : false
-      var basket = doc.next[0].picked ? [doc.next[0].picked.matchType === 'missing', doc.next[0].picked.basket] : [] //include the matchtype bc dont wanna display baskets when == missing 
+      var basket = doc.next[0].picked ? [doc.next[0].picked.matchType === 'missing', doc.next[0].picked.basket] : [] //include the matchtype bc dont wanna display baskets when == missing
       require('pendedAt')(doc) && emit([require('to_id')(doc), doc.next[0].pended.group, priority, picked, basket, require('sortedBin')(doc)],[require('qty')(doc)])
     },
     reduce:'_stats'
