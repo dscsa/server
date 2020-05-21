@@ -28,7 +28,7 @@ module.exports = function(stream) {
         }
         else {//default to {} this is what other body parsers do in strict mode.  Not sure what we want to do here.
           try {
-            stream.body = JSON.parse(stream.body || '{}')
+            stream.body = csv.parseJSON(stream.body, {})
           } catch (err) {
             reject('Error: Invalid JSON\\n'+err.stack+'\\n'+stream.body)
           }
