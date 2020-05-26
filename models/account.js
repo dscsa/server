@@ -482,7 +482,7 @@ exports.pend = {
 
   //List of items pended with a given name
   async get(ctx, _id, group) {
-    const result = await ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[_id, group], endkey:[_id, group+'\uffff']})
+    const result = await ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[_id, group], endkey:[_id, group, {}]})
     ctx.req.body = result.rows.map(row => row.doc)
   },
 
@@ -624,7 +624,7 @@ function compensateForMissingTransaction(groupName, ctx){
 function unlockPickingData(groupName, ctx){
   console.log("locking group:", groupName);
 
-  return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName +'\uffff']})
+  return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName,{}]})
   .then(res => {
 
     if(!res.rows.length) return;
@@ -650,7 +650,7 @@ function loadPickingData(groupName, ctx){
     return ctx.db.account.get(ctx.account._id).then(account =>{
       ctx.account = account
 
-      return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName +'\uffff']})
+      return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName, {}]})
       .then(res => {
 
         if(!res.rows.length) return //TODO how to return error here
@@ -769,7 +769,7 @@ function prepShoppingData(raw_transactions, ctx) {
 function refreshGroupsToPick(ctx, today){
     console.log("refreshing groups")
 
-    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {startkey:[ctx.account._id], endkey:[ctx.account._id +'\uffff'], group_level:5})
+    return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {startkey:[ctx.account._id], endkey:[ctx.account._id, {}], group_level:5})
     .then(res => {
       //key = [account._id, group, priority, picked (true, false, null=locked), basket]
       let groups = {}
