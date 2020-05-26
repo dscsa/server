@@ -3,8 +3,8 @@
 let csv = require('csv/server')
 
 exports.get = async function (ctx, name) {
-  ctx.query.selector  = JSON.parse(ctx.query.selector)
-  ctx.query.open_revs = JSON.parse(ctx.query.open_revs || "null")
+  ctx.query.selector  = csv.parseJSON(ctx.query.selector)
+  ctx.query.open_revs = csv.parseJSON(ctx.query.open_revs)
   ctx.body = await ctx.db[name].get(ctx.query.selector.id, ctx.query)
 }
 

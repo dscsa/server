@@ -136,11 +136,13 @@ function setOrderFields(generic, account, res ) {
 
 exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  console.time('Get recordByGeneric')
+  const label = 'Get recordByGeneric '+Date.now()
+
+  console.time(label)
 
   let records = await getRecords(ctx, to_id, 'by-generic')
 
-  console.timeEnd('Get recordByGeneric')
+  console.timeEnd(label)
 
   records = mergeRecords(records)
 
@@ -151,26 +153,20 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
 
 exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  console.time('Get recordByFrom')
+  const label = 'Get recordByFrom '+Date.now()
+
+  console.time(label)
 
   let records = await getRecords(ctx, to_id, 'by-from-generic')
 
-  console.timeEnd('Get recordByFrom')
-  //console.time('Merge recordByFrom')
+  console.timeEnd(label)
 
   records = mergeRecords(records)
 
-  //console.timeEnd('Merge recordByFrom')
-  //console.time('Sort recordByFrom')
-
   records = sortRecords(records, to_id)
-
-  //console.timeEnd('Sort recordByFrom')
-  //console.time('To CSV recordByFrom')
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
 
-  //console.timeEnd('To CSV recordByFrom')
 }
 
 exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
@@ -185,25 +181,19 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
 
   //console.log('START: recordByUser','group:', ctx.query.group, 'group_level:', +ctx.query.group_level, 'default_level:', defaultLevel, 'denormalize:', denormalize)
 
-  console.time('Get recordByUser')
+  const label = 'Get recordByUser '+Date.now()
+  console.time(label)
 
   let [records, accounts] = await Promise.all([
     getRecords(ctx, to_id, 'by-user-from-shipment'),
     denormalize >= 1 ? this.db.account.allDocs({endkey:'_design', include_docs:true}) : null
   ])
 
-  console.timeEnd('Get recordByUser')
-  //console.time('Merge recordByUser')
+  console.timeEnd(label)
 
   records = mergeRecords(records)
 
-  //console.timeEnd('Merge recordByUser')
-  //console.time('Sort recordByUser')
-
   records = sortRecords(records)
-
-  //console.timeEnd('Sort recordByUser')
-  //console.time('Add Accounts recordByUser')
 
   if (accounts) {
     let accountMap = {}
@@ -215,11 +205,7 @@ exports.recordByUser = async function  (ctx, to_id) { //account._id will not be 
       record.value['shipment.from'] = accountMap[record.key[defaultLevel]]
   }
 
-  //console.timeEnd('Add Accounts recordByUser')
-  //console.time('To CSV recordByUser')
-
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder(accounts))
-  //console.timeEnd('To CSV recordByUser')
 }
 
 function defaultFieldOrder(shipment) {
@@ -274,7 +260,7 @@ function defaultFieldOrder(shipment) {
 }
 
 function startkey(key) {
-  return JSON.parse(key || '[]')
+  return csv.parseJSON(key, [])
 }
 
 function endkey(key) {
@@ -576,7 +562,7 @@ function compensateForMissingTransaction(groupName, ctx){
         return 0
       })
 
-      console.log("following items found: ", items)
+      //console.log("following items found: ", items)
 
       //TODO: be able to find multiple transactions, until aggregate qty exceeds missed_qty
       let result = [] //we'll add here and hopefully reach desired total
@@ -803,13 +789,18 @@ function sortOrders(a,b){ //given array of orders, sort appropriately.
     let urgency1 = a.key[2]
     let urgency2 = b.key[2]
 
+    if(urgency2 && !urgency1) return 1
     if(urgency1 && !urgency2) return -1
-    if(!urgency1 && urgency2) return 1
 
-    let group1 = a.key[1]
-    let group2 = b.key[1]
-    if(group1 > group2) return 1
-    if(group1 < group2) return -1
+    //Manually pended groups might not have a date.  If no date is set, then assume that it is wanted today
+    let dateRegex = /\d\d\d\d-\d\d-\d\d [a-zA-Z]/
+    let yyyymmdd  = new Date().toJSON().slice(0, 10)+' N' //pended._id date would be better but that is not available at group_level == 5.  Add it to view's key?
+    let group1 = a.key[1].match(dateRegex) ? a.key[1] : yyyymmdd+a.key[1]
+    let group2 = b.key[1].match(dateRegex) ? b.key[1] : yyyymmdd+b.key[1]
+
+    //They either both have prepended date or both do not have it
+    if (group1 > group2) return 1
+    if (group1 < group2) return -1
 
     let picked1 = a.key[3] == true
     let picked2 = b.key[3] == true
