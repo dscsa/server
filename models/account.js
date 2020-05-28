@@ -131,7 +131,35 @@ function setOrderFields(generic, account, res ) {
   return res
 }
 
+//Thin wrapper to transform a couchdb view into a csv with as little magic as possible
+exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { //account._id will not be set because google does not send cookie
 
+  const label = 'Get '+view_prefix+'-'+view_suffix+'.csv '+Date.now()
+
+  console.time(label)
+
+  let opts   = {
+    group_level:ctx.query.group_level,
+    startkey:[to_id].concat(ctx.query.startkey || ['']), //default to empty string because that is how the transaction's groupByDate works
+    endkey:[to_id].concat(ctx.query.endkey || ['',{}])   //default to empty string because that is how the transaction's groupByDate works.  Add in {} so we get all results by default
+  }
+
+  let query = await ctx.db.transaction.query(view_prefix+'-'+view_suffix, opts)
+
+  let merged = {}
+
+  mergeRecord(merged, query, view_prefix, uniqueKey)
+
+  let records = sortRecords(merged)
+
+  //console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'query', query, 'merged', merged, 'records', records)
+
+  console.timeEnd(label)
+
+  const fields = ctx.query.fields || ['count.'+view_prefix, 'qty.'+view_prefix, 'value.'+view_prefix]
+
+  ctx.body = csv.fromJSON(records, fields)
+}
 
 
 exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie

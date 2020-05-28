@@ -234,17 +234,21 @@ keys(function() {
     .get(models.account.dispose)
 
 
-  r('/account/:id/inventory.csv')     //Allow user to get, modify, & delete docs
+  r('/account/:id/inventory.csv')
     .get(models.account.inventory)
 
-  r('/account/:id/record-by-generic.csv')     //Allow user to get, modify, & delete docs
+  r('/account/:id/record-by-generic.csv')
     .get(models.account.recordByGeneric)
 
-  r('/account/:id/record-by-user.csv')     //Allow user to get, modify, & delete docs
+  r('/account/:id/record-by-user.csv')
     .get(models.account.recordByUser)
 
-  r('/account/:id/record-by-from.csv')     //Allow user to get, modify, & delete docs
+  r('/account/:id/record-by-from.csv')
     .get(models.account.recordByFrom)
+
+  r('/account/:id/:view_prefix-:view_suffix.csv')
+    .get(models.account.recordByView)
+
 
   r('/:model/:id')
     .get(async function(ctx, db, id) {
