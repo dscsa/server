@@ -146,11 +146,11 @@ exports.recordByView = async function  (ctx, to_id, view) { //account._id will n
 
   let records = await ctx.db.transaction.query(view, opts)
 
-  console.log('recordByView', view, opts, records)
+  console.log('recordByView', view, opts, 'num results', records.rows.length)
 
   console.timeEnd(label)
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
+  ctx.body = csv.fromJSON(records.rows, ctx.query.fields || defaultFieldOrder())
 }
 
 
