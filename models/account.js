@@ -140,8 +140,8 @@ exports.recordByView = async function  (ctx, to_id, view) { //account._id will n
 
   let opts   = {
     group_level:ctx.query.group_level,
-    startkey:[to_id].concat(ctx.query.startkey),
-    endkey:[to_id].concat(ctx.query.endkey)
+    startkey:[to_id].concat(ctx.query.startkey || []),
+    endkey:[to_id].concat(ctx.query.endkey || [])
   }
 
   let records = await ctx.db.transaction.query(view, opts)
