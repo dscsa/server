@@ -246,7 +246,7 @@ keys(function() {
   r('/account/:id/record-by-from.csv')
     .get(models.account.recordByFrom)
 
-  r('/account/:id/:view.csv')
+  r('/account/:id/:view_prefix-:view_suffix.csv')
     .get(models.account.recordByView)
 
 
