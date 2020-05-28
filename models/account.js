@@ -156,9 +156,12 @@ exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { 
 
   console.timeEnd(label)
 
-  const fields = ctx.query.fields || ['count.'+view_prefix, 'qty.'+view_prefix, 'value.'+view_prefix]
+  let defaultFields = ['count.'+view_prefix, 'qty.'+view_prefix, 'value.'+view_prefix]
 
-  ctx.body = csv.fromJSON(records, fields)
+  if (ctx.query.group_level > 2)
+    defaultFields.unshift('key.0')
+
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFields)
 }
 
 
