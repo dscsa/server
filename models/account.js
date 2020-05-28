@@ -131,7 +131,25 @@ function setOrderFields(generic, account, res ) {
   return res
 }
 
+//Thin wrapper to transform a couchdb view into a csv with as little magic as possible
+exports.recordByView = async function  (ctx, to_id, view) { //account._id will not be set because google does not send cookie
 
+  const label = 'Get '+view+'.csv '+Date.now()
+
+  console.time(label)
+
+  let opts   = {
+    group_level:ctx.query.group_level,
+    startkey:[to_id].concat(ctx.query.startkey),
+    endkey:[to_id].concat(ctx.query.endkey)
+  }
+
+  let records = optionalField(ctx, view, opts)
+
+  console.timeEnd(label)
+
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
+}
 
 
 exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
