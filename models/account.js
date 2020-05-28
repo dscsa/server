@@ -134,7 +134,7 @@ function setOrderFields(generic, account, res ) {
 //Thin wrapper to transform a couchdb view into a csv with as little magic as possible
 exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { //account._id will not be set because google does not send cookie
 
-  const label = 'Get '+view+'.csv '+Date.now()
+  const label = 'Get '+view_prefix+'-'+view_suffix+'.csv '+Date.now()
 
   console.time(label)
 
@@ -150,7 +150,7 @@ exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { 
 
   mergeRecord(merged, records, view_prefix, uniqueKey)
 
-  console.log('recordByView', view, opts, 'merged', merged.length, 'num results', records.rows.length)
+  console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'merged', merged.length, 'num results', records.rows.length)
 
   console.timeEnd(label)
 
