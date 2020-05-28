@@ -150,6 +150,8 @@ exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { 
 
   mergeRecord(merged, records, view_prefix, uniqueKey)
 
+  merged = sortRecords(merged)
+
   console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'merged', merged.length, 'num results', records.rows.length)
 
   console.timeEnd(label)
