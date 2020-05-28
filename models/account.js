@@ -152,11 +152,13 @@ exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { 
 
   let records = sortRecords(merged)
 
-  console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'query', query, 'merged', merged, 'records', records)
+  //console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'query', query, 'merged', merged, 'records', records)
 
   console.timeEnd(label)
 
-  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
+  const fields = ctx.query.fields || ['count.'+view_prefix, 'qty.'+view_prefix, 'value.'+view_prefix]
+
+  ctx.body = csv.fromJSON(records, fields)
 }
 
 
