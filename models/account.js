@@ -144,7 +144,9 @@ exports.recordByView = async function  (ctx, to_id, view) { //account._id will n
     endkey:[to_id].concat(ctx.query.endkey)
   }
 
-  let records = optionalField(ctx, view, opts)
+  let records = ctx.db.transaction.query(view, opts)
+
+  console.log('recordByView', view, opts, records)
 
   console.timeEnd(label)
 
