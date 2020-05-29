@@ -143,7 +143,7 @@ exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { 
     endkey:[to_id].concat(ctx.query.endkey || ['',{}])   //default to empty string because that is how the transaction's groupByDate works.  Add in {} so we get all results by default
   }
 
-  opts.group_level = ctx.query.group_level ? ctx.query.group_level+2 :  opts.endkey.length
+  opts.group_level = ctx.query.group_level ? +ctx.query.group_level+2 : opts.endkey.length
 
   let query = await ctx.db.transaction.query(view_prefix+'-'+view_suffix, opts)
 
