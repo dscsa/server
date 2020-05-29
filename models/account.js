@@ -139,10 +139,11 @@ exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { 
   console.time(label)
 
   let opts   = {
-    group_level:ctx.query.group_level,
     startkey:[to_id].concat(ctx.query.startkey || ['']), //default to empty string because that is how the transaction's groupByDate works
     endkey:[to_id].concat(ctx.query.endkey || ['',{}])   //default to empty string because that is how the transaction's groupByDate works.  Add in {} so we get all results by default
   }
+
+  opts.group_level = ctx.query.group_level ? ctx.query.group_level+2 :  opts.endkey.length
 
   let query = await ctx.db.transaction.query(view_prefix+'-'+view_suffix, opts)
 
@@ -152,11 +153,11 @@ exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { 
 
   let records = sortRecords(merged)
 
-  //console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'query', query, 'merged', merged, 'records', records)
+  console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'query', query.length, 'merged', merged.length, 'records', records.length)
 
   console.timeEnd(label)
 
-  let defaultFields = ['key.0','key.1','key.2','key.3'].slice(0, Math.max(opts.group_level-2, 0))
+  let defaultFields = ['key.0','key.1','key.2','key.3'].slice(0, opts.group_level-2)
 
   defaultFields.push('count.'+view_prefix, 'qty.'+view_prefix, 'value.'+view_prefix)
 
