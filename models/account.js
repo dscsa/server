@@ -132,17 +132,15 @@ function setOrderFields(generic, account, res ) {
 }
 
 //Thin wrapper to transform a couchdb view into a csv with as little magic as possible
-exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { //account._id will not be set because google does not send cookie
+exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //account._id will not be set because google does not send cookie
 
   const label = 'Get '+view_prefix+'-'+view_suffix+'.csv '+Date.now()
 
   console.time(label)
 
-  let opts   = {
-    group_level:ctx.query.group_level,
-    startkey:[to_id].concat(ctx.query.startkey || ['']), //default to empty string because that is how the transaction's groupByDate works
-    endkey:[to_id].concat(ctx.query.endkey || ['',{}])   //default to empty string because that is how the transaction's groupByDate works.  Add in {} so we get all results by default
-  }
+  let opts = getOpts(ctx, to_id)
+
+  opts = view_prefix == 'inventory' ? opts.inventory : opts.date
 
   let query = await ctx.db.transaction.query(view_prefix+'-'+view_suffix, opts)
 
@@ -152,17 +150,18 @@ exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { 
 
   let records = sortRecords(merged)
 
-  //console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'query', query, 'merged', merged, 'records', records)
+  console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'params', ctx.query, 'query', query.length, 'merged', merged.length, 'records', records.length)
 
   console.timeEnd(label)
 
-  const fields = ctx.query.fields || ['count.'+view_prefix, 'qty.'+view_prefix, 'value.'+view_prefix]
+  let defaultFields = ['key.0','key.1','key.2','key.3','key.4','key.5','key.6','key.7','key.8','key.9'].slice(0, opts.group_level-2)
 
-  ctx.body = csv.fromJSON(records, fields)
+  defaultFields.push('count.'+view_prefix, 'qty.'+view_prefix, 'value.'+view_prefix)
+
+  ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFields)
 }
 
-
-exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
+exports.recordByGeneric = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
   const label = 'Get recordByGeneric '+Date.now()
 
@@ -179,7 +178,7 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
 }
 
-exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
+exports.recordByFrom = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
   const label = 'Get recordByFrom '+Date.now()
 
@@ -194,10 +193,9 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
   records = sortRecords(records, to_id)
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
-
 }
 
-exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
+exports.recordByUser = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
   //If group_level by From or Shipment, let's add in some demornalized accout data that we can use in the V1 & V2 Merge gSheet
   //Baseline is group by [to_id, user], we need at least [to_id, user, from] in order to add account data.
@@ -295,11 +293,12 @@ function endkey(key) {
   return [...startkey(key), {}]
 }
 
-async function getRecords(ctx, to_id, suffix) {
-  //TODO Enable people to pick only certain fields so we don't need all these queries
-  ///We can also reduce the lines of code by doing a for-loop accross the stages
+function getOpts(ctx, to_id) {
+
   let group  = ctx.query.group || ''
-  let opts   = {
+  let opts   = {}
+
+  opts.date  = {
     group_level:default_group_level(group).groupByDate,
     startkey:[to_id, group].concat(startkey(ctx.query.startkey)),
     endkey:[to_id, group].concat(endkey(ctx.query.endkey))
@@ -308,7 +307,8 @@ async function getRecords(ctx, to_id, suffix) {
   //Unlike the others inventory dates can be in the future (e.g, emitted every month until they expire).  We only want ones in
   //the past emit([to_id, 'month', year, month, doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, sortedDrug, doc.bin], val)
   let invDate = group ? [] : currentDate(1, true).slice(0, 2)
-  let invOpts = {
+
+  opts.inventory = {
     group_level:default_group_level(group).groupByInv + invDate.length,
     startkey:[to_id, group || 'month'].concat(invDate).concat(startkey(ctx.query.startkey)),
       endkey:[to_id, group || 'month'].concat(invDate).concat(endkey(ctx.query.endkey))
@@ -317,29 +317,38 @@ async function getRecords(ctx, to_id, suffix) {
   //Advanced use cases (Form 8283) might call for specifying a custom group level
   if (ctx.query.group_level) {
     //console.log('group_level', invOpts.group_level, ctx.query.group_level, opts.group_level)
-    invOpts.group_level += +ctx.query.group_level + 2 - opts.group_level //we keep the inventory Group level relative to the new, custom group_level
-    opts.group_level     = +ctx.query.group_level + 2
+    opts.inventory.group_level += +ctx.query.group_level + 2 - opts.date.group_level //we keep the inventory Group level relative to the new, custom group_level
+    opts.date.group_level       = +ctx.query.group_level + 2
   }
+
+  return opts
+}
+
+async function getRecords(ctx, to_id, suffix) {
+
+  let group = ctx.query.group || ''
+  let opts  = getOpts(ctx, to_id)
+
 
   //console.log('getRecords', 'opts', opts)
 
   //Inventory cannot be kept by day because expiration date is kept by month.
   //Might be possible to eventually get it for custom group_level but doesn't seem worth trying to figure that out now.
   let queries = [
-    optionalField(ctx, 'entered-'+suffix, opts),
-    optionalField(ctx, 'refused-'+suffix, opts),
-    optionalField(ctx, 'verified-'+suffix, opts),
-    optionalField(ctx, 'expired-'+suffix, opts),
-    optionalField(ctx, 'disposed-'+suffix, opts),
-    optionalField(ctx, 'dispensed-'+suffix, opts),
-    optionalField(ctx, 'pended-'+suffix, opts),
-    optionalField(ctx, 'picked-'+suffix, opts),
-    optionalField(ctx, 'repacked-'+suffix, opts),
+    optionalField(ctx, 'entered-'+suffix, opts.date),
+    optionalField(ctx, 'refused-'+suffix, opts.date),
+    optionalField(ctx, 'verified-'+suffix, opts.date),
+    optionalField(ctx, 'expired-'+suffix, opts.date),
+    optionalField(ctx, 'disposed-'+suffix, opts.date),
+    optionalField(ctx, 'dispensed-'+suffix, opts.date),
+    optionalField(ctx, 'pended-'+suffix, opts.date),
+    optionalField(ctx, 'picked-'+suffix, opts.date),
+    optionalField(ctx, 'repacked-'+suffix, opts.date),
   ]
 
   if (group === '' || group === 'month' || group === 'year') //inventory is not kept by day and other groupings not listed here
     //console.log('getRecords', 'invOpts', invOpts)
-    queries.push(optionalField(ctx, 'inventory-'+suffix, invOpts).then(res => {
+    queries.push(optionalField(ctx, 'inventory-'+suffix, opts.inventory).then(res => {
       //console.log('res', res && res.rows)
       group || res && res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
       return res
