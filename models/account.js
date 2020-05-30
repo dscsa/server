@@ -161,7 +161,6 @@ exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFields)
 }
 
-
 exports.recordByGeneric = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
   const label = 'Get recordByGeneric '+Date.now()
@@ -194,7 +193,6 @@ exports.recordByFrom = async function(ctx, to_id) { //account._id will not be se
   records = sortRecords(records, to_id)
 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
-
 }
 
 exports.recordByUser = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
