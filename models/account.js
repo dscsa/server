@@ -145,6 +145,8 @@ exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //
 
   opts.group_level = ctx.query.group_level ? +ctx.query.group_level+2 : opts.endkey.length
 
+  console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'params', ctx.query)
+
   let query = await ctx.db.transaction.query(view_prefix+'-'+view_suffix, opts)
 
   let merged = {}
@@ -153,7 +155,7 @@ exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //
 
   let records = sortRecords(merged)
 
-  console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'params', ctx.query, 'query', query.length, 'merged', merged.length, 'records', records.length)
+  console.log('recordByView', view_prefix+'-'+view_suffix, 'query', query.length, 'merged', merged.length, 'records', records.length)
 
   console.timeEnd(label)
 
