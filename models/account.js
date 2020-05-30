@@ -143,10 +143,11 @@ exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //
     endkey:[to_id].concat(ctx.query.endkey ? JSON.parse(ctx.query.endkey) : ['',{}])   //default to empty string because that is how the transaction's groupByDate works.  Add in {} so we get all results by default
   }
 
-  opts.group_level = opts.endkey.length //Default to a group_level implied by view name
+  //Default to a group_level implied by view name
+  opts.group_level = opts.endkey.length
 
-  if (ctx.query.group_level) //enable 'false' and 'null' in addition to '-1' to show a group_level of 0
-    opts.group_level = (ctx.query.group_level == 'false' || ctx.query.group_level == 'null') ? 0 : +ctx.query.group_level+1
+  if (ctx.query.group_level) //Make false, none, null work in addition to -2 for displaying fully aggregated (non-grouped) results
+    opts.group_level = ~ ['false', 'none', 'null'].indexOf(ctx.query.group_level) ? 0 : +ctx.query.group_level+2
 
   let query = await ctx.db.transaction.query(view_prefix+'-'+view_suffix, opts)
 
@@ -160,7 +161,7 @@ exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //
 
   console.timeEnd(label)
 
-  let defaultFields = ['key.0','key.1','key.2','key.3','key.4','key.5','key.6','key.7','key.8','key.9'].slice(0, opts.group_level-1)
+  let defaultFields = ['key.0','key.1','key.2','key.3','key.4','key.5','key.6','key.7','key.8','key.9'].slice(0, opts.group_level-2)
 
   defaultFields.push('count.'+view_prefix, 'qty.'+view_prefix, 'value.'+view_prefix)
 
