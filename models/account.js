@@ -138,16 +138,7 @@ exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //
 
   console.time(label)
 
-  let opts   = {
-    startkey:[to_id].concat(ctx.query.startkey ? JSON.parse(ctx.query.startkey) : ['']), //default to empty string because that is how the transaction's groupByDate works
-    endkey:[to_id].concat(ctx.query.endkey ? JSON.parse(ctx.query.endkey) : ['',{}])   //default to empty string because that is how the transaction's groupByDate works.  Add in {} so we get all results by default
-  }
-
-  //Default to a group_level implied by view name
-  opts.group_level = opts.endkey.length
-
-  if (ctx.query.group_level) //Make false, none, null work in addition to -2 for displaying fully aggregated (non-grouped) results
-    opts.group_level = ~ ['false', 'none', 'null'].indexOf(ctx.query.group_level) ? 0 : +ctx.query.group_level+2
+  let opts  = getOpts(ctx, to_id)
 
   let query = await ctx.db.transaction.query(view_prefix+'-'+view_suffix, opts)
 
@@ -302,11 +293,12 @@ function endkey(key) {
   return [...startkey(key), {}]
 }
 
-async function getRecords(ctx, to_id, suffix) {
-  //TODO Enable people to pick only certain fields so we don't need all these queries
-  ///We can also reduce the lines of code by doing a for-loop accross the stages
+function getOpts(ctx, to_id) {
+
   let group  = ctx.query.group || ''
-  let opts   = {
+  let opts   = {}
+
+  opts.date  = {
     group_level:default_group_level(group).groupByDate,
     startkey:[to_id, group].concat(startkey(ctx.query.startkey)),
     endkey:[to_id, group].concat(endkey(ctx.query.endkey))
@@ -315,7 +307,8 @@ async function getRecords(ctx, to_id, suffix) {
   //Unlike the others inventory dates can be in the future (e.g, emitted every month until they expire).  We only want ones in
   //the past emit([to_id, 'month', year, month, doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, sortedDrug, doc.bin], val)
   let invDate = group ? [] : currentDate(1, true).slice(0, 2)
-  let invOpts = {
+
+  opts.inventory = {
     group_level:default_group_level(group).groupByInv + invDate.length,
     startkey:[to_id, group || 'month'].concat(invDate).concat(startkey(ctx.query.startkey)),
       endkey:[to_id, group || 'month'].concat(invDate).concat(endkey(ctx.query.endkey))
@@ -324,29 +317,38 @@ async function getRecords(ctx, to_id, suffix) {
   //Advanced use cases (Form 8283) might call for specifying a custom group level
   if (ctx.query.group_level) {
     //console.log('group_level', invOpts.group_level, ctx.query.group_level, opts.group_level)
-    invOpts.group_level += +ctx.query.group_level + 2 - opts.group_level //we keep the inventory Group level relative to the new, custom group_level
-    opts.group_level     = +ctx.query.group_level + 2
+    opts.inventory.group_level += +ctx.query.group_level + 2 - opts.date.group_level //we keep the inventory Group level relative to the new, custom group_level
+    opts.date.group_level       = +ctx.query.group_level + 2
   }
+
+  return opts
+}
+
+async function getRecords(ctx, to_id, suffix) {
+
+  let group = ctx.query.group || ''
+  let opts  = getOpts(ctx, to_id)
+
 
   //console.log('getRecords', 'opts', opts)
 
   //Inventory cannot be kept by day because expiration date is kept by month.
   //Might be possible to eventually get it for custom group_level but doesn't seem worth trying to figure that out now.
   let queries = [
-    optionalField(ctx, 'entered-'+suffix, opts),
-    optionalField(ctx, 'refused-'+suffix, opts),
-    optionalField(ctx, 'verified-'+suffix, opts),
-    optionalField(ctx, 'expired-'+suffix, opts),
-    optionalField(ctx, 'disposed-'+suffix, opts),
-    optionalField(ctx, 'dispensed-'+suffix, opts),
-    optionalField(ctx, 'pended-'+suffix, opts),
-    optionalField(ctx, 'picked-'+suffix, opts),
-    optionalField(ctx, 'repacked-'+suffix, opts),
+    optionalField(ctx, 'entered-'+suffix, opts.date),
+    optionalField(ctx, 'refused-'+suffix, opts.date),
+    optionalField(ctx, 'verified-'+suffix, opts.date),
+    optionalField(ctx, 'expired-'+suffix, opts.date),
+    optionalField(ctx, 'disposed-'+suffix, opts.date),
+    optionalField(ctx, 'dispensed-'+suffix, opts.date),
+    optionalField(ctx, 'pended-'+suffix, opts.date),
+    optionalField(ctx, 'picked-'+suffix, opts.date),
+    optionalField(ctx, 'repacked-'+suffix, opts.date),
   ]
 
   if (group === '' || group === 'month' || group === 'year') //inventory is not kept by day and other groupings not listed here
     //console.log('getRecords', 'invOpts', invOpts)
-    queries.push(optionalField(ctx, 'inventory-'+suffix, invOpts).then(res => {
+    queries.push(optionalField(ctx, 'inventory-'+suffix, opts.inventory).then(res => {
       //console.log('res', res && res.rows)
       group || res && res.rows.forEach(row => { row.key[1] = ''; row.key.splice(2, 2)}) //remove year and month from keys if no grouping is specified
       return res
