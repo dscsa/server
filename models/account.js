@@ -139,13 +139,11 @@ exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //
   console.time(label)
 
   let opts   = {
-    startkey:[to_id].concat(ctx.query.startkey || ['']), //default to empty string because that is how the transaction's groupByDate works
-    endkey:[to_id].concat(ctx.query.endkey || ['',{}])   //default to empty string because that is how the transaction's groupByDate works.  Add in {} so we get all results by default
+    startkey:[to_id].concat(ctx.query.startkey ? JSON.parse(ctx.query.startkey) : ['']), //default to empty string because that is how the transaction's groupByDate works
+    endkey:[to_id].concat(ctx.query.endkey ? JSON.parse(ctx.query.endkey) : ['',{}])   //default to empty string because that is how the transaction's groupByDate works.  Add in {} so we get all results by default
   }
 
   opts.group_level = ctx.query.group_level ? +ctx.query.group_level+2 : opts.endkey.length
-
-  console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'params', ctx.query)
 
   let query = await ctx.db.transaction.query(view_prefix+'-'+view_suffix, opts)
 
@@ -155,7 +153,7 @@ exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //
 
   let records = sortRecords(merged)
 
-  console.log('recordByView', view_prefix+'-'+view_suffix, 'query', query.length, 'merged', merged.length, 'records', records.length)
+  console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'params', ctx.query, 'query', query.length, 'merged', merged.length, 'records', records.length)
 
   console.timeEnd(label)
 
