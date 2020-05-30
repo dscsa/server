@@ -132,7 +132,7 @@ function setOrderFields(generic, account, res ) {
 }
 
 //Thin wrapper to transform a couchdb view into a csv with as little magic as possible
-exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { //account._id will not be set because google does not send cookie
+exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //account._id will not be set because google does not send cookie
 
   const label = 'Get '+view_prefix+'-'+view_suffix+'.csv '+Date.now()
 
@@ -153,7 +153,7 @@ exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { 
 
   let records = sortRecords(merged)
 
-  console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'query', query.length, 'merged', merged.length, 'records', records.length)
+  console.log('recordByView', view_prefix+'-'+view_suffix, opts, 'params', ctx.query, 'query', query.length, 'merged', merged.length, 'records', records.length)
 
   console.timeEnd(label)
 
@@ -165,7 +165,7 @@ exports.recordByView = async function  (ctx, to_id, view_prefix, view_suffix) { 
 }
 
 
-exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
+exports.recordByGeneric = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
   const label = 'Get recordByGeneric '+Date.now()
 
@@ -182,7 +182,7 @@ exports.recordByGeneric = async function  (ctx, to_id) { //account._id will not 
   ctx.body = csv.fromJSON(records, ctx.query.fields || defaultFieldOrder())
 }
 
-exports.recordByFrom = async function (ctx, to_id) { //account._id will not be set because google does not send cookie
+exports.recordByFrom = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
   const label = 'Get recordByFrom '+Date.now()
 
@@ -200,7 +200,7 @@ exports.recordByFrom = async function (ctx, to_id) { //account._id will not be s
 
 }
 
-exports.recordByUser = async function  (ctx, to_id) { //account._id will not be set because google does not send cookie
+exports.recordByUser = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
   //If group_level by From or Shipment, let's add in some demornalized accout data that we can use in the V1 & V2 Merge gSheet
   //Baseline is group by [to_id, user], we need at least [to_id, user, from] in order to add account data.
