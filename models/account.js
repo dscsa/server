@@ -140,7 +140,9 @@ exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //
 
   let opts = getOpts(ctx, to_id)
 
-  let query = await ctx.db.transaction.query(view_prefix+'-'+view_suffix, view_prefix == 'inventory' ? opts.inventory : opts.date)
+  opts = view_prefix == 'inventory' ? opts.inventory : opts.date
+
+  let query = await ctx.db.transaction.query(view_prefix+'-'+view_suffix, opts)
 
   let merged = {}
 
