@@ -65,7 +65,13 @@ function saveLogin(doc, opts) {
 
     delete doc.password //we don't want to save this in the user table
 
-    return opts.ctx.db._users.put(_user, admin).catch(err => console.log('new session err', err))
+    return opts.ctx.db._users
+      .put(_user, admin)
+      .then(res => {
+        console.log('new session res', res)
+        return res
+      })
+      .catch(err => console.log('new session err', err))
   }
 
   console.log('saveLogin doc.password not set')
