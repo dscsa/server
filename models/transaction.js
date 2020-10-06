@@ -288,7 +288,7 @@ exports.views = {
   //*** 2. Server (Private) Endpoints ***
   //Used by history
   'next.transaction._id':function(doc) {
-    var transaction_arr = doc.next[0].repacked ? doc.next[0].repacked.transactions : []
+    var transaction_arr = (doc.next[0] && doc.next[0].repacked) ? doc.next[0].repacked.transactions : []
     for (var i in transaction_arr)
       transaction_arr[i] && emit(transaction_arr[i]._id)
   },
@@ -569,21 +569,21 @@ exports.views = {
 
   'pended-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'pended', [doc.next[0].pended && doc.next[0].pended.user ? doc.next[0].pended.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+      require('groupByDate')(emit, doc, 'pended', [doc.next[0] && doc.next[0].pended && doc.next[0].pended.user ? doc.next[0].pended.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
   'picked-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'picked', [doc.next[0].picked && doc.next[0].picked.user ? doc.next[0].picked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+      require('groupByDate')(emit, doc, 'picked', [doc.next[0] && doc.next[0].picked && doc.next[0].picked.user ? doc.next[0].picked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
 
   'repacked-by-user-from-shipment':{
     map(doc) {
-      require('groupByDate')(emit, doc, 'repacked', [doc.next[0].repacked && doc.next[0].repacked.user ? doc.next[0].repacked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
+      require('groupByDate')(emit, doc, 'repacked', [doc.next[0] && doc.next[0].repacked && doc.next[0].repacked.user ? doc.next[0].repacked.user._id : '', require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
   },
