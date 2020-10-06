@@ -30,6 +30,7 @@ module.exports = function(stream) {
           try {
             stream.body = csv.parseJSON(stream.body, {})
           } catch (err) {
+            console.error(new Date().toJSON(), 'body.js parseJSON error', stream.url, stream.headers, stream)
             reject('Error: Invalid JSON\\n'+err.stack+'\\n'+stream.body)
           }
         }
