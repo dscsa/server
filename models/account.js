@@ -30,6 +30,10 @@ exports.views = {
 
 exports.get_csv = async function (ctx, db) {
   let view = await ctx.db.account.allDocs({endkey:'_design', include_docs:true})
+
+  for (let account of view.rows)
+    delete account.ordered
+
   ctx.body = csv.fromJSON(view.rows, ctx.query.fields)
   ctx.type = 'text/csv'
 }
