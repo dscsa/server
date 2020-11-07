@@ -233,7 +233,6 @@ keys(function() {
   r('/account/:id/dispose')
     .get(models.account.dispose)
 
-
   r('/account/:id/inventory.csv')
     .get(models.account.inventory)
 

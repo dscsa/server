@@ -132,6 +132,17 @@ exports.lib = {
     return date.toJSON().slice(0, 10).split('-')
   },
 
+  //magic bin is the placeholder while they use/dispense it
+  //M00 = monday
+  //T00 = tuesday
+  //W00 = wednesday
+  //R00 = THURSDAY
+  //F00 = Friday
+  //X00, Y00, Z00 can also be used for weekends or miscellaneous
+  isMagicBin(doc) {
+    return doc.bin && ~ ['M00', 'T00', 'W00', 'R00', 'F00', 'S00', 'X00', 'Y00', 'Z00'].indexOf(doc.bin)
+  },
+
   //This includes unpulled expired, no-way to remove those from view
   //removes all pended, dispensed, disposed, and previous (repacked)
   isInventory(doc) {
@@ -335,11 +346,6 @@ exports.views = {
   //always shop for extra
   //extra goes into prepack shelf
   //the ac
-  //magic bin is the placeholder while they use/dispense it
-  //M00 = monday
-  //T00 = tuesday
-  //W00 = wednesday
-  //X00, Y00 were before the day by
   /*
     its a repacked bottle thatll prbably be dispensed
     cindy ispense
@@ -444,6 +450,7 @@ exports.views = {
 
   'inventory-by-generic':{
     map(doc) {
+      if (require('isMagicBin')(doc)) return
       require('inventory')(emit, doc, [doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
@@ -517,6 +524,7 @@ exports.views = {
 
   'inventory-by-from-generic':{
     map(doc) {
+      if (require('isMagicBin')(doc)) return
       require('inventory')(emit, doc, [require('from_id')(doc), doc.drug.generic, doc.drug.gsns, doc.drug.brand, doc.drug._id, doc.exp.to || doc.exp.from, require('sortedBin')(doc), doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
@@ -590,6 +598,7 @@ exports.views = {
 
   'inventory-by-user-from-shipment':{
     map(doc) {
+      if (require('isMagicBin')(doc)) return
       require('inventory')(emit, doc, [doc.user._id, require('from_id')(doc), doc.shipment._id, doc.bin, doc._id], [require('qty')(doc), require('value')(doc)])
     },
     reduce:'_stats'
