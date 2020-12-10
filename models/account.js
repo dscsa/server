@@ -532,7 +532,7 @@ exports.pend = {
     */
 
     ctx.req.body = ctx.req.body.reduce(doc => {
-      return doc.next[0] && doc.drug.generic == generic && ! doc.next[0].picked
+      return doc.next[0] && ! doc.next[0].picked && ( ! generic || doc.drug.generic == generic)
     })
 
     ctx.account  = {_id}

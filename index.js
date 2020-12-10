@@ -226,7 +226,7 @@ keys(function() {
   r('/account/:id/pend/:name')
     .post(models.account.pend.post)
 
-  r('/account/:id/pend/:name/:generic')
+  r('/account/:id/pend/:name/:generic?')
     .del(models.account.pend.delete)
 
   r('/account/:id/dispense')
