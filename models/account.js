@@ -522,9 +522,19 @@ exports.pend = {
   },
 
   //Unpend all requests that match a name
-  async delete(ctx, _id, group) {
+  async delete(ctx, _id, group, generic) {
 
     await exports.pend.get(ctx, _id, group)
+
+    /*
+    //If we have picked items already for a canceled order then don't unpend or it will be hard to return them to inventory
+    //Don't do this yet because they will get repacked (and risk being short-dated) if we don't unpend
+    */
+
+    ctx.req.body = ctx.req.body.reduce(doc => {
+      return doc.next[0] && doc.drug.generic == generic && ! doc.next[0].picked
+    })
+
     ctx.account  = {_id}
     ctx.body     = await updateNext(ctx, 'pended', null)
   }
