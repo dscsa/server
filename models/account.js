@@ -508,9 +508,11 @@ exports.authorized = {
 exports.pend = {
 
   //List of items pended with a given name
-  async get(ctx, _id, group) {
+  async get(ctx, _id, group, generic) {
     const result = await ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[_id, group], endkey:[_id, group, {}]})
-    ctx.req.body = result.rows.map(row => row.doc)
+    ctx.req.body = result.rows.map(row => row.doc).reduce(doc => {
+      return ! generic || doc.drug.generic == generic
+    })
   },
 
   //Body of request has all the transaction that you wish to pend under a name
@@ -524,7 +526,7 @@ exports.pend = {
   //Unpend all requests that match a name
   async delete(ctx, _id, group, generic) {
 
-    await exports.pend.get(ctx, _id, group)
+    await exports.pend.get(ctx, _id, group, generic)
 
     /*
     //If we have picked items already for a canceled order then don't unpend or it will be hard to return them to inventory
@@ -532,7 +534,7 @@ exports.pend = {
     */
 
     ctx.req.body = ctx.req.body.reduce(doc => {
-      return doc.next[0] && ! doc.next[0].picked && ( ! generic || doc.drug.generic == generic)
+      return doc.next[0] && ! doc.next[0].picked
     })
 
     ctx.account  = {_id}
