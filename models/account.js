@@ -509,8 +509,10 @@ exports.pend = {
 
   //List of items pended with a given name
   async get(ctx, _id, group, generic) {
+
     const result = await ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[_id, group], endkey:[_id, group, {}]})
-    ctx.req.body = result.rows.map(row => row.doc).reduce(doc => {
+
+    ctx.req.body = result.rows.map(row => row.doc).filter(doc => {
       return ! generic || doc.drug.generic == generic
     })
   },
@@ -533,7 +535,7 @@ exports.pend = {
     //Don't do this yet because they will get repacked (and risk being short-dated) if we don't unpend
     */
 
-    ctx.req.body = ctx.req.body.reduce(doc => {
+    ctx.req.body = ctx.req.body.filter(doc => {
       return doc.next[0] && ! doc.next[0].picked
     })
 
