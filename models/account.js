@@ -138,7 +138,7 @@ function setOrderFields(generic, account, res ) {
 //Thin wrapper to transform a couchdb view into a csv with as little magic as possible
 exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //account._id will not be set because google does not send cookie
 
-  const label = 'Get '+view_prefix+'-'+view_suffix+'.csv '+Date.now()
+  const label = new Date().toJSON()+' '+view_prefix+'-'+view_suffix+'.csv '+ctx.request.origin+' ('+ctx.request.ip+') '+ctx.request.href
 
   console.time(label)
 
@@ -167,7 +167,7 @@ exports.recordByView = async function(ctx, to_id, view_prefix, view_suffix) { //
 
 exports.recordByGeneric = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  const label = 'Get recordByGeneric '+Date.now()
+  const label = new Date().toJSON()+' get recordByGeneric '+ctx.request.origin+' ('+ctx.request.ip+') '+ctx.request.href
 
   console.time(label)
 
@@ -184,7 +184,7 @@ exports.recordByGeneric = async function(ctx, to_id) { //account._id will not be
 
 exports.recordByFrom = async function(ctx, to_id) { //account._id will not be set because google does not send cookie
 
-  const label = 'Get recordByFrom '+Date.now()
+  const label = new Date().toJSON()+' get recordByFrom '+ctx.request.origin+' ('+ctx.request.ip+') '+ctx.request.href
 
   console.time(label)
 
@@ -211,7 +211,7 @@ exports.recordByUser = async function(ctx, to_id) { //account._id will not be se
 
   //console.log('START: recordByUser','group:', ctx.query.group, 'group_level:', +ctx.query.group_level, 'default_level:', defaultLevel, 'denormalize:', denormalize)
 
-  const label = 'Get recordByUser '+Date.now()
+  const label = new Date().toJSON()+' get recordByUser '+ctx.request.origin+' ('+ctx.request.ip+') '+ctx.request.href
   console.time(label)
 
   let [records, accounts] = await Promise.all([
@@ -516,7 +516,7 @@ exports.pend = {
       return ! generic || doc.drug.generic == generic
     })
 
-    console.log('account/pend.get', group, generic, ctx.body)
+    console.log('account/pend.get', group, generic, ctx.body.length)
   },
 
   //Body of request has all the transaction that you wish to pend under a name
