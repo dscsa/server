@@ -516,7 +516,7 @@ exports.pend = {
       return ! generic || doc.drug.generic == generic
     })
 
-    console.log('account/pend.get', group, generic, ctx.body.length)
+    console.log('account/pend.get', group, generic, result.rows.length, '->', ctx.body.length)
   },
 
   //Body of request has all the transaction that you wish to pend under a name
@@ -537,14 +537,18 @@ exports.pend = {
     //Don't do this yet because they will get repacked (and risk being short-dated) if we don't unpend
     */
 
+    const len_with_picked = ctx.body.length
+
     ctx.req.body = ctx.body.filter(doc => {
       return doc.next[0] && ! doc.next[0].picked
     })
 
+    const len_no_picked = ctx.req.body.length
+
     ctx.account  = {_id}
     ctx.body     = await updateNext(ctx, 'pended', null)
 
-    console.log('account/pend.delete', group, generic, ctx.body)
+    console.log('account/pend.delete', group, generic, len_with_picked, '->', len_no_picked, ctx.body)
   }
 
 }
