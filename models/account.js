@@ -512,9 +512,11 @@ exports.pend = {
 
     const result = await ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[_id, group], endkey:[_id, group, {}]})
 
-    ctx.req.body = result.rows.map(row => row.doc).filter(doc => {
+    ctx.body = result.rows.map(row => row.doc).filter(doc => {
       return ! generic || doc.drug.generic == generic
     })
+
+    console.log('account/pend.get', group, generic, ctx.body)
   },
 
   //Body of request has all the transaction that you wish to pend under a name
@@ -535,12 +537,14 @@ exports.pend = {
     //Don't do this yet because they will get repacked (and risk being short-dated) if we don't unpend
     */
 
-    ctx.req.body = ctx.req.body.filter(doc => {
+    ctx.req.body = ctx.body.filter(doc => {
       return doc.next[0] && ! doc.next[0].picked
     })
 
     ctx.account  = {_id}
     ctx.body     = await updateNext(ctx, 'pended', null)
+
+    console.log('account/pend.delete', group, generic, ctx.body)
   }
 
 }
