@@ -60,6 +60,8 @@ keys(function() {
       ctx.user._id    = session.slice(0, 21)
       ctx.account._id = session.slice(11, 21)
       cookie = JSON.stringify({_id:ctx.user._id, account:ctx.account})
+    } else {
+      console.log('index/auth could not authentication', ctx.method, ctx.path, 'basic auth', basic, 'raw cookie', ctx.cookies.get('AuthSession'), 'parsed cookie', session)
     }
 
     ctx.cookies.set('AuthUser', cookie, {httpOnly:false}) //if this is set again in "next()" then 2nd call needs to be called with the overwrite:true option

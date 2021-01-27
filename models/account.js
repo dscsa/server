@@ -523,8 +523,9 @@ exports.pend = {
   //wrap name array into tranactiond
   //in the ctx object the query paramaters
   async post(ctx, _id, group) {
+    console.log('account/pend.post', 'ctx', ctx, '_id', _id, 'group', group, 'this', this)
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, 'pended', {_id:new Date().toJSON(), group, repackQty:ctx.query.repackQty, user:ctx.user})
+    ctx.body = await updateNext(ctx, 'pended', {_id:new Date().toJSON(), group, repackQty:ctx.query.repackQty, user:{_id:ctx.user}})
   },
 
   //Unpend all requests that match a name
@@ -649,7 +650,7 @@ function compensateForMissingTransaction(groupName, ctx){
       console.log("result number: ", result.length)
 
       if(tally >= missed_qty){
-        result.forEach(item => item.next = [{pended:{_id:new Date().toJSON(), user:ctx.user, repackQty: repack_qty, group: groupName}}])
+        result.forEach(item => item.next = [{pended:{_id:new Date().toJSON(), user:{_id:ctx.user}, repackQty: repack_qty, group: groupName}}])
 
         let prepped = prepShoppingData(result, ctx)
 
