@@ -523,9 +523,9 @@ exports.pend = {
   //wrap name array into tranactiond
   //in the ctx object the query paramaters
   async post(ctx, _id, group) {
-    console.log('account/pend.post', 'ctx', ctx, '_id', _id, 'group', group, 'this', this)
+    console.log('account/pend.post', 'ctx.user', ctx.user, '_id', _id, 'group', group, 'this.user', this.user)
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, 'pended', {_id:new Date().toJSON(), group, repackQty:ctx.query.repackQty, user:{_id:ctx.user}})
+    ctx.body = await updateNext(ctx, 'pended', {_id:new Date().toJSON(), group, repackQty:ctx.query.repackQty, user:ctx.user})
   },
 
   //Unpend all requests that match a name
@@ -558,7 +558,7 @@ exports.dispense = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, 'dispensed',{_id:new Date().toJSON(), user:{_id:ctx.user}})
+    ctx.body = await updateNext(ctx, 'dispensed',{_id:new Date().toJSON(), user:ctx.user})
   },
 
   // async delete(ctx, _id) {
@@ -650,7 +650,7 @@ function compensateForMissingTransaction(groupName, ctx){
       console.log("result number: ", result.length)
 
       if(tally >= missed_qty){
-        result.forEach(item => item.next = [{pended:{_id:new Date().toJSON(), user:{_id:ctx.user}, repackQty: repack_qty, group: groupName}}])
+        result.forEach(item => item.next = [{pended:{_id:new Date().toJSON(), user:ctx.user, repackQty: repack_qty, group: groupName}}])
 
         let prepped = prepShoppingData(result, ctx)
 
@@ -895,6 +895,8 @@ async function saveShoppingResults(arr_enriched_transactions, key, ctx){
     //then save them
     var transactions_to_save = []
 
+    console.log('saveShoppingResults', 'ctx.user', ctx.user, 'this.user', this.user)
+
     for(var i = 0; i < arr_enriched_transactions.length; i++){
 
       var reformated_transaction = arr_enriched_transactions[i].raw
@@ -953,7 +955,7 @@ exports.dispose = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
-    ctx.body = await updateNext(ctx, 'disposed',{_id:new Date().toJSON(), user:{_id:ctx.user}})
+    ctx.body = await updateNext(ctx, 'disposed',{_id:new Date().toJSON(), user:ctx.user})
   },
 
   // async delete(ctx, _id) {

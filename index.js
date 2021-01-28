@@ -53,6 +53,7 @@ keys(function() {
     ctx.account = {}
 
     //CouchDB saves Authsession like this https://github.com/apache/couchdb/blob/1347806d2feebce53325070b475f9e211d240ddf/src/couch/src/couch_httpd_auth.erl#L267
+    //slice(6) to get rid of "Basic " in "Basic <base64>"
     session = Buffer.from(basic ? basic.slice(6) : session, 'base64').toString()
 
     //User Id is saved in a user_id.account_id format
@@ -60,8 +61,10 @@ keys(function() {
       ctx.user._id    = session.slice(0, 21)
       ctx.account._id = session.slice(11, 21)
       cookie = JSON.stringify({_id:ctx.user._id, account:ctx.account})
+    } else if (/:/.test(session)) {
+      ctx.user._id    = session.split(':')[0] //likely/always admin:<password>
     } else if (ctx.method != 'GET') {
-      console.log('index/auth could not authentication', ctx.method, ctx.path, 'basic auth', basic, 'raw cookie', ctx.cookies.get('AuthSession'), 'parsed cookie', session)
+      console.log('index/auth could not authentication', ctx.method, ctx.path, 'basic auth', basic, 'raw cookie', ctx.cookies.get('AuthSession'), 'parsed', session)
     }
 
     ctx.cookies.set('AuthUser', cookie, {httpOnly:false}) //if this is set again in "next()" then 2nd call needs to be called with the overwrite:true option
