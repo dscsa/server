@@ -523,7 +523,7 @@ exports.pend = {
   //wrap name array into tranactiond
   //in the ctx object the query paramaters
   async post(ctx, _id, group) {
-    console.log('account/pend.post', 'ctx.user', ctx.user, '_id', _id, 'group', group, 'this.user', this.user)
+    console.log('account/pend.post', 'ctx.user', ctx && ctx.user, '_id', _id, 'group', group, 'this.user', this && this.user)
     ctx.account = {_id}
     ctx.body = await updateNext(ctx, 'pended', {_id:new Date().toJSON(), group, repackQty:ctx.query.repackQty, user:ctx.user})
   },
@@ -895,7 +895,7 @@ async function saveShoppingResults(arr_enriched_transactions, key, ctx){
     //then save them
     var transactions_to_save = []
 
-    console.log('saveShoppingResults', 'ctx.user', ctx.user, 'this.user', this.user)
+    console.log('saveShoppingResults', 'ctx.user', ctx && ctx.user, 'this.user', this && this.user)
 
     for(var i = 0; i < arr_enriched_transactions.length; i++){
 
