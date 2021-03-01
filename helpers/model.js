@@ -22,7 +22,6 @@ exports.post = async function (ctx, name) {
 }
 
 exports.put = async function (ctx, name, id) {
-  console.log('put', name, ctx.req.body, id)
   ctx.body = await ctx.db[name].put(ctx.req.body, {ctx}).then(doc => {
     console.log('put doc', doc)
     return doc

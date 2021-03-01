@@ -662,7 +662,6 @@ exports.picking = {
 
 async function getUser(ctx){
   let user = await ctx.db.user.get(ctx.user._id);
-  console.log(user);
 
   if(!user._id){
     throw new Error('Unable to retrieve user');
