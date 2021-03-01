@@ -101,6 +101,7 @@ exports.lib = {
     return ! refusedAt && doc.next[0] && doc.next[0].dispensed && doc.next[0].dispensed._id && doc.next[0].dispensed._id.slice(0, 10).split('-')
   },
 
+
   //Locked when currently being pick if picked === {} so there might not be an _id yet
   pickedAt(doc) {
     var refusedAt = require('refusedAt')(doc) //
@@ -346,6 +347,11 @@ exports.views = {
   //always shop for extra
   //extra goes into prepack shelf
   //the ac
+  //magic bin is the placeholder while they use/dispense it
+  //M00 = monday
+  //T00 = tuesday
+  //W00 = wednesday
+  //X00, Y00 were before the day by
   /*
     its a repacked bottle thatll prbably be dispensed
     cindy ispense

@@ -1,12 +1,12 @@
 "use strict"
 
-let fs      = require('fs')
-let app     = require('koa')
-app         = new app()
-let body    = require('./helpers/body')
-let keys    = require('./helpers/keys')
-let r       = require('./helpers/router')(app)
-let ajax    = require('./helpers/ajax')
+let fs      = require('fs');
+let Koa     = require('koa');
+let app         = new Koa();
+let body    = require('./helpers/body');
+let keys    = require('./helpers/keys');
+let koaRouter       = require('./helpers/router')(app);
+let ajax    = require('./helpers/ajax');
 
 process.on('unhandledRejection', (reason, promise) => {
   console.log('unhandledRejection', reason instanceof Buffer ? reason.toString() : reason)
@@ -33,6 +33,13 @@ keys(function() {
     ctx.db   = pouchdb
     ctx.ajax = ajax({baseUrl:'http://localhost:5984'})
 
+    let position = ctx.req.url.indexOf('picking');
+    if( position === 0 || position === 1){
+      console.log(ctx.req.url);
+      ctx.req.url = 'account' + (position === 0 ? '/' : '') + ctx.req.url;
+
+      console.log(ctx.req.url);
+    }
     //return ctx.ajax({url:'http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date%3E%222017-06-02T22:49:03.681%22%20AND%20ndc_description%20like%20%22MEMA%2510%25%22'})
 
     //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
@@ -71,7 +78,7 @@ keys(function() {
 
     //console.log('index.js', ctx.method, ctx.url, 'user', ctx.user, 'account', ctx.account, 'basic', basic, 'session', session)
 
-    await body(ctx.req)
+    await body(ctx.req);
     await next()
 
     ctx.set('access-control-expose-headers', 'cache-control, content-length, content-type, date, etag, location, server, transfer-encoding')
@@ -147,7 +154,7 @@ keys(function() {
   User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.119 Safari/537.36
   */
 
-  r('/')
+  koaRouter('/')
     .get(async function(ctx) {
       if(ctx.accepts('html')) //Not sure why pouchdb checks ctx.  Shows welcome UUID & Version
         return await get_asset(ctx)
@@ -156,108 +163,108 @@ keys(function() {
     })
 
   //Serve the application and assets
-  r('/client/:file', {end:false})
+  koaRouter('/client/:file', {end:false})
     .get(get_asset)
 
-  r('/pouch/:file', {end:false})
+  koaRouter('/pouch/:file', {end:false})
     .get(get_asset)
 
-  r('/csv/:file', {end:false})
+  koaRouter('/csv/:file', {end:false})
     .get(get_asset)
 
   //r('/favicon.ico', {end:false})
     //.get(get_asset)
 
-  r('/:model/', {strict:true}) //Shows DB info including update_seq#, needed for replication for new users
+  koaRouter('/:model/', {strict:true}) //Shows DB info including update_seq#, needed for replication for new users
     .get(adminProxy)
 
-  r('/:model/_revs_diff')      //Not sure why PouchDB needs this
+  koaRouter('/:model/_revs_diff')      //Not sure why PouchDB needs this
     .post(adminProxy)
 
-  r('/:model/_local/:doc')
+  koaRouter('/:model/_local/:doc')
     .get(adminProxy)
     .put(adminProxy)
 
-  r('/:model/_local%2F:doc')
+  koaRouter('/:model/_local%2F:doc')
     .put(proxy)
 
-  r('/:model/_design/:doc')
+  koaRouter('/:model/_design/:doc')
     .get(proxy)
     .put(proxy)
 
-  r('/:model/_design/:ddoc/_view/:view')
+  koaRouter('/:model/_design/:ddoc/_view/:view')
     .get(proxy)
 
-  r('/:model/_changes')      //Lets PouchDB watch db using longpolling
+  koaRouter('/:model/_changes')      //Lets PouchDB watch db using longpolling
     .get(proxy)
 
-  r('/:model/_all_docs')       //Needed if indexedDb cleared on browser
+  koaRouter('/:model/_all_docs')       //Needed if indexedDb cleared on browser
     .get(model('all_docs'))
     .post(model('all_docs'))
 
-  r('/:model/_bulk_docs')    //Update denormalized transactions when drug is updated
+  koaRouter('/:model/_bulk_docs')    //Update denormalized transactions when drug is updated
     .post(model('bulk_docs'))
 
-  r('/:model/_bulk_get')     //Allow PouchDB to make bulk edits
+  koaRouter('/:model/_bulk_get')     //Allow PouchDB to make bulk edits
     .post(model('bulk_get'))
 
   //
   //User API Endpoints
   //
 
-  r('/:model.csv')
+  koaRouter('/:model.csv')
     .get(model('get_csv'))
     .post(model('bulk_docs'))
 
-  r('/:model', {strict:true})
+  koaRouter('/:model', {strict:true})
     .get(model('get'))
     .post(model('post'))
 
-  r('/user/session')
+  koaRouter('/user/session')
     .post(models.user.session.post)  //Login
     .del(models.user.session.delete) //Logout
 
-  r('/transaction/:id/history')
+  koaRouter('/transaction/:id/history')
     .get(models.transaction.history)
 
-  r('/account/authorized')     //Allow user to get, modify, & delete docs
+  koaRouter('/account/authorized')     //Allow user to get, modify, & delete docs
     .get(models.account.authorized.get)
     .post(models.account.authorized.post)
     .del(models.account.authorized.delete)
 
-  r('/account/picking')
+  koaRouter('/account/picking')
     .post(models.account.picking.post)
 
-  r('/account/:id/pend/:name')
+  koaRouter('/account/:id/pend/:name')
     .post(models.account.pend.post)
 
-  r('/account/:id/pend/:name/:generic?')
+  koaRouter('/account/:id/pend/:name/:generic?')
     .get(models.account.pend.get)
     .del(models.account.pend.delete)
 
-  r('/account/:id/dispense')
+  koaRouter('/account/:id/dispense')
     .get(models.account.dispense)
 
-  r('/account/:id/dispose')
+  koaRouter('/account/:id/dispose')
     .get(models.account.dispose)
 
-  r('/account/:id/inventory.csv')
+  koaRouter('/account/:id/inventory.csv')
     .get(models.account.inventory)
 
-  r('/account/:id/record-by-generic.csv')
+  koaRouter('/account/:id/record-by-generic.csv')
     .get(models.account.recordByGeneric)
 
-  r('/account/:id/record-by-user.csv')
+  koaRouter('/account/:id/record-by-user.csv')
     .get(models.account.recordByUser)
 
-  r('/account/:id/record-by-from.csv')
+  koaRouter('/account/:id/record-by-from.csv')
     .get(models.account.recordByFrom)
 
-  r('/account/:id/:view_prefix-:view_suffix.csv')
+  koaRouter('/account/:id/:view_prefix-:view_suffix.csv')
     .get(models.account.recordByView)
 
 
-  r('/:model/:id')
+  koaRouter('/:model/:id')
     .get(async function(ctx, db, id) {
       ctx.query.selector = `{"id":"${id}"}`
       await model('get')(ctx, db)

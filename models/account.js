@@ -571,24 +571,109 @@ exports.picking = {
 
   async post(ctx) {
 
-    let groupName = ctx.req.body.groupName
-    let action = ctx.req.body.action
+    const groupName = ctx.req.body.groupName;
+    const action = ctx.req.body.action;
+    const Group = require('../models/group');
 
-    console.log("Call to PICKING for:", groupName ? groupName : 'refresh')
+
+    console.log("Call to PICKING for:", groupName ? groupName : 'refresh');
+    console.log("ACTION: " + action);
 
     if(action == 'refresh'){
-      ctx.body = await refreshGroupsToPick(ctx)
+      let groups = await refreshGroupsToPick(ctx);
+
+      for(let i = 0; i < groups.length; i++){
+        let groupInstance = new Group(groups[i].name);
+        groups[i].groupData = groupInstance;
+        groups[i].isLockedByCurrentUser = groupInstance.userIsOwner(ctx.user);
+
+        //add any baskets saved in lock file
+        if(groups[i].groupData.basket && groups[i].baskets){
+          let baskets = groups[i].baskets;
+          baskets.push(groups[i].groupData.basket.fullBasket);
+
+          //remove dupes
+          //https://stackoverflow.com/a/14438954
+          groups[i].baskets = baskets.filter((value, index, self) => {
+            return self.indexOf(value) === index;
+          });
+
+        }
+      }
+
+      ctx.body = groups;
     } else if(action == 'load'){
-      ctx.body = await loadPickingData(groupName,ctx)
+
+
+      if(!ctx.user._id){
+        console.log('=============================');
+        console.log('        USER IS MISSING      ');
+        console.log('=============================');
+      }
+
+      let user = await getUser(ctx);
+
+      const group = new Group(groupName);
+
+      if(group.isLocked() && !group.userIsOwner(ctx.user)){
+        throw new Error('This group is already locked by someone else');
+      }
+
+      if(!group.userIsOwner(ctx.user) && !group.isLocked()){
+        let userInfo = {
+          name: user.name,
+          email:user.email,
+          phone:user.phone,
+          _id:user._id
+        };
+
+        group.lock(userInfo);
+        console.log(userInfo);
+        console.log(group.lockFileContent());
+      }
+
+      ctx.body = await loadPickingData(group,ctx)
     } else if(action == 'unlock'){
+      const group = new Group(groupName);
+      group.unlock();
       ctx.body = await unlockPickingData(groupName, ctx)
     } else if(action == 'missing_transaction'){
       ctx.body = await compensateForMissingTransaction(groupName,ctx)
+    }
+    else if (action === 'check_owner'){
+      ctx.body = {owner:true}
+    }
+    else if(action === 'group_info'){
+      const group = new Group(groupName);
+
+      if(!group.isLocked() || group.userIsOwner(ctx.user)){
+        ctx.body = await loadPickingData(group, ctx);
+      }
+      else ctx.body = [];
+    }
+    else if(action === 'save_basket_number'){
+      const group = new Group(groupName);
+      group.setBasketNumber(ctx.req.body.basket);
+      ctx.body = ['success'];
     }
 
   },
 }
 
+async function getUser(ctx){
+  let user = await ctx.db.user.get(ctx.user._id);
+  console.log(user);
+
+  if(!user._id){
+    throw new Error('Unable to retrieve user');
+  }
+
+  return user;
+}
+
+function getUserInformation(userId){
+
+}
 
 function compensateForMissingTransaction(groupName, ctx){
   let missing_generic = ctx.req.body.generic //in case we ever want to expand this
@@ -682,7 +767,10 @@ function unlockPickingData(groupName, ctx){
     let transactions = []
 
     for(var i = 0; i < res.rows.length; i++){
-      if(!(res.rows[i].doc.next[0].picked && res.rows[i].doc.next[0].picked._id)) transactions.push({'raw':res.rows[i].doc}) //don't unlock fully picked items
+      if(!(res.rows[i].doc.next[0].picked && res.rows[i].doc.next[0].picked._id))
+      {
+        transactions.push({'raw':res.rows[i].doc})
+      } //don't unlock fully picked items
     }
 
     return saveShoppingResults(transactions, 'unlock', ctx).then(_ => {
@@ -692,20 +780,23 @@ function unlockPickingData(groupName, ctx){
   })
 }
 
-function loadPickingData(groupName, ctx){
-    console.log("loading group:", groupName)
+async function loadPickingData(group, ctx){
+    console.log("loading group:", group.groupName);
 
-    let shopList = []
+    let groupName = group.groupName,
+        pickingData = {shopList:[], groupData:group};
+
+    //console.log(await ctx.db.account.get(ctx.account._id));
 
     return ctx.db.account.get(ctx.account._id).then(account =>{
       ctx.account = account
 
       return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName, {}]})
-      .then(res => {
+      .then(async res => {
 
         if(!res.rows.length) return //TODO how to return error here
 
-        shopList = prepShoppingData(res.rows.map(row => row.doc).sort(function(a,b){
+        let rawTransactions = res.rows.map(row => row.doc).sort(function(a,b){
           var aName = a.drug.generic;
           var bName = b.drug.generic;
 
@@ -730,18 +821,36 @@ function loadPickingData(groupName, ctx){
           if (aFlip < bFlip) return -1
 
           return 0
-        }), ctx)
+        });
 
-        if(!shopList.length) return //TODO: return error here
+        pickingData.shopList = prepShoppingData(rawTransactions, ctx);
 
-        return saveShoppingResults(shopList, 'lockdown', ctx).then(_ => {
-          return shopList
-        })
+        if(!pickingData.shopList.length) return //TODO: return error here
+
+        return saveShoppingResults(pickingData.shopList, 'lockdown', ctx).then(_ => {
+          return pickingData;
+        });
 
       })
 
     })
 
+}
+
+function isLocked(transaction, userId){
+  if(transaction.next && transaction.next[0]){
+    let next = transaction.next[0];
+
+    if(next.picked){
+       if(next.lock && next.lock.userId && next.lock.userId === userId){
+         return false;
+       }
+       return true;
+    }
+    else return false;
+  }
+
+  return false;
 }
 //given an array of transactions, then build the shopList array
 //which has the extra info we need to track during the shopping process
@@ -754,7 +863,7 @@ function prepShoppingData(raw_transactions, ctx) {
 
   for(var i = 0; i < raw_transactions.length; i++){
 
-    if((raw_transactions[i].next[0].picked) || (raw_transactions[i].next[0].pended.priority === null)) continue //don't show picked or fully unchecked boxes (fromt he inventory drawer)
+    if(isLocked(raw_transactions[i], ctx.user._id) || (raw_transactions[i].next[0].pended.priority === null)) continue //don't show picked or fully unchecked boxes (fromt he inventory drawer)
 
     //this will track info needed during the miniapp running, and which we'd need to massage later before saving
     var extra_data = {
@@ -915,12 +1024,13 @@ async function saveShoppingResults(arr_enriched_transactions, key, ctx){
 
         } else if(key == 'unlock'){
 
-          delete next[0].picked
+          delete next[0].picked;
+          delete next[0].lock;
 
         } else if(key == 'lockdown'){
 
-          next[0].picked = {}
-
+          next[0].picked = {};
+          next[0].lock = {userId: ctx.user._id};
         }
       }
 
@@ -951,7 +1061,7 @@ function getOutcome(extraItemData){
 
 
 
-exports.dispose = {
+  exports.dispose = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
