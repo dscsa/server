@@ -1,8 +1,8 @@
 "use strict"
 
 let fs      = require('fs');
-let Koa     = require('koa');
-let app         = new Koa();
+let app     = require('koa');
+app         = new app();
 let body    = require('./helpers/body');
 let keys    = require('./helpers/keys');
 let koaRouter       = require('./helpers/router')(app);
