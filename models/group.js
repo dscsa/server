@@ -110,6 +110,8 @@ module.exports = class Group {
         return filesystem.existsSync(this.lockFilePath());
     }
 
+
+
     userIsOwner(user){
         return this.isLocked() && this.user._id && (this.user._id  === user._id);
     }
