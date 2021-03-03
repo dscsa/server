@@ -36,11 +36,20 @@ module.exports = class Group {
     }
 
     lockFilePath(){
-        return `${__dirname}/../store/${this.groupName}`;
+        return this.lockFileFolder() + this.groupName;
 
     }
 
+    lockFileFolder(){
+        return `${__dirname}/../store/`;
+    }
+
+
     write(){
+        if(!filesystem.existsSync(this.lockFileFolder())){
+            filesystem.mkdirSync(this.lockFileFolder());
+        }
+        
         filesystem.writeFileSync(this.lockFilePath(), this.generateLockFileContent());
         console.log(this.lockFileContent());
         console.trace();

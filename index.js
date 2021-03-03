@@ -32,7 +32,7 @@ keys(function() {
 
     ctx.db   = pouchdb
     ctx.ajax = ajax({baseUrl:'http://localhost:5984'});
-    
+
     //return ctx.ajax({url:'http://data.medicaid.gov/resource/tau9-gfwr.json?$where=as_of_date%3E%222017-06-02T22:49:03.681%22%20AND%20ndc_description%20like%20%22MEMA%2510%25%22'})
 
     //Sugar  //Rather setting up CouchDB for CORS, it's easier & more secure to do here
