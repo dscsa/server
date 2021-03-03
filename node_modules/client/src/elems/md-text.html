@@ -1,0 +1,15 @@
+<!-- firefox needs max-height otherwise is oversizes the parent element -->
+<template style="display:inline-block; box-sizing:border-box;">
+  <div ref="div" class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label" style="width:100%; margin-bottom:-12px; padding-top:22px; min-height:19px; line-height:19px; font-size:inherit; text-overflow:inherit; display:block; ${ label.textContent.trim() || 'padding-top:0px'};">
+    <!-- Chrome's input[type=date] has a minimum height of 24px because of its internal buttons, to align heights we need to make all have min-height. -->
+    <textarea
+      required.bind="required || required === ''"
+      class="mdl-textfield__input"
+      value.bind="value"
+      disabled.bind="disabled || disabled === ''"
+      placeholder.bind="placeholder || ''"
+      style="padding:0; min-height:inherit; line-height:inherit; font-size:inherit; font-weight:inherit; text-transform:inherit; text-overflow:inherit; "/>
+    </textarea>
+    <label ref="label" class="mdl-textfield__label"><slot></slot></label>
+  </div>
+</template>

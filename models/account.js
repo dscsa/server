@@ -629,7 +629,7 @@ exports.picking = {
 
         group.lock(userInfo);
         console.log(userInfo);
-        console.log(group.lockFileContent());
+        console.log(group.getLockFileContent());
       }
 
       ctx.body = await loadPickingData(group,ctx)

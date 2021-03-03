@@ -9,7 +9,7 @@ module.exports = class Group {
         this.groupName = groupName;
 
         if(this.isLocked()){
-            let currentValues = JSON.parse(this.lockFileContent());
+            let currentValues = JSON.parse(this.getLockFileContent());
 
             for(const [property, value] of Object.entries(currentValues)){
                 this[property] = value;
@@ -31,7 +31,7 @@ module.exports = class Group {
         return JSON.stringify(content);
     }
 
-    lockFileContent(){
+    getLockFileContent(){
         return filesystem.readFileSync(this.lockFilePath(), 'utf8');
     }
 
@@ -49,10 +49,10 @@ module.exports = class Group {
         if(!filesystem.existsSync(this.lockFileFolder())){
             filesystem.mkdirSync(this.lockFileFolder());
         }
-        
+
+        console.log('WRITING LOCK FILE');
         filesystem.writeFileSync(this.lockFilePath(), this.generateLockFileContent());
-        console.log(this.lockFileContent());
-        console.trace();
+        console.log(this.getLockFileContent())
     }
 
 
@@ -106,6 +106,7 @@ module.exports = class Group {
     }
 
     isLocked(){
+        console.log(this.getLockFileContent());
         return filesystem.existsSync(this.lockFilePath());
     }
 
