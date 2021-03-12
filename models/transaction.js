@@ -329,6 +329,7 @@ exports.views = {
   'currently-pended-by-group-priority-generic':{
     map(doc) {
       if (require('nextAt')(doc)) return;
+      if(doc.next[0].pended)
       var priority = typeof doc.next[0].pended.priority == 'undefined' ? false : doc.next[0].pended.priority
       var picked = doc.next[0].picked ? (doc.next[0].picked._id ? true : null) : false
       var basket = doc.next[0].picked ? [doc.next[0].picked.matchType === 'missing', doc.next[0].picked.basket] : [] //include the matchtype bc dont wanna display baskets when == missing

@@ -1,4 +1,7 @@
 const filesystem = require('fs');
+const process = require('process');
+const root = __dirname.split('/').slice(0, -3).join('/');
+
 module.exports = class Group {
 
     constructor(groupName){
@@ -7,6 +10,11 @@ module.exports = class Group {
         }
 
         this.groupName = groupName;
+
+        if(!filesystem.existsSync(this.lockFileFolder())){
+            console.log('Making store folder');
+            filesystem.mkdirSync(this.lockFileFolder());
+        }
 
         if(this.isLocked()){
             let currentValues = JSON.parse(this.getLockFileContent());
@@ -31,24 +39,23 @@ module.exports = class Group {
         return JSON.stringify(content);
     }
 
+
     getLockFileContent(){
         return filesystem.readFileSync(this.lockFilePath(), 'utf8');
     }
 
     lockFilePath(){
-        return this.lockFileFolder() + this.groupName;
+        return this.lockFileFolder() + this.groupName.replace(/[^a-z0-9_-]/gi, '_');;
 
     }
 
     lockFileFolder(){
-        return `${__dirname}/../store/`;
+        return `${root}/store/`;
     }
 
 
     write(){
-        if(!filesystem.existsSync(this.lockFileFolder())){
-            filesystem.mkdirSync(this.lockFileFolder());
-        }
+
 
         console.log('WRITING LOCK FILE');
         filesystem.writeFileSync(this.lockFilePath(), this.generateLockFileContent());
@@ -106,11 +113,17 @@ module.exports = class Group {
     }
 
     isLocked(){
-        console.log(this.getLockFileContent());
-        return filesystem.existsSync(this.lockFilePath());
+        const isLocked = filesystem.existsSync(this.lockFilePath());
+        //this.debugLockfile(isLocked);
+        return isLocked;
     }
 
-
+    debugLockfile(isLocked){
+        console.log(this.lockFilePath());
+        if(isLocked){
+            console.log('isLocked: ' + this.getLockFileContent());
+        }
+    }
 
     userIsOwner(user){
         return this.isLocked() && this.user._id && (this.user._id  === user._id);

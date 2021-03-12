@@ -2,7 +2,8 @@
 //defaults
 module.exports = exports = Object.create(require('../helpers/model'))
 
-let csv = require('csv/server')
+let csv = require('csv/server');
+
 let admin = {ajax:{jar:false, auth:require('../../../keys/dev').couch}}
 //let cache = {}
 //let DAILY_LIMIT = 1000
@@ -573,7 +574,7 @@ exports.picking = {
 
     const groupName = ctx.req.body.groupName;
     const action = ctx.req.body.action;
-    const Group = require('../models/group');
+
 
 
     console.log("Call to PICKING for:", groupName ? groupName : 'refresh');
@@ -582,60 +583,14 @@ exports.picking = {
     if(action == 'refresh'){
       let groups = await refreshGroupsToPick(ctx);
 
-      for(let i = 0; i < groups.length; i++){
-        let groupInstance = new Group(groups[i].name);
-        groups[i].groupData = groupInstance;
-        groups[i].isLockedByCurrentUser = groupInstance.userIsOwner(ctx.user);
-
-        //add any baskets saved in lock file
-        if(groups[i].groupData.basket && groups[i].baskets){
-          let baskets = groups[i].baskets;
-          baskets.push(groups[i].groupData.basket.fullBasket);
-
-          //remove dupes
-          //https://stackoverflow.com/a/14438954
-          groups[i].baskets = baskets.filter((value, index, self) => {
-            return self.indexOf(value) === index;
-          });
-
-        }
-      }
-
       ctx.body = groups;
     } else if(action == 'load'){
 
+      let pickingData = await loadPickingData(groupName, ctx);
 
-      if(!ctx.user._id){
-        console.log('=============================');
-        console.log('        USER IS MISSING      ');
-        console.log('=============================');
-      }
+      ctx.body = pickingData;
 
-      let user = await getUser(ctx);
-
-      const group = new Group(groupName);
-
-      if(group.isLocked() && !group.userIsOwner(ctx.user)){
-        throw new Error('This group is already locked by someone else');
-      }
-
-      if(!group.userIsOwner(ctx.user) && !group.isLocked()){
-        let userInfo = {
-          name: user.name,
-          email:user.email,
-          phone:user.phone,
-          _id:user._id
-        };
-
-        group.lock(userInfo);
-        console.log(userInfo);
-        console.log(group.getLockFileContent());
-      }
-
-      ctx.body = await loadPickingData(group,ctx)
     } else if(action == 'unlock'){
-      const group = new Group(groupName);
-      group.unlock();
       ctx.body = await unlockPickingData(groupName, ctx)
     } else if(action == 'missing_transaction'){
       ctx.body = await compensateForMissingTransaction(groupName,ctx)
@@ -644,23 +599,22 @@ exports.picking = {
       ctx.body = {owner:true}
     }
     else if(action === 'group_info'){
-      const group = new Group(groupName);
-
-      if(!group.isLocked() || group.userIsOwner(ctx.user)){
-        ctx.body = await loadPickingData(group, ctx);
-      }
-      else ctx.body = [];
+      ctx.body = await loadPickingData(groupName, ctx)
     }
     else if(action === 'save_basket_number'){
-      const group = new Group(groupName);
-      group.setBasketNumber(ctx.req.body.basket);
-      ctx.body = ['success'];
+      ctx.body = await saveBasket(groupName, ctx);
     }
 
   },
 }
 
 async function getUser(ctx){
+  if(!ctx.user._id){
+    console.log('=============================');
+    console.log('        USER IS MISSING      ');
+    console.log('=============================');
+  }
+
   let user = await ctx.db.user.get(ctx.user._id);
 
   if(!user._id){
@@ -668,10 +622,6 @@ async function getUser(ctx){
   }
 
   return user;
-}
-
-function getUserInformation(userId){
-
 }
 
 function compensateForMissingTransaction(groupName, ctx){
@@ -755,8 +705,34 @@ function compensateForMissingTransaction(groupName, ctx){
 }
 
 
+async function saveBasket(groupName, ctx){
+  let transactionId = ctx.req.body.id,
+      basket = ctx.req.body.basket;
+
+  let transaction =  await ctx.db.transaction.get(transactionId._id);
+
+  if(transaction.next && transaction.next[0]){
+    if(!transaction.next[0].picked){
+      transaction.next[0].picked = {};
+    }
+    transaction.next[0].picked.basket = basket.fullBasket;
+
+    if(!transaction.next[0].picked || !transaction.next[0].pickedArchive){
+      transaction.next[0].pickedArchive = {};
+    }
+    transaction.next[0].pickedArchive.basket = basket.fullBasket;
+
+    if(!transaction.next[0].lock){
+      transaction.next[0].lock = {};
+    }
+    transaction.next[0].lock.basket = basket;
+  }
+
+  return await ctx.db.transaction.put(transaction, {ctx});
+}
+
 function unlockPickingData(groupName, ctx){
-  console.log("locking group:", groupName);
+  console.log("unlocking group:", groupName);
 
   return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName,{}]})
   .then(res => {
@@ -777,63 +753,84 @@ function unlockPickingData(groupName, ctx){
     })
 
   })
+};
+
+function sortTransactionsForPickList(transactions){
+  return transactions.map(row => row.doc).sort(function(a,b){
+    var aName = a.drug.generic;
+    var bName = b.drug.generic;
+
+    //sort by drug name first
+    if(aName > bName) return -1
+    if(aName < bName) return 1
+
+    var aBin = a.bin
+    var bBin = b.bin
+
+    var aPack = aBin && aBin.length == 3
+    var bPack = bBin && bBin.length == 3
+
+    if (aPack > bPack) return -1
+    if (aPack < bPack) return 1
+
+    //Flip columns and rows for sorting, since shopping is easier if you never move backwards
+    var aFlip = aBin[0]+aBin[2]+aBin[1]+(aBin[3] || '')
+    var bFlip = bBin[0]+bBin[2]+bBin[1]+(bBin[3] || '')
+
+    if (aFlip > bFlip) return 1
+    if (aFlip < bFlip) return -1
+
+    return 0
+  });
 }
 
-async function loadPickingData(group, ctx){
-    console.log("loading group:", group.groupName);
+async function loadPickingData(groupName, ctx){
+    console.log("loading group:", groupName);
 
-    let groupName = group.groupName,
-        pickingData = {shopList:[], groupData:group};
+//    return empty array if not authorized
+    let pickingData = {shopList:[], groupData:{}};
 
     //console.log(await ctx.db.account.get(ctx.account._id));
 
-    return ctx.db.account.get(ctx.account._id).then(account =>{
+    let account = await ctx.db.account.get(ctx.account._id);
+
+
       ctx.account = account
 
-      return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName, {}]})
-      .then(async res => {
+      let res = await ctx.db.transaction.query('currently-pended-by-group-priority-generic', {include_docs:true, reduce:false, startkey:[ctx.account._id, groupName], endkey:[ctx.account._id,groupName, {}]})
 
-        if(!res.rows.length) return //TODO how to return error here
+      if(!res.rows.length) return //TODO how to return error here
 
-        let rawTransactions = res.rows.map(row => row.doc).sort(function(a,b){
-          var aName = a.drug.generic;
-          var bName = b.drug.generic;
+      if(!true /**check the first transaction for ownership**/){
+        return;
+      }
 
-          //sort by drug name first
-          if(aName > bName) return -1
-          if(aName < bName) return 1
+      let rawTransactions = sortTransactionsForPickList(res.rows);
 
-          var aBin = a.bin
-          var bBin = b.bin
+      pickingData.groupData = getGroupInfoFromTransactionList(
+          rawTransactions,
+          groupName,
+          ctx,
+          false
+      );
 
-          var aPack = aBin && aBin.length == 3
-          var bPack = bBin && bBin.length == 3
+      pickingData.shopList = prepShoppingData(rawTransactions, ctx);
 
-          if (aPack > bPack) return -1
-          if (aPack < bPack) return 1
+      if(!pickingData.shopList.length) return //TODO: return error here
 
-          //Flip columns and rows for sorting, since shopping is easier if you never move backwards
-          var aFlip = aBin[0]+aBin[2]+aBin[1]+(aBin[3] || '')
-          var bFlip = bBin[0]+bBin[2]+bBin[1]+(bBin[3] || '')
+      await saveShoppingResults(pickingData.shopList, 'lockdown', ctx);
 
-          if (aFlip > bFlip) return 1
-          if (aFlip < bFlip) return -1
 
-          return 0
-        });
+      return pickingData;
 
-        pickingData.shopList = prepShoppingData(rawTransactions, ctx);
+}
 
-        if(!pickingData.shopList.length) return //TODO: return error here
+function getOutcomeName(outcomeObject){
+  let match = Object.entries(outcomeObject).filter((entry) => {
+    return entry[1] == true ? entry[1] : null
+  });
 
-        return saveShoppingResults(pickingData.shopList, 'lockdown', ctx).then(_ => {
-          return pickingData;
-        });
-
-      })
-
-    })
-
+  return match.length ? match[0][0] : null;
 }
 
 function isLocked(transaction, userId){
@@ -851,6 +848,7 @@ function isLocked(transaction, userId){
 
   return false;
 }
+
 //given an array of transactions, then build the shopList array
 //which has the extra info we need to track during the shopping process
 function prepShoppingData(raw_transactions, ctx) {
@@ -875,13 +873,15 @@ function prepShoppingData(raw_transactions, ctx) {
       },
       saved:null, //will be used to avoid double-saving
       basketNumber:'' //distinct from basketLetter at this point, will eventually combine into a fullBasket property
-    }
+    };
 
     if(uniqueDrugs[raw_transactions[i].drug.generic]){
       uniqueDrugs[raw_transactions[i].drug.generic].count += 1
     } else {
       uniqueDrugs[raw_transactions[i].drug.generic] = {count:1, global_index:generic_index++, relative_index:1} //relative index is useful in next loop of editing the extra field
     }
+
+    evaluateAndAddArchivedPickingData(raw_transactions[i], extra_data,  ctx);
 
 
     shopList.push({raw:raw_transactions[i], extra:extra_data})
@@ -923,37 +923,321 @@ function prepShoppingData(raw_transactions, ctx) {
   return shopList
 }
 
+function evaluateAndAddArchivedPickingData(transaction, extra, ctx){
+  if(transaction.next && transaction.next[0]){
+    let next0 = transaction.next[0];
 
-function refreshGroupsToPick(ctx, today){
+    if(next0.pickedArchive && next0.lock.userId === ctx.user._id){
+      let archive = next0.pickedArchive;
+
+      next0.picked = archive;
+      transaction.next[0] = next0;
+
+      if(archive.matchType){
+        extra.saved = archive.matchType;
+      }
+
+      if(archive.matchType && extra.outcome){
+        extra.outcome[archive.matchType] = true;
+      }
+
+      if(next0.pickedArchive.basket){
+        extra.fullBasket = next0.pickedArchive.basket;
+        extra.basketLetter = next0.pickedArchive.basket[0];
+        extra.basketNumber = next0.pickedArchive.basket.substr(1);
+      }
+    }
+  }
+}
+
+function getGroupNameFromTransaction(transaction){
+  return transaction.next[0].pended && transaction.next[0].pended.group
+      ? transaction.next[0].pended.group
+      : null;
+}
+
+function ifExists(obj, path){
+  let currentNode = obj;
+  path = path.split('.');
+
+  for(let part of path){
+    currentNode = currentNode[part];
+
+    if(!currentNode)
+      break;
+  }
+
+  return currentNode;
+}
+
+function getGroupInfoFromTransactionList(transactionList, nameOfSpecificGroupToGet, ctx, withLogging = false){
+  let groupInfo = {}, transactionsToOutput = ['2021-02-25 R59576'], output = {};
+
+  function logIfNewBasketAdded(groupName, transactionBasket) {
+    if(groupInfo[groupName].baskets.indexOf(transactionBasket) === -1){
+      console.log('basket added - ' + transactionBasket);
+    }
+  }
+
+  for(let i = 0; i < transactionList.length; i++){
+
+    let transaction = transactionList[i];
+
+    if(transaction.next && transaction.next[0])
+    {
+      let groupName = getGroupNameFromTransaction(transaction);
+
+      if(!groupName)
+        continue;
+
+      if(!groupInfo[groupName]){
+        groupInfo[groupName] = {name:groupName, numTransactions:0, pickedTransactions:0, isCompletelyPicked:false};
+      }
+
+      if(!groupInfo[groupName].lock && transaction.next[0].lock){
+        groupInfo[groupName].lock = transaction.next[0].lock;
+        //console.log('adding lock');
+      }
+
+      groupInfo[groupName].numTransactions++;
+
+      if(withLogging === true && transactionsToOutput.indexOf(groupName) !== -1){
+        if(!output[groupName])
+          output[groupName] = [];
+
+        output[groupName].push({
+          step:output[groupName].length + 1,
+          id:transaction._id,
+          rev:transaction._rev,
+          picked:ifExists(transaction.next[0], 'picked.matchType'),
+          archive: ifExists(transaction.next[0], 'pickedArchive.matchType'),
+          //pended:transaction.next[0].pended
+        });
+      }
+
+      if(transaction.next[0].pickedArchive && transaction.next[0].pickedArchive.basket){
+        if(transaction.next[0].pickedArchive.matchType !== 'missing'){
+          let transactionBasket = transaction.next[0].pickedArchive.basket;
+
+          if(!groupInfo[groupName].baskets)
+            groupInfo[groupName].baskets = [];
+
+          //logIfNewBasketAdded(groupName, transactionBasket);
+
+          groupInfo[groupName].baskets = mergeBaskets([groupInfo[groupName].baskets, transactionBasket]);
+
+          if(!groupInfo[groupName].basketsByGeneric)
+          {
+            //console.log('REQUEST ' + ctx.req.body.action);
+            groupInfo[groupName].basketsByGeneric = {};
+          }
+
+
+          let genericName = transaction.drug.generic.replace(/\s/g, '');
+          //console.log(genericName, transactionBasket);
+          groupInfo[groupName].basketsByGeneric[genericName] = mergeBaskets([transactionBasket, groupInfo[groupName].basketsByGeneric[genericName] || null]);
+          //console.log(groupInfo);
+        }
+
+        if( transaction.next[0].picked){
+          groupInfo[groupName].pickedTransactions++;
+        }
+      }
+    }
+  }
+
+  if(withLogging === true){
+    logGroupStatuses(groupInfo, output);
+  }
+
+  return nameOfSpecificGroupToGet ? groupInfo[nameOfSpecificGroupToGet] : groupInfo;
+}
+
+function logGroupStatuses(groupInfo, output){
+  return;
+  let completeGroups = [];
+  for (let name of Object.keys(groupInfo)){
+    const group = groupInfo[name];
+    const lockedBy = group.lock && group.lock.user && group.lock.user.name ? "\nLocked by: " + group.lock.user.name : '';
+    const isDone = group.numTransactions === group.pickedTransactions ? "\nComplete" : '';
+
+    if(isDone.length){
+      group.isCompletelyPicked = true;
+      completeGroups.push(group);
+    }
+
+    console.log(`Group info from transactions: ${name} \n numTransactions: ${group.numTransactions}\n pickedTransaction: ${group.pickedTransactions} ${lockedBy} ${isDone}\n\n`);
+  }
+
+  console.log('============================');
+  for(let groupName of Object.keys(output)){
+    console.log(groupName);
+    console.log(output[groupName]);
+  }
+}
+
+function mergeBaskets(basketsData){
+  let merged = [];
+
+  for(let basketData of basketsData){
+    if(basketData instanceof Set){
+      //modify a copy of the set otherwise we're destroying the actual set that was sent into the function
+      basketData = Array.from(new Set(basketData));
+    }
+    else if(typeof basketData === 'string' || basketData instanceof String){
+      //modify a copy of the string otherwise we're destroying the actual string that was sent into the function
+      basketData = basketData.slice(0).split(' ');
+    }
+    else if (basketData === null){
+      basketData = [];
+    }
+
+    if(!Array.isArray(basketData)){
+      throw 'Basket data is incorrect: ' + JSON.stringify(basketData);
+    }
+
+    merged = merged.concat(basketData);
+  }
+
+  return merged.filter((value, index, self) => {
+      return self.indexOf(value) === index;
+  });
+}
+
+async function refreshGroupsToPick(ctx, today){
     console.log("refreshing groups")
+
+  let transactions = await ctx.db.transaction.query('currently-pended-by-group-priority-generic', {reduce:false,startkey:[ctx.account._id], endkey:[ctx.account._id, {}]});
+   console.log(transactions.rows.length);
+
+
+   let lockData = {},
+    transactionIndex = {},
+   transactionIds = [];
+
+   transactions.rows.forEach(row => {
+    let id = row.id,
+      groupName = row.key[1],
+      basket = row.key[4] && row.key[4][1] ? row.key[4][1] : '';
+
+      if(!lockData[groupName])
+        lockData[groupName] = {name:groupName, transactions:[]};
+
+
+      if(basket && basket.length){
+        if(!lockData[groupName].baskets){
+          lockData[groupName].baskets = new Set();
+        }
+
+        lockData[groupName].baskets.add(basket);
+      }
+
+      lockData[groupName].transactions.push({id:id, basket:basket});
+      //transactionIndex[id] = [groupName, lockData[groupName].transactions.length - 1];
+      transactionIds.push(id);
+   });
+
+   console.log(transactionIndex.length);
+
+  let options = {
+    include_docs:true,
+    keys: transactionIds
+  };
+
+  await ctx.db.transaction.allDocs(options, function (err, response) {
+    let transactionDocs = response.rows.map(function(transaction){
+      return transaction.doc ? transaction.doc : null;
+    });
+
+    let groupData = getGroupInfoFromTransactionList(transactionDocs, null, ctx);
+
+    for(let groupName of Object.keys(groupData)){
+      if(lockData[groupName]){
+        for(let groupDatum of Object.keys(groupData[groupName])){
+          lockData[groupName][groupDatum] = groupData[groupName][groupDatum];
+        }
+      }
+    }
+    // handle err or response
+  });
+
+  /////////////
+
 
     return ctx.db.transaction.query('currently-pended-by-group-priority-generic', {startkey:[ctx.account._id], endkey:[ctx.account._id, {}], group_level:5})
     .then(res => {
       //key = [account._id, group, priority, picked (true, false, null=locked), basket]
-      let groups = {}
-
-      let today = new Date().toJSON().slice(0,10).replace(/-/g,'/')
-
+      let groups = {};
       //gotta extract some of these fields before sorting
-      let groups_raw = res.rows.sort(sortOrders) //sort before stacking so that the cumulative count considrs priority and final sort logic
-      for(var group of groups_raw){
+      let groups_raw = res.rows.sort(sortOrders); //sort before stacking so that the cumulative count considrs priority and final sort logic
 
-        if((group.key[1].length > 0) && (group.key[2] != null)){
+      for (var group of groups_raw) {
+        let groupName = group.key[1];
+        if ((groupName.length > 0) && (group.key[2] != null)) {
 
-          if(groups[group.key[1]] && (group.key[4].length > 0) && (!group.key[4][0])){
-            groups[group.key[1]].baskets.push(group.key[4][1])
-          } else if(group.key[3] != true){ //so fully picked items will only be added if there is a not-picked/locked item in order
-            groups[group.key[1]] = {name:group.key[1], priority:group.key[2], locked: group.key[3] == null, qty: group.value.count, baskets: []}
+          if (groups[groupName] && (group.key[4].length > 0) && (!group.key[4][0])) {
+
+            groups[groupName].baskets.push(group.key[4][1]);
+
+            if(lockData[groupName].baskets) {
+              let baskets = groups[groupName].baskets;
+
+              baskets = baskets.concat(Array.from(lockData[groupName].baskets));
+
+              baskets = baskets.filter((value, index, self) => {
+                return self.indexOf(value) === index;
+              });
+
+              groups[groupName].baskets = baskets;
+            }
           }
+          else if (group.key[3] != true) { //so fully picked items will only be added if there is a not-picked/locked item in order
+            groups[groupName] = {
+              name: groupName,
+              priority: group.key[2],
+              locked: group.key[3] == null,
+              qty: group.value.count,
+              baskets: []
+            }
 
+            if(lockData[groupName] && lockData[groupName].lock){
+              groups[groupName].lock = lockData[groupName].lock;
+
+              if(lockData[groupName].baskets){
+                groups[groupName].baskets = Array.from(lockData[groupName].baskets);
+              }
+            }
+          }
         }
-
       }
 
+      for (let group of Object.values(groups)){
+        group.isLockedByCurrentUser = !!group.lock && (group.lock.userId === ctx.user._id);
+      }
+
+//       for(let i = 0; i < groups.length; i++){
+//
+//         let groupInstance = new Group(groups[i].name);
+//         groups[i].groupData = groupInstance;
+//         groups[i].isLockedByCurrentUser = groupInstance.userIsOwner(ctx.user);
+//
+//         //add any baskets saved in lock file
+//         if(groups[i].groupData.basket && groups[i].baskets){
+//           let baskets = groups[i].baskets;
+//           baskets.push(groups[i].groupData.basket.fullBasket);
+// console.log(this.shopList[i]);
+//
+//           //remove dupes
+//           //https://stackoverflow.com/a/14438954
+//           groups[i].baskets = baskets.filter((value, index, self) => {
+//             return self.indexOf(value) === index;
+//           });
+//
+//         }
+//       }
+
       return Object.values(groups)
-
-    })
-
+    });
 }
 
 function sortOrders(a,b){ //given array of orders, sort appropriately.
@@ -995,15 +1279,70 @@ function getImageURLS(shopList, ctx){
     }
   }
 
+  function createLockTimestamp(){
+  let bigTimestamp = {},
+      date = new Date(),
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Nov', 'Dec'],
+        minutes = date.getMinutes(),
+        hours = date.getHours(),
+        ampm = hours >= 12 ? 'pm' : 'am';
+
+    hours = hours % 12;
+
+    // the hour '0' should be '12'  ;
+    if(hours === 0)
+      hours = 12;
+
+    minutes = minutes < 10 ? '0'+minutes : minutes;
+
+    bigTimestamp.date = `${months[date.getMonth() + 1]} ${date.getDate()}`;
+    bigTimestamp.time = `${hours}:${minutes}${ampm}`;
+    bigTimestamp.fullTime = `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear().toString().substring(2)} ${hours}:${minutes}${date.getSeconds()}${ampm}`;
+
+    return bigTimestamp;
+  }
+
+function createLock(user){
+    let lock = {
+      _id: user._id,
+      userId: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone
+    };
+
+    lock = Object.assign(lock, createLockTimestamp());
+
+    return lock;
+  }
+  function outcomeChanged(transaction, newOutcome){
+  let data = transaction.next[0];
+
+  if(data && data.picked && data.pickedArchive){
+    return newOutcome !== data.pickedArchive.matchType;
+  }
+  else return false;
+}
+
+function canChangeOutcome(transaction){
+  let data = transaction.next[0];
+
+  if(data.pickedArchive){
+    return data.pickedArchive.matchType !== 'missing';
+  }
+
+  return true;
+}
 async function saveShoppingResults(arr_enriched_transactions, key, ctx){
 
     if(arr_enriched_transactions.length == 0) return Promise.resolve()
 
     //go through enriched trasnactions, edit the raw transactions to store the data,
     //then save them
-    var transactions_to_save = []
+    var transactions_to_save = [],
+        numComplete = {};
 
-    console.log('saveShoppingResults', 'ctx.user', ctx && ctx.user, 'this.user', this && this.user)
+    console.log('saveShoppingResults', 'ctx.user', ctx && ctx.user, 'this.user')
 
     for(var i = 0; i < arr_enriched_transactions.length; i++){
 
@@ -1012,36 +1351,58 @@ async function saveShoppingResults(arr_enriched_transactions, key, ctx){
 
       if(next[0]){
         if(key == 'shopped'){
-          var outcome = this.getOutcome(arr_enriched_transactions[i].extra)
+          var outcome = this.getOutcome(arr_enriched_transactions[i].extra);
+
+          //TODO: SE: Branch does not seem reachable. Investigate
+
           next[0].picked = {
             _id:new Date().toJSON(),
             basket:arr_enriched_transactions[i].extra.fullBasket,
             repackQty: reformated_transaction.qty.to ? reformated_transaction.qty.to : reformated_transaction.qty.from,
             matchType:outcome,
             user:this.user,
-          }
-
+          };
+          next[0].pickedArchive = next[0].picked;
         } else if(key == 'unlock'){
-
           delete next[0].picked;
           delete next[0].lock;
+          delete next[0].pickedArchive;
 
         } else if(key == 'lockdown'){
+          let user = await getUser(ctx);
 
-          next[0].picked = {};
-          next[0].lock = {userId: ctx.user._id};
+          if(!!next[0].lock && (next[0].lock.userId === ctx.user._id)){
+              //DO NOT REMOVE THE PICK INFORMATION IF ITS THE SAME PERSON
+              if(!next[0].relocks)
+                next[0].relocks = [];
+
+              next[0].relocks.push(createLockTimestamp().fullTime);
+          }
+          else{
+            next[0].picked = {};
+            next[0].lock = createLock(user);
+          }
+
+        }
+
+        let groupName = getGroupNameFromTransaction(reformated_transaction);
+        if(next[0].picked && next[0].picked.matchType){
+          if(!numComplete[groupName])
+            numComplete[groupName] = 0;
+
+          numComplete[groupName]++;
         }
       }
 
-      reformated_transaction.next = next
-      transactions_to_save.push(reformated_transaction)
-
+      reformated_transaction.next = next;
+      transactions_to_save.push(reformated_transaction);
     }
+console.log(numComplete);
 
     //console.log(ctx.account)
     return ctx.db.transaction.bulkDocs(transactions_to_save, {ctx:ctx})
     .then(res => {
-        console.log("results of saving" + JSON.stringify(res))
+        console.log("results of saving: " + res.map(row => row.ok === true).length + '/' + res.length + ' ok');
         return true
     })
     .catch(err => {
@@ -1058,9 +1419,7 @@ function getOutcome(extraItemData){
     return res
   }
 
-
-
-  exports.dispose = {
+exports.dispose = {
 
   async post(ctx, _id) {
     ctx.account = {_id}
@@ -1073,16 +1432,15 @@ function getOutcome(extraItemData){
   // }
 }
 
-
-
 function updateNext(ctx, key, object){
 
   for (let transaction of ctx.req.body) {
 
     if(object){
 
-      if ( (!transaction.next[0])
-          || (Array.isArray(transaction.next[0]))) transaction.next[0] = {}   //for ones where there's already [[]]
+      if ( !transaction.next[0] || Array.isArray(transaction.next[0])) {
+        transaction.next[0] = {}
+      }   //for ones where there's already [[]]
 
       transaction.next[0][key] = object
 
@@ -1099,7 +1457,6 @@ function updateNext(ctx, key, object){
 
 function replaceNext(ctx, next) {
 
-  //console.log('account.updateNext', ctx.req.body.length, next, ctx.req.body)
   for (let transaction of ctx.req.body) {
     transaction.next = next
   }
